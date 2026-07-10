@@ -496,7 +496,7 @@
     </div>
     <div id="voidSealInline">
       <label>Void Seal</label>
-      <input type="text" id="voidSeal" class="sn-input" placeholder="000000" inputmode="none" autocomplete="off"
+      <input type="text" id="voidSeal" class="sn-input" placeholder="00000" inputmode="none" autocomplete="off"
              onclick="showSnPad('voidSeal')" onfocus="showSnPad('voidSeal')" readonly>
     </div>
     </div>
@@ -713,8 +713,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.10-5';
-const _APP_VERSION='v0.946';
+const _APP_BUMP='2026.07.10-6';
+const _APP_VERSION='v0.947';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1087,7 +1087,7 @@ _updateSoundBtn();
 let _snPadHistoryPushed=false;
 let _snPadTarget='serialNo';
 function _snPadInput(){return document.getElementById(_snPadTarget)||document.getElementById('serialNo');}
-function _snPadMaxLen(){return _snPadTarget==='voidSeal'?6:4;}
+function _snPadMaxLen(){return _snPadTarget==='voidSeal'?5:4;}
 function showSnPad(target='serialNo'){
   _snPadTarget=target;
   updateSnPadDisplay();
@@ -1133,8 +1133,8 @@ function snPadBack(){
 function normalizeVoidSeal(){
   const inp=document.getElementById('voidSeal');
   if(!inp)return '';
-  const digits=inp.value.replace(/\D/g,'').slice(0,6);
-  inp.value=digits?digits.padStart(6,'0'):'';
+  const digits=inp.value.replace(/\D/g,'').slice(0,5);
+  inp.value=digits?digits.padStart(5,'0'):'';
   return inp.value;
 }
 function focusSerialInput(){
@@ -1979,14 +1979,14 @@ if(!_isMob){
   sealInp.removeAttribute('onclick');
   sealInp.removeAttribute('onfocus');
   sealInp.setAttribute('inputmode','numeric');
-  sealInp.setAttribute('maxlength','6');
+  sealInp.setAttribute('maxlength','5');
   document.getElementById('snLabel').textContent='機身號碼';
   document.getElementById('snPadBtn').style.display='flex';
   snInp.addEventListener('focus',()=>{_snPadTarget='serialNo';updateSnPadDisplay();});
   snInp.addEventListener('input',()=>{snInp.value=snInp.value.replace(/\D/g,'').slice(0,4);updateSnPadDisplay();});
   snInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='serialNo';handleSnEnter();}});
   sealInp.addEventListener('focus',()=>{_snPadTarget='voidSeal';updateSnPadDisplay();});
-  sealInp.addEventListener('input',()=>{sealInp.value=sealInp.value.replace(/\D/g,'').slice(0,6);updateSnPadDisplay();});
+  sealInp.addEventListener('input',()=>{sealInp.value=sealInp.value.replace(/\D/g,'').slice(0,5);updateSnPadDisplay();});
   sealInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='voidSeal';handleSnEnter();}});
   ['actionCustom','errorDescription','boxId'].forEach(id=>{
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addToQueue();}});
