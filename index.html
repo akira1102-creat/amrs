@@ -285,6 +285,12 @@
     .bp-update-btn:not(:disabled):hover{color:#e6edf3;border-color:#484f58}
     .bp-update-btn:disabled{color:#484f58;cursor:not-allowed}
     .bp-update-ts{font-size:11px;color:#484f58}
+    .sn-seal-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:end}
+    body.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .sn-entry-line{display:flex;gap:10px;align-items:stretch}
+    #voidSealInline{display:none}
+    body.company-geg #voidSealInline{display:block}
+    body.company-geg #snPadBtn{display:none !important}
     .mob .bp-label{font-size:13px}
     #dashboardCard{max-width:1100px}
     .dash-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
@@ -347,6 +353,7 @@
     .mob .dash-search-line{grid-template-columns:minmax(0,1fr) 100px}
     .mob .dash-actions{grid-column:1/-1}
     .mob .dash-card-form{grid-template-columns:1fr}
+    .mob body.company-geg .sn-seal-row,body.mob.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
     #appVersion{text-align:center;font-size:11px;color:#30363d;padding:8px 0 4px;max-width:640px;margin:0 auto;letter-spacing:.5px}
     #mainLayout{max-width:640px;margin:0 auto;}
     #mainRight{}
@@ -468,7 +475,7 @@
     </div>
   </div>
   <div style="margin-top:14px">
-    <label>PO 號碼</label>
+    <label>PO 號碼 / 月份號碼（如 2026 年 7 月請填寫 2607）</label>
     <input type="text" id="poNumber" placeholder="e.g. 7083405" inputmode="numeric">
   </div>
 </div>
@@ -476,15 +483,22 @@
 <div class="card">
   <div class="card-title">新增記錄</div>
   <form id="snSingleArea" onsubmit="addToQueue(); return false;" style="margin-bottom:14px">
+    <div class="sn-seal-row">
     <div>
       <label id="snLabel">機身號碼（點擊開啟數字鍵盤）</label>
-      <div style="display:flex;gap:10px;align-items:stretch">
+      <div class="sn-entry-line">
         <input type="text" id="serialNo" class="sn-input" style="flex:1"
                placeholder="0000" inputmode="none" autocomplete="off"
-               onclick="showSnPad()" onfocus="showSnPad()" readonly>
+               onclick="showSnPad('serialNo')" onfocus="showSnPad('serialNo')" readonly>
         <button class="icon-btn" id="snPadBtn" onclick="showSnPad()" type="button"
                 style="display:none;font-size:22px;width:54px" title="開啟數字鍵盤">⌨️</button>
       </div>
+    </div>
+    <div id="voidSealInline">
+      <label>Void Seal</label>
+      <input type="text" id="voidSeal" class="sn-input" placeholder="000000" inputmode="none" autocomplete="off"
+             onclick="showSnPad('voidSeal')" onfocus="showSnPad('voidSeal')" readonly>
+    </div>
     </div>
   </form>
   <div id="batchArea" style="display:none">
@@ -499,10 +513,6 @@
     </select>
   </div>
   <div class="grid2 geg-only" id="gegSealFields" style="margin-bottom:14px">
-    <div>
-      <label>Void Seal</label>
-      <input type="text" id="voidSeal" placeholder="選填" autocomplete="off">
-    </div>
     <div>
       <label>New Void Seal</label>
       <input type="text" id="newVoidSeal" placeholder="如有更換才填" autocomplete="off">
@@ -703,8 +713,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.10-3';
-const _APP_VERSION='v0.944';
+const _APP_BUMP='2026.07.10-4';
+const _APP_VERSION='v0.945';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1075,7 +1085,11 @@ _updateSoundBtn();
 
 // ── SN Numpad ──────────────────────────────────────────────
 let _snPadHistoryPushed=false;
-function showSnPad(){
+let _snPadTarget='serialNo';
+function _snPadInput(){return document.getElementById(_snPadTarget)||document.getElementById('serialNo');}
+function _snPadMaxLen(){return _snPadTarget==='voidSeal'?6:4;}
+function showSnPad(target='serialNo'){
+  _snPadTarget=target;
   updateSnPadDisplay();
   const pad=document.getElementById('snPad');
   if(!pad.classList.contains('show')){
@@ -1102,8 +1116,8 @@ window.addEventListener('popstate',function(e){
   }
 });
 function snPadPress(n){
-  const inp=document.getElementById('serialNo');
-  if((inp.value||'').length>=4)return;
+  const inp=_snPadInput();
+  if((inp.value||'').length>=_snPadMaxLen())return;
   if(navigator.vibrate)navigator.vibrate(15);
   playTapSound();
   inp.value=(inp.value||'')+n;
@@ -1112,19 +1126,46 @@ function snPadPress(n){
 function snPadBack(){
   if(navigator.vibrate)navigator.vibrate(15);
   playBackSound();
-  const inp=document.getElementById('serialNo');
+  const inp=_snPadInput();
   inp.value=(inp.value||'').slice(0,-1);
   updateSnPadDisplay();
 }
-function snPadDone(){playDoneSound();addToQueue();}
+function normalizeVoidSeal(){
+  const inp=document.getElementById('voidSeal');
+  if(!inp)return '';
+  const digits=inp.value.replace(/\D/g,'').slice(0,6);
+  inp.value=digits?digits.padStart(6,'0'):'';
+  return inp.value;
+}
+function focusSerialInput(){
+  _snPadTarget='serialNo';
+  document.getElementById('serialNo').focus();
+  if(_isMob)showSnPad('serialNo');
+}
+function focusVoidSealInput(){
+  _snPadTarget='voidSeal';
+  document.getElementById('voidSeal').focus();
+  if(_isMob)showSnPad('voidSeal');
+}
+function handleSnEnter(){
+  if(activeCompany==='GEG'){
+    if(_snPadTarget==='voidSeal'){normalizeVoidSeal();focusSerialInput();}
+    else focusVoidSealInput();
+    updateSnPadDisplay();
+    return;
+  }
+  addToQueue();
+}
+function snPadDone(){playDoneSound();handleSnEnter();}
 function updateSnPadDisplay(){
-  const v=document.getElementById('serialNo').value||'';
+  const v=_snPadInput().value||'';
   document.getElementById('snPadDisplay').textContent=v||'—';
 }
 document.addEventListener('click',function(e){
   const pad=document.getElementById('snPad');
-  const inp=document.getElementById('serialNo');
-  if(pad.classList.contains('show')&&!pad.contains(e.target)&&e.target!==inp){hideSnPad();}
+  const sn=document.getElementById('serialNo');
+  const seal=document.getElementById('voidSeal');
+  if(pad.classList.contains('show')&&!pad.contains(e.target)&&e.target!==sn&&e.target!==seal){hideSnPad();}
 });
 // ───────────────────────────────────────────────────────────
 
@@ -1397,7 +1438,7 @@ function toggleOptional(){optionalVisible=!optionalVisible;document.getElementBy
 function getGegSealData(){
   if(activeCompany!=='GEG')return {};
   return {
-    voidSeal:document.getElementById('voidSeal').value.trim(),
+    voidSeal:normalizeVoidSeal(),
     newVoidSeal:document.getElementById('newVoidSeal').value.trim()
   };
 }
@@ -1924,14 +1965,25 @@ async function doSubmit(){
 function showToast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type?' '+type:'')+' show';setTimeout(()=>el.className='toast'+(type?' '+type:''),2800);}
 if(!_isMob){
   const snInp=document.getElementById('serialNo');
+  const sealInp=document.getElementById('voidSeal');
   snInp.removeAttribute('readonly');
   snInp.removeAttribute('onclick');
   snInp.removeAttribute('onfocus');
   snInp.setAttribute('inputmode','numeric');
   snInp.setAttribute('maxlength','4');
+  sealInp.removeAttribute('readonly');
+  sealInp.removeAttribute('onclick');
+  sealInp.removeAttribute('onfocus');
+  sealInp.setAttribute('inputmode','numeric');
+  sealInp.setAttribute('maxlength','6');
   document.getElementById('snLabel').textContent='機身號碼';
   document.getElementById('snPadBtn').style.display='flex';
-  snInp.addEventListener('input',updateSnPadDisplay);
+  snInp.addEventListener('focus',()=>{_snPadTarget='serialNo';updateSnPadDisplay();});
+  snInp.addEventListener('input',()=>{snInp.value=snInp.value.replace(/\D/g,'').slice(0,4);updateSnPadDisplay();});
+  snInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='serialNo';handleSnEnter();}});
+  sealInp.addEventListener('focus',()=>{_snPadTarget='voidSeal';updateSnPadDisplay();});
+  sealInp.addEventListener('input',()=>{sealInp.value=sealInp.value.replace(/\D/g,'').slice(0,6);updateSnPadDisplay();});
+  sealInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='voidSeal';handleSnEnter();}});
   ['actionCustom','errorDescription','boxId'].forEach(id=>{
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addToQueue();}});
   });
