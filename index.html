@@ -1,0 +1,1956 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#161b22">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Akira ML">
+  <link rel="manifest" href="manifest.json?v=20260709b">
+  <link rel="icon" href="icon.png?v=23" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
+  <title>Akira 維修記錄系統</title>
+  <script>
+    (function(){
+      var ua = navigator.userAgent;
+      var isMob = /Android|iPhone|iPad|iPod|Mobile|webOS/i.test(ua) || window.screen.width <= 768;
+      if(isMob) document.documentElement.classList.add('mob');
+    })();
+  </script>
+  <style>
+    #pinScreen{position:fixed;inset:0;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:9999}
+    #pinBox{display:flex;flex-direction:column;align-items:center;gap:28px;padding:40px 32px;background:#161b22;border-radius:24px;border:1px solid #30363d;width:320px}
+    #pinTitle{font-size:20px;font-weight:700;color:#e6edf3;letter-spacing:.5px}
+    #pinSub{font-size:13px;color:#8b949e}
+    .pin-dots{display:flex;gap:14px}
+    .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #388bfd;background:transparent;transition:background .15s}
+    .pin-dot.filled{background:#388bfd}
+    .pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%}
+    .pin-btn{padding:18px 0;background:#21262d;border:1px solid #30363d;border-radius:14px;font-size:22px;font-weight:600;color:#e6edf3;cursor:pointer;text-align:center;transition:background .1s;user-select:none}
+    .pin-btn:active{background:#388bfd}
+    .pin-btn.back{font-size:18px;color:#8b949e}
+    .pin-btn.empty{visibility:hidden}
+    #pinError{font-size:14px;color:#f85149;opacity:0;transition:opacity .3s;height:18px}
+    .pin-kb-hint{font-size:12px;color:#484f58;text-align:center}
+    .mob .pin-kb-hint{display:none}
+    @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-10px)}40%,80%{transform:translateX(10px)}}
+    #pinBox.shake{animation:shake .4s ease}
+    .mob #pinBox{width:90%;max-width:400px;gap:32px;padding:44px 28px}
+    .mob #pinTitle{font-size:28px}
+    .mob #pinSub{font-size:18px}
+    .mob .pin-dot{width:22px;height:22px}
+    .mob .pin-dots{gap:18px}
+    .mob .pin-btn{padding:24px 0;font-size:32px;border-radius:18px}
+    .mob .pin-btn.back{font-size:26px}
+    .mob #pinError{font-size:20px;height:24px}
+    #setupScreen{position:fixed;inset:0;background:#0d1117;display:none;align-items:center;justify-content:center;z-index:9998}
+    #setupScreen.show{display:flex}
+    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
+    #setupBox{display:flex;flex-direction:column;gap:20px;padding:40px 32px;background:#161b22;border-radius:24px;border:1px solid #30363d;width:340px}
+    #setupTitle{font-size:18px;font-weight:700;color:#e6edf3}
+    #setupSub{font-size:13px;color:#8b949e;line-height:1.6}
+    #gasUrlInput{width:100%;font-size:13px;padding:12px 14px;border:1px solid #388bfd;border-radius:14px;color:#e6edf3;background:#0d1117;word-break:break-all}
+    #gasUrlInput:focus{outline:none;border-color:#58a6ff}
+    #setupErr{font-size:13px;color:#f85149;min-height:18px}
+    #setupSaveBtn{padding:14px;font-size:15px;font-weight:700;background:#238636;color:#fff;border:none;border-radius:14px;cursor:pointer}
+    #setupSaveBtn:active{background:#2ea043}
+    #setupSaveBtn:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
+    #setupCancelBtn{padding:12px;font-size:14px;font-weight:600;background:none;border:1px solid #30363d;border-radius:14px;color:#8b949e;cursor:pointer}
+    #setupCancelBtn:active{border-color:#484f58;color:#e6edf3}
+    #setupTestBtn{padding:12px;font-size:14px;font-weight:600;background:none;border:1px solid #388bfd;border-radius:14px;color:#388bfd;cursor:pointer}
+    #setupTestBtn:active{background:#21262d}
+    #setupTestResult{font-size:13px;min-height:18px;text-align:center;border-radius:10px;padding:8px 12px;display:none}
+    #setupTestResult.ok{display:block;background:#0d3d20;color:#3fb950;border:1px solid #238636}
+    #setupTestResult.err{display:block;background:#3d0d0d;color:#f85149;border:1px solid #da3633}
+    .mob #setupBox{width:90%;max-width:400px;padding:36px 24px}
+    .mob #setupTitle{font-size:22px}
+    .mob #setupSub{font-size:15px}
+    .mob #gasUrlInput{font-size:14px}
+    .mob #setupSaveBtn{padding:16px;font-size:17px}
+    .mob #setupCancelBtn{padding:14px;font-size:16px}
+    .mob #setupTestBtn{padding:14px;font-size:16px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;padding:16px}
+    .card{background:#161b22;border-radius:20px;padding:20px;margin-bottom:16px;border:1px solid #30363d;max-width:640px;margin-left:auto;margin-right:auto}
+    .card-title{font-size:12px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:14px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    label{display:block;font-size:13px;font-weight:600;color:#8b949e;margin-bottom:8px}
+    select,input{width:100%;font-size:15px;padding:11px 13px;border:1px solid #30363d;border-radius:14px;color:#e6edf3;background:#0d1117;-webkit-appearance:none}
+    select:focus,input:focus{outline:none;border-color:#388bfd}
+    input[type=checkbox]{width:auto;height:20px;padding:0;border:none;background:none;border-radius:0;-webkit-appearance:checkbox;appearance:checkbox;cursor:pointer}
+    .combo{position:relative;width:100%}
+    .combo input{padding-right:38px}
+    .combo:after{content:'▾';position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#8b949e;font-size:16px;pointer-events:none}
+    .combo-menu{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:8500;max-height:228px;overflow:auto;background:#0d1117;border:1px solid #388bfd;border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.55);padding:6px}
+    .combo.open .combo-menu{display:block}
+    .combo-option{width:100%;display:block;padding:10px 12px;border:none;border-radius:10px;background:transparent;color:#e6edf3;font-size:15px;text-align:left;cursor:pointer}
+    .combo-option:hover,.combo-option:active{background:#1f6feb;color:#fff}
+    .combo-empty{padding:10px 12px;color:#8b949e;font-size:13px}
+    .sn-input{font-size:44px !important;font-weight:800;text-align:center;letter-spacing:4px;padding:20px !important;color:#58a6ff !important;border:2px solid #388bfd !important;cursor:pointer}
+    .row-action{display:flex;gap:10px;align-items:stretch}
+    .row-action select,.row-action input,.row-action .combo{flex:1}
+    .icon-btn{flex-shrink:0;width:46px;font-size:16px;background:#21262d;border:1px solid #30363d;border-radius:14px;cursor:pointer;color:#e6edf3;display:flex;align-items:center;justify-content:center}
+    .add-btn{width:100%;margin-top:16px;padding:14px;font-size:16px;background:#238636;color:#fff;border:none;border-radius:16px;font-weight:700;cursor:pointer}
+    .add-btn:active{background:#2ea043}
+    .opt-toggle{width:100%;margin-top:14px;padding:7px 14px;font-size:12px;background:none;border:1px solid #30363d;border-radius:10px;color:#8b949e;cursor:pointer;text-align:left}
+    .opt-toggle:hover{color:#e6edf3;border-color:#484f58}
+    #optionalFields{display:none;flex-direction:column;gap:14px;margin-top:14px}
+    #optionalFields.vis{display:flex}
+    .q-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0d1117;border-radius:14px;margin-bottom:10px;border:1px solid #21262d}
+    .q-sn{font-size:22px;font-weight:800;color:#58a6ff;min-width:55px}
+    .q-info{flex:1}
+    .q-reason{font-size:14px;color:#e6edf3}
+    .q-action{font-size:12px;color:#3fb950;margin-top:2px}
+    .q-extra{font-size:11px;color:#8b949e;margin-top:2px}
+    .q-select{width:20px !important;height:20px;flex-shrink:0;accent-color:#388bfd}
+    .q-edit-icon{background:none;border:none;font-size:18px;color:#8b949e;cursor:pointer;padding:2px 6px}
+    .q-edit-icon:hover{color:#e6edf3}
+    .q-del{background:none;border:none;font-size:22px;color:#f85149;cursor:pointer;padding:2px 6px}
+    .badge{display:inline-block;padding:1px 10px;font-size:13px;font-weight:700;background:#388bfd;color:#fff;border-radius:50px;margin-left:8px}
+    .queue-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:#0d1117;border:1px solid #21262d;border-radius:12px}
+    .queue-select-all{display:flex;align-items:center;gap:7px;margin:0;color:#8b949e;font-size:12px;cursor:pointer}
+    .queue-selected{font-size:12px;color:#58a6ff;font-weight:700;margin-left:auto}
+    .queue-bulk-btn{padding:6px 10px;font-size:12px;font-weight:700;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:9px;cursor:pointer}
+    .queue-bulk-btn:disabled{color:#484f58;cursor:not-allowed}
+    .queue-bulk-btn:not(:disabled):active{background:#1f6feb;color:#fff}
+    .queue-clear-btn{color:#8b949e}
+    .q-editing{flex-direction:column;align-items:stretch !important}
+    .q-edit-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .q-select-label{display:flex;align-items:center;gap:7px;margin:0;color:#8b949e;font-size:12px;cursor:pointer}
+    .q-edit-form .ef-row{margin-bottom:10px}
+    .q-edit-form label{font-size:12px;margin-bottom:5px}
+    .q-edit-btns{display:flex;gap:8px;margin-top:12px}
+    .q-save-btn{flex:1;padding:10px;font-size:14px;font-weight:700;background:#238636;color:#fff;border:none;border-radius:12px;cursor:pointer}
+    .q-cancel-btn{flex:1;padding:10px;font-size:14px;font-weight:700;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:12px;cursor:pointer}
+    .submit-btn{width:100%;max-width:640px;display:block;margin:0 auto;padding:16px;font-size:17px;font-weight:800;background:#1f6feb;color:#fff;border:none;border-radius:18px;cursor:pointer;letter-spacing:.3px}
+    .submit-btn:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
+    .submit-btn:not(:disabled):active{background:#388bfd}
+    .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(80px);padding:12px 24px;font-size:15px;font-weight:600;background:#238636;color:#fff;border-radius:50px;box-shadow:0 4px 20px rgba(0,0,0,.4);transition:transform .3s ease;z-index:9000;white-space:nowrap}
+    .toast.err{background:#da3633}
+    .toast.warn{background:#9a6700}
+    .toast.show{transform:translateX(-50%) translateY(0)}
+    #dupModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8888;align-items:center;justify-content:center}
+    #dupModal.show{display:flex}
+    #dupBox{background:#161b22;border:1px solid #30363d;border-radius:20px;padding:28px;max-width:340px;width:90%;text-align:center}
+    #dupTitle{font-size:22px;font-weight:800;color:#f0883e;margin-bottom:10px}
+    #dupMsg{font-size:14px;color:#8b949e;line-height:1.6;margin-bottom:20px}
+    .dup-btns{display:flex;gap:10px}
+    .dup-cancel{flex:1;padding:12px;font-size:15px;font-weight:700;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:14px;cursor:pointer}
+    .dup-confirm{flex:1;padding:12px;font-size:15px;font-weight:700;background:#da3633;color:#fff;border:none;border-radius:14px;cursor:pointer}
+    #confirmModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8888;align-items:center;justify-content:center}
+    #confirmModal.show{display:flex}
+    #confirmBox{background:#161b22;border:1px solid #30363d;border-radius:20px;padding:24px;max-width:360px;width:90%}
+    #confirmTitle{font-size:17px;font-weight:800;color:#e6edf3;margin-bottom:14px}
+    .confirm-info{margin-bottom:12px}
+    .confirm-info div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;font-size:13px}
+    .confirm-info div:last-child{border-bottom:none}
+    .confirm-info span:first-child{color:#8b949e}
+    .confirm-info span:last-child{color:#e6edf3;font-weight:600}
+    .confirm-count{font-size:15px;font-weight:700;color:#388bfd;text-align:center;padding:10px;background:#0d1117;border-radius:10px;margin-bottom:16px}
+    .confirm-btns{display:flex;gap:10px}
+    .confirm-cancel{flex:1;padding:11px;font-size:14px;font-weight:700;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:12px;cursor:pointer}
+    .confirm-ok{flex:1;padding:11px;font-size:14px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:12px;cursor:pointer}
+    #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
+    #menuBtn{width:38px;height:34px;background:#161b22;border:1px solid #30363d;border-radius:10px;color:#e6edf3;font-size:20px;cursor:pointer}
+    #appTitle{flex:1;text-align:center;font-size:11px;font-weight:600;color:#484f58;letter-spacing:1.5px;text-transform:uppercase;padding:4px 0}
+    #activeCompanyLabel{font-size:14px;color:#fff;font-weight:900;min-width:48px;text-align:center;background:#1f6feb;border:1px solid #58a6ff;border-radius:999px;padding:5px 10px;box-shadow:0 0 0 3px rgba(31,111,235,.16)}
+    body.dashboard-view #activeCompanyLabel{display:none}
+    .settings-btn{background:none;border:none;color:#484f58;font-size:14px;cursor:pointer;padding:2px 5px;vertical-align:middle;border-radius:6px;margin-left:4px}
+    .settings-btn:hover,.settings-btn:active{color:#8b949e}
+    #menuOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:8700}
+    #menuOverlay.show{display:block}
+    #sideMenu{position:fixed;top:0;bottom:0;left:0;width:290px;max-width:86vw;background:#161b22;border-right:1px solid #30363d;z-index:8800;transform:translateX(-100%);transition:transform .18s ease;padding:18px;overflow:auto}
+    #sideMenu.show{transform:translateX(0)}
+    .menu-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .menu-title{font-size:15px;font-weight:800;color:#e6edf3}
+    .menu-close{background:none;border:1px solid #30363d;border-radius:9px;color:#8b949e;font-size:16px;padding:4px 9px;cursor:pointer}
+    .menu-section{font-size:11px;font-weight:800;color:#8b949e;text-transform:uppercase;letter-spacing:.08em;margin:16px 0 8px}
+    .menu-item{width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 12px;margin-bottom:7px;background:#0d1117;border:1px solid #21262d;border-radius:12px;color:#e6edf3;font-size:14px;font-weight:650;cursor:pointer;text-align:left}
+    .menu-item.active{border-color:#388bfd;color:#58a6ff}
+    .menu-item.dragging{opacity:.45;border-color:#58a6ff}
+    .menu-drag{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin-left:10px;border-radius:8px;color:#8b949e;cursor:grab;touch-action:none}
+    .menu-drag:active{cursor:grabbing}
+    .menu-sub{margin-left:8px;border-left:1px solid #30363d;padding-left:10px}
+    .menu-status{font-size:10px;color:#8b949e;font-weight:600}
+    .dash-btn:disabled{opacity:.45;cursor:not-allowed}
+    .app-page{display:none}
+    .app-page.active{display:block}
+    @media(min-width:769px){
+      body:not(.auth-locked){padding:16px 16px 16px 306px}
+      body:not(.auth-locked) #sideMenu{display:block;transform:none;top:0;bottom:0;left:0;width:274px;max-width:none;z-index:1000;box-shadow:4px 0 18px rgba(0,0,0,.16)}
+      body:not(.auth-locked) #menuOverlay{display:none !important}
+      body:not(.auth-locked) #menuBtn,body:not(.auth-locked) .menu-close{display:none}
+      body:not(.auth-locked) #appTop{max-width:1100px;margin:0 auto 16px}
+      body:not(.auth-locked) #appTitle{text-align:left;padding-left:2px}
+      body:not(.auth-locked) #activeCompanyLabel{min-width:64px}
+      body:not(.auth-locked) .menu-head{padding-bottom:12px;border-bottom:1px solid #21262d}
+      body:not(.auth-locked) .menu-title{font-size:16px}
+    }
+    #todayCard{margin-top:16px}
+    .today-header{display:flex;align-items:center;cursor:pointer;user-select:none}
+    .today-title{flex:1;font-size:12px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.07em}
+    .today-toggle{font-size:14px;color:#8b949e}
+    #todayList{display:none;margin-top:12px}
+    .t-item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #21262d}
+    .t-item:last-child{border-bottom:none}
+    .t-sn{font-size:14px;font-weight:800;color:#58a6ff;min-width:52px;padding-top:1px}
+    .t-detail{flex:1}
+    .t-main{font-size:12px;color:#8b949e}
+    .t-sub{font-size:11px;color:#484f58;margin-top:2px}
+    .t-dim{font-size:13px;color:#484f58;padding:8px 0}
+    #snPad{position:fixed;bottom:0;left:0;right:0;background:#161b22;border-top:2px solid #388bfd;padding:12px 16px 24px;z-index:600;transform:translateY(100%);transition:transform .22s ease}
+    #snPad.show{transform:translateY(0)}
+    #snPadHeader{display:flex;align-items:center;padding:4px 0 12px;max-width:380px;margin:0 auto}
+    #snPadDisplay{flex:1;font-size:44px;font-weight:800;color:#58a6ff;text-align:center;letter-spacing:5px;min-height:58px;word-break:break-all}
+    #soundToggleBtn{flex-shrink:0;background:none;border:1px solid #30363d;border-radius:10px;color:#484f58;font-size:18px;padding:6px 10px;cursor:pointer;margin-left:10px;transition:color .15s,border-color .15s}
+    #soundToggleBtn.on{color:#3fb950;border-color:#3fb950}
+    .snpad-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:380px;margin:0 auto}
+    .snpad-btn{padding:18px 0;background:#21262d;border:1px solid #30363d;border-radius:14px;font-size:26px;font-weight:600;color:#e6edf3;cursor:pointer;text-align:center;user-select:none;transition:background .1s}
+    .snpad-btn:active{background:#388bfd}
+    .snpad-back{color:#8b949e;font-size:22px}
+    .snpad-done{background:#238636;color:#fff}
+    .snpad-done:active{background:#2ea043}
+    .mob .card{max-width:none;padding:11px 13px;margin-bottom:9px}
+    .mob .card-title{font-size:11px;margin-bottom:9px}
+    .mob label{font-size:11px;margin-bottom:4px}
+    .mob select,.mob input{font-size:15px;padding:9px 11px}
+    .mob .combo input{padding-right:36px}
+    .mob .combo-menu{max-height:240px}
+    .mob .combo-option{font-size:15px;padding:10px 12px}
+    .mob .sn-input{font-size:38px !important;padding:12px !important}
+    .mob .icon-btn{width:42px;font-size:16px}
+    .mob .add-btn{padding:11px;font-size:15px;margin-top:10px}
+    .mob .opt-toggle{font-size:11px;padding:7px 11px;margin-top:10px}
+    .mob .grid2{grid-template-columns:1fr 1fr;gap:10px}
+    .mob .q-item{padding:10px 14px;gap:10px}
+    .mob .q-sn{font-size:20px;min-width:52px}
+    .mob .q-reason{font-size:14px}
+    .mob .q-action{font-size:12px}
+    .mob .q-extra{font-size:11px}
+    .mob .queue-tools{gap:6px;padding:7px 9px}
+    .mob .queue-selected{margin-left:0;width:100%}
+    .mob .queue-bulk-btn{padding:6px 9px}
+    .mob .q-edit-icon{font-size:18px;padding:3px 5px}
+    .mob .q-del{font-size:20px;padding:3px 6px}
+    .mob .badge{font-size:13px;padding:2px 9px}
+    .mob .submit-btn{padding:16px;font-size:18px}
+    .mob .toast{font-size:15px;padding:12px 22px}
+    .mob #dupBox{padding:28px 22px}
+    .mob #dupTitle{font-size:22px}
+    .mob #dupMsg{font-size:14px}
+    .mob .dup-cancel,.mob .dup-confirm{padding:14px;font-size:16px}
+    .mob #confirmBox{padding:20px}
+    .mob #confirmTitle{font-size:16px}
+    .mob .confirm-info div{font-size:12px}
+    .mob .confirm-count{font-size:14px}
+    .mob .confirm-cancel,.mob .confirm-ok{padding:13px;font-size:15px}
+    .mob .q-save-btn,.mob .q-cancel-btn{padding:12px;font-size:15px}
+    .mob .t-sn{font-size:14px;min-width:48px}
+    .mob .t-main{font-size:12px}
+    .mob .t-sub{font-size:11px}
+    .mob .t-dim{font-size:13px}
+    .mob #appTitle{font-size:10px;padding:2px 0 8px}
+    .mob .snpad-btn{padding:20px 0;font-size:28px}
+    .mob #snPadDisplay{font-size:46px}
+    #snPadQueue{display:flex;flex-wrap:wrap;gap:6px;align-items:center;max-width:380px;margin:0 auto 10px;min-height:0;padding:4px 0;max-height:72px;overflow:hidden}
+    .spq-label{font-size:11px;color:#8b949e;flex-shrink:0;margin-right:2px}
+    .spq-sn{font-size:13px;font-weight:700;color:#58a6ff;background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:2px 8px}
+    .spq-more{font-size:12px;font-weight:700;color:#f0883e;background:#2d1f00;border:1px solid #9a6700;border-radius:8px;padding:2px 8px;flex-shrink:0}
+    #snPadCloseBtn{flex-shrink:0;background:none;border:1px solid #30363d;border-radius:10px;color:#8b949e;font-size:18px;padding:6px 10px;cursor:pointer;margin-right:8px;transition:color .15s,border-color .15s}
+    #snPadCloseBtn:active{color:#f85149;border-color:#f85149}
+    #statsCard .stat-total{font-size:14px;font-weight:700;color:#e6edf3;padding:6px 0 10px}
+    .stat-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #21262d;font-size:13px;color:#8b949e}
+    .stat-row:last-child{border-bottom:none}
+    .stat-count{font-weight:700;color:#58a6ff}
+    #retryNotice{max-width:640px;margin:0 auto 10px;padding:10px 16px;background:#2d1f00;border:1px solid #9a6700;border-radius:12px;font-size:13px;color:#f0883e;display:flex;align-items:center;gap:10px}
+    #retryNoticeMsg{flex:1}
+    #retrySyncBtn{padding:6px 14px;font-size:12px;font-weight:700;background:#9a6700;color:#fff;border:none;border-radius:8px;cursor:pointer;white-space:nowrap}
+    #batchArea{margin-bottom:14px}
+    #batchSns{width:100%;font-size:18px;padding:10px 13px;border:1px solid #30363d;border-radius:14px;color:#58a6ff;background:#0d1117;resize:vertical;min-height:90px;font-family:monospace;letter-spacing:3px;font-weight:700}
+    #batchSns:focus{outline:none;border-color:#388bfd}
+    .batch-add-btn{width:100%;margin-top:10px;padding:12px;font-size:15px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:14px;cursor:pointer}
+    .batch-add-btn:active{background:#388bfd}
+    .mob #statsCard .stat-total{font-size:13px;padding:4px 0 8px}
+    .mob .stat-row{font-size:12px}
+    .mob #retryNotice{font-size:12px;padding:8px 12px}
+    .mob #batchSns{font-size:16px;letter-spacing:2px}
+    .bp-row{display:flex;align-items:center;gap:10px;margin-top:14px}
+    .bp-check{width:20px;height:20px;cursor:pointer;accent-color:#388bfd;flex-shrink:0}
+    .bp-label{font-size:14px;font-weight:600;color:#e6edf3;cursor:pointer;user-select:none}
+    #bpFields{margin-top:4px;padding:12px 14px;background:#0d1117;border-radius:14px;border:1px solid #21262d}
+    .bp-day-btn{width:100%;padding:9px 12px;font-size:13px;font-weight:600;background:#21262d;border:1px solid #30363d;border-radius:10px;color:#e6edf3;cursor:pointer;text-align:center}
+    .bp-day-btn.active{border-color:#388bfd;color:#58a6ff}
+    .bp-update-btn{padding:3px 9px;font-size:13px;background:#21262d;border:1px solid #30363d;border-radius:8px;color:#8b949e;cursor:pointer;line-height:1.4}
+    .bp-update-btn:not(:disabled):hover{color:#e6edf3;border-color:#484f58}
+    .bp-update-btn:disabled{color:#484f58;cursor:not-allowed}
+    .bp-update-ts{font-size:11px;color:#484f58}
+    .mob .bp-label{font-size:13px}
+    #dashboardCard{max-width:1100px}
+    .dash-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
+    .dash-date-row{display:flex;gap:8px}
+    .dash-date-row input{flex:1;min-width:0}
+    .dash-clear-btn{width:auto;padding:0 10px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#8b949e;font-size:12px;font-weight:700;cursor:pointer}
+    .dash-clear-btn:hover{color:#e6edf3;border-color:#484f58}
+    .dash-clear-btn.active{background:#1f6feb;border-color:#58a6ff;color:#fff;box-shadow:0 0 0 3px rgba(31,111,235,.16)}
+    .dash-search{grid-column:1/4}
+    .dash-search-line{display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:8px}
+    .dash-mode{min-height:42px;padding:0 10px;border:1px solid #30363d;border-radius:12px;background:#21262d;color:#8b949e;font-size:12px;font-weight:800;cursor:pointer;user-select:none}
+    .dash-mode.active{background:#1f6feb;border-color:#58a6ff;color:#fff;box-shadow:0 0 0 3px rgba(31,111,235,.16)}
+    .dash-actions{display:flex;gap:8px;grid-column:4/5}
+    .dash-btn{width:100%;padding:10px 12px;font-size:13px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:12px;cursor:pointer}
+    .dash-btn.secondary{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+    .dash-summary{font-size:12px;color:#8b949e;margin:12px 0 10px;min-height:18px}
+    .dash-table-wrap{display:none}
+    .dash-table{width:100%;border-collapse:collapse;min-width:980px}
+    .dash-table th{position:sticky;top:0;background:#161b22;color:#8b949e;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:9px 8px;border-bottom:1px solid #30363d}
+    .dash-table td{padding:7px 8px;border-bottom:1px solid #21262d;vertical-align:middle}
+    .dash-table tr:last-child td{border-bottom:none}
+    .dash-table input,.dash-table select{font-size:12px;padding:7px 8px;border-radius:9px;min-width:80px}
+    body:not(.dashboard-geg) .dash-geg-col{display:none}
+    .dash-table .dash-sn{min-width:70px}
+    .dash-table .dash-wide{min-width:150px}
+    .dash-save{padding:7px 10px;font-size:12px;font-weight:700;background:#238636;color:#fff;border:none;border-radius:9px;cursor:pointer;white-space:nowrap}
+    .dash-save:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
+    .dash-empty{padding:18px;color:#8b949e;font-size:13px;text-align:center}
+    .dash-mobile-list{display:block}
+    .dash-mobile-empty{padding:16px;color:#8b949e;font-size:13px;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
+    .dash-mobile-card{border:1px solid #21262d;border-radius:14px;background:#0d1117;margin-bottom:10px;padding:13px 14px}
+    .dash-mobile-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;color:#58a6ff;margin-bottom:10px;letter-spacing:.02em}
+    .dash-mobile-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.55)}
+    .dash-mobile-row:last-child{border-bottom:none}
+    .dash-mobile-key{font-size:12px;color:#8b949e;font-weight:700}
+    .dash-mobile-val{font-size:13px;color:#e6edf3;line-height:1.35;word-break:break-word;white-space:pre-wrap}
+    .dash-card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+    .dash-card-btn{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .dash-card-btn.primary{background:#238636;border-color:#2ea043;color:#fff}
+    .dash-card-btn:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
+    .dash-card-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:4px}
+    .dash-card-form label{display:block;font-size:12px;color:#8b949e;font-weight:700;margin-bottom:5px}
+    .dash-card-form input,.dash-card-form select{width:100%;font-size:13px;padding:8px 10px;border-radius:10px}
+    .dash-pager{display:none;align-items:center;justify-content:center;gap:10px;margin-top:12px}
+    .dash-pager.show{display:flex}
+    .dash-page-info{font-size:12px;color:#8b949e;font-weight:700;min-width:76px;text-align:center}
+    .dash-page-btn{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .dash-page-btn:disabled{color:#484f58;cursor:not-allowed}
+    .geg-only{display:none}
+    body.company-geg .geg-only{display:block}
+    .mob #dashboardCard{max-width:none}
+    .mob #dashboardCard.card{padding:16px 15px;overflow:hidden}
+    .mob .dash-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+    .mob .dash-controls > div{min-width:0}
+    .mob .dash-date-row{display:grid;grid-template-columns:minmax(0,1fr) 74px;gap:8px}
+    .mob .dash-date-row input{width:100%;font-size:15px;padding-left:11px;padding-right:8px}
+    .mob .dash-clear-btn{height:42px;padding:0;font-size:13px}
+    .mob .dash-controls input,.mob .dash-controls select{width:100%;min-width:0}
+    .mob .dash-controls > div:nth-child(1),.mob .dash-controls > div:nth-child(2),.mob .dash-controls .dash-search{grid-column:1/-1}
+    .mob .dash-search-line{grid-template-columns:minmax(0,1fr) 100px}
+    .mob .dash-actions{grid-column:1/-1}
+    .mob .dash-card-form{grid-template-columns:1fr}
+    #appVersion{text-align:center;font-size:11px;color:#30363d;padding:8px 0 4px;max-width:640px;margin:0 auto;letter-spacing:.5px}
+    #mainLayout{max-width:640px;margin:0 auto;}
+    #mainRight{}
+    @media(min-width:900px){
+      #mainLayout.has-queue{display:flex;gap:24px;align-items:flex-start;max-width:1100px;}
+      #mainLayout.has-queue #mainLeft{flex:1;min-width:0;max-width:640px;}
+      #mainLayout.has-queue #mainRight{width:380px;flex-shrink:0;position:sticky;top:16px;}
+      #mainLayout.has-queue .card{max-width:none;margin-left:0;margin-right:0;}
+      #mainLayout.has-queue .submit-btn{max-width:none;}
+    }
+  </style>
+</head>
+<body class="auth-locked">
+
+<div id="pinScreen">
+  <div id="pinBox">
+    <div id="pinTitle">維修記錄系統</div>
+    <div id="pinSub">請輸入 PIN</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+      <div class="pin-dot" id="d4"></div>
+      <div class="pin-dot" id="d5"></div>
+    </div>
+    <div id="pinError">PIN 錯誤</div>
+    <div class="pin-kb-hint">或使用鍵盤輸入</div>
+    <div class="pin-pad">
+      <div class="pin-btn" onclick="pinPress(1)">1</div>
+      <div class="pin-btn" onclick="pinPress(2)">2</div>
+      <div class="pin-btn" onclick="pinPress(3)">3</div>
+      <div class="pin-btn" onclick="pinPress(4)">4</div>
+      <div class="pin-btn" onclick="pinPress(5)">5</div>
+      <div class="pin-btn" onclick="pinPress(6)">6</div>
+      <div class="pin-btn" onclick="pinPress(7)">7</div>
+      <div class="pin-btn" onclick="pinPress(8)">8</div>
+      <div class="pin-btn" onclick="pinPress(9)">9</div>
+      <div class="pin-btn empty"></div>
+      <div class="pin-btn" onclick="pinPress(0)">0</div>
+      <div class="pin-btn back" onclick="pinBack()">⌫</div>
+    </div>
+  </div>
+</div>
+
+<div id="setupScreen">
+  <div id="setupBox">
+    <div id="setupTitle">網站代號設定</div>
+    <div id="setupSub">請輸入 Google Apps Script Deploy ID，用作連接維修記錄系統。資料只會儲存在本機。</div>
+    <div>
+      <label style="margin-bottom:8px">Deploy ID / 網站代號</label>
+      <input type="text" id="gasUrlInput" placeholder="貼上 Deploy ID 或完整 Web App URL" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="setupErr"></div>
+    <button id="setupTestBtn" onclick="testConnection()" type="button">🔗 測試連線</button>
+    <div id="setupTestResult"></div>
+    <button id="setupSaveBtn" onclick="saveSetup()" disabled>儲存並繼續</button>
+    <button id="setupCancelBtn" onclick="cancelSetup()" style="display:none">返回上一頁</button>
+  </div>
+</div>
+
+<div id="dupModal">
+  <div id="dupBox">
+    <div id="dupTitle">⚠ 機身號碼重複</div>
+    <div id="dupMsg"></div>
+    <div class="dup-btns">
+      <button class="dup-cancel" onclick="cancelDupAdd()">取消</button>
+      <button class="dup-confirm" onclick="confirmDupAdd()">仍然加入</button>
+    </div>
+  </div>
+</div>
+
+<div id="confirmModal">
+  <div id="confirmBox">
+    <div id="confirmTitle">📤 確認提交</div>
+    <div class="confirm-info" id="confirmInfo"></div>
+    <div class="confirm-count" id="confirmCount"></div>
+    <div class="confirm-btns">
+      <button class="confirm-cancel" onclick="cancelConfirm()">取消</button>
+      <button class="confirm-ok" id="confirmOkBtn" onclick="confirmSubmit()" disabled>提交</button>
+    </div>
+  </div>
+</div>
+
+<div id="menuOverlay" onclick="closeMenu()"></div>
+<nav id="sideMenu" aria-label="主選單">
+  <div class="menu-head">
+    <div class="menu-title">AMRS</div>
+    <button class="menu-close" onclick="closeMenu()" type="button">✕</button>
+  </div>
+  <div class="menu-section">資料輸入</div>
+  <div class="menu-sub" id="companyMenu"></div>
+  <div class="menu-section">資料查詢</div>
+  <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
+</nav>
+
+<div id="appTop">
+  <button id="menuBtn" onclick="openMenu()" type="button" aria-label="開啟選單">☰</button>
+  <div id="appTitle">AKiRa Maintain Record System <button class="settings-btn" onclick="openGasSettings()" title="更改網站代號">⚙</button></div>
+  <div id="activeCompanyLabel">SCL</div>
+</div>
+
+<div id="inputPage" class="app-page active">
+<div id="mainLayout">
+<div id="mainLeft">
+<div class="card">
+  <div class="card-title">基本資料</div>
+  <div class="grid2">
+    <div>
+      <label>場地</label>
+      <select id="casino">
+        <option>Venetian</option><option>Parisian</option>
+        <option>Londoner</option><option>Plaza</option><option>Sands</option>
+      </select>
+    </div>
+    <div>
+      <label>日期</label>
+      <input type="date" id="date">
+    </div>
+  </div>
+  <div style="margin-top:14px">
+    <label>PO 號碼</label>
+    <input type="text" id="poNumber" placeholder="e.g. 7083405" inputmode="numeric">
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">新增記錄</div>
+  <form id="snSingleArea" onsubmit="addToQueue(); return false;" style="margin-bottom:14px">
+    <div>
+      <label id="snLabel">機身號碼（點擊開啟數字鍵盤）</label>
+      <div style="display:flex;gap:10px;align-items:stretch">
+        <input type="text" id="serialNo" class="sn-input" style="flex:1"
+               placeholder="0000" inputmode="none" autocomplete="off"
+               onclick="showSnPad()" onfocus="showSnPad()" readonly>
+        <button class="icon-btn" id="snPadBtn" onclick="showSnPad()" type="button"
+                style="display:none;font-size:22px;width:54px" title="開啟數字鍵盤">⌨️</button>
+      </div>
+    </div>
+  </form>
+  <div id="batchArea" style="display:none">
+    <label>機身號碼（一行一個，每個 1–4 位數字）</label>
+    <textarea id="batchSns" rows="4" placeholder="1234&#10;5678&#10;9012" autocomplete="off" spellcheck="false"></textarea>
+    <button class="batch-add-btn" onclick="addBatchToQueue()" type="button">＋ 全部加入待提交</button>
+  </div>
+  <div style="margin-bottom:14px">
+    <label>機型</label>
+    <select id="model">
+      <option>SAE</option><option>TAE</option>
+    </select>
+  </div>
+  <div class="grid2 geg-only" id="gegSealFields" style="margin-bottom:14px">
+    <div>
+      <label>Void Seal</label>
+      <input type="text" id="voidSeal" placeholder="選填" autocomplete="off">
+    </div>
+    <div>
+      <label>New Void Seal</label>
+      <input type="text" id="newVoidSeal" placeholder="如有更換才填" autocomplete="off">
+    </div>
+  </div>
+  <div style="margin-bottom:14px">
+    <label>原因</label>
+    <div class="combo" data-combo="reason">
+      <input type="text" id="reason" oninput="onReasonInput()" onchange="onReasonChange()" placeholder="搜尋原因..." autocomplete="off">
+      <div class="combo-menu" id="reasonMenu"></div>
+    </div>
+  </div>
+  <div>
+    <label>處理方法</label>
+    <div class="row-action" id="actionDropRow">
+      <div class="combo" data-combo="actionDrop">
+        <input type="text" id="actionDrop" oninput="_syncBpFromAction()" onchange="_syncBpFromAction()" placeholder="搜尋處理方法..." autocomplete="off">
+        <div class="combo-menu" id="actionMenu"></div>
+      </div>
+      <button class="icon-btn" onclick="switchToCustom()" type="button">✏️</button>
+    </div>
+    <div class="row-action" id="actionCustomRow" style="display:none">
+      <input type="text" id="actionCustom" placeholder="自訂處理方法...">
+      <button class="icon-btn" onclick="switchToDrop()" type="button">☰</button>
+    </div>
+  </div>
+  <div class="bp-row">
+    <input type="checkbox" id="brokenPartsCheck" class="bp-check" onchange="onBrokenPartsChange()">
+    <label for="brokenPartsCheck" class="bp-label">🔧 損壞零件</label>
+  </div>
+  <div id="bpFields" style="display:none">
+    <div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <label style="margin-bottom:0">零件代碼</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="bp-update-ts" id="bpUpdateTs"></span>
+          <button class="bp-update-btn" id="bpUpdateBtn" onclick="fetchPartsCodes()" type="button" title="下載最新零件清單">↻</button>
+        </div>
+      </div>
+      <div class="combo" data-combo="itemCode">
+        <input type="text" id="itemCode" placeholder="按 ↻ 載入零件清單" autocomplete="off">
+        <div class="combo-menu" id="itemCodeMenu"></div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-bottom:10px">
+      <div>
+        <label>數量</label>
+        <select id="bpQty"></select>
+      </div>
+      <div>
+        <label>維修日</label>
+        <button class="bp-day-btn" id="bpRepairDayBtn" onclick="toggleBpRepairDay()" type="button">等待</button>
+        <input type="date" id="bpRepairDayDate" style="display:none;margin-top:6px">
+      </div>
+    </div>
+    <button class="opt-toggle" id="bpRemarkBtn" onclick="toggleBpRemark()" type="button" style="margin-top:0">▼ 備註</button>
+    <div id="bpRemarkRow" style="display:none;margin-top:10px">
+      <input type="text" id="bpRemark" placeholder="選填">
+    </div>
+  </div>
+  <button class="opt-toggle" id="optToggleBtn" onclick="toggleOptional()" type="button">▼ 錯誤描述 / Box ID</button>
+  <div id="optionalFields">
+    <div>
+      <label>錯誤描述</label>
+      <input type="text" id="errorDescription" placeholder="選填">
+    </div>
+    <div>
+      <label>Box ID</label>
+      <input type="text" id="boxId" placeholder="選填">
+    </div>
+  </div>
+  <button class="opt-toggle" id="batchToggleBtn" onclick="toggleBatch()" type="button" style="margin-top:10px">⊞ 批量模式</button>
+  <button class="add-btn" id="addQueueBtn" onclick="addToQueue()" type="button">＋ 加入待提交</button>
+</div>
+</div><!-- /mainLeft -->
+
+<div id="mainRight">
+<div class="card" id="queueCard" style="display:none">
+  <div class="card-title">待提交 <span class="badge" id="countBadge">0</span></div>
+  <div class="queue-tools" id="queueTools">
+    <label class="queue-select-all"><input type="checkbox" id="queueSelectAll" onchange="toggleQueueSelectAll(this.checked)"> 全選</label>
+    <span class="queue-selected" id="queueSelectedCount">已選 0 筆</span>
+    <button class="queue-bulk-btn" id="bulkSaeBtn" onclick="bulkSetModel('SAE')" type="button" disabled>SAE</button>
+    <button class="queue-bulk-btn" id="bulkTaeBtn" onclick="bulkSetModel('TAE')" type="button" disabled>TAE</button>
+    <button class="queue-bulk-btn queue-clear-btn" id="bulkClearBtn" onclick="clearQueueSelection()" type="button" disabled>清除選取</button>
+  </div>
+  <div id="queueList"></div>
+</div>
+
+<div class="card" id="statsCard" style="display:none">
+  <div class="card-title">今日統計</div>
+  <div id="statsList"></div>
+</div>
+
+<div id="retryNotice" style="display:none">
+  <span id="retryNoticeMsg"></span>
+  <button id="retrySyncBtn" onclick="_attemptRetry()">立即同步</button>
+</div>
+
+<button class="submit-btn" id="submitBtn" onclick="submitAll()" disabled>全部提交</button>
+</div><!-- /mainRight -->
+</div><!-- /mainLayout -->
+</div><!-- /inputPage -->
+
+<div id="dashboardPage" class="app-page">
+<div class="card" id="dashboardCard">
+  <div class="card-title">資料查詢</div>
+  <div class="dash-controls">
+    <div>
+      <label>由</label>
+      <div class="dash-date-row"><input type="date" id="dashFrom"><button class="dash-clear-btn" id="dashFromUnlimited" onclick="clearDashDate('dashFrom')" type="button">不限</button></div>
+    </div>
+    <div>
+      <label>至</label>
+      <div class="dash-date-row"><input type="date" id="dashTo"><button class="dash-clear-btn" id="dashToUnlimited" onclick="clearDashDate('dashTo')" type="button">不限</button></div>
+    </div>
+    <div>
+      <label>場地</label>
+      <select id="dashCasino">
+        <option value="">請選擇</option>
+      </select>
+    </div>
+    <div>
+      <label>機型</label>
+      <select id="dashModel">
+        <option value="">不限</option>
+        <option value="SAE">SAE</option>
+        <option value="TAE">TAE</option>
+      </select>
+    </div>
+    <div class="dash-search">
+      <label>搜尋</label>
+      <div class="dash-search-line">
+        <input type="text" id="dashSearch" placeholder="請輸入準確S/N" autocomplete="off">
+        <button class="dash-mode" id="dashFuzzy" onclick="toggleDashFuzzy()" type="button" aria-pressed="false">模糊搜尋</button>
+      </div>
+    </div>
+    <div class="dash-actions">
+      <button class="dash-btn" id="dashSearchBtn" onclick="loadDashboard()" type="button" disabled>搜尋</button>
+      <button class="dash-btn secondary" onclick="resetDashboardFilters()" type="button">重設</button>
+    </div>
+  </div>
+  <div class="dash-summary" id="dashSummary">毋須打開試算表，可直接搜尋及修改資料。</div>
+  <div class="dash-mobile-list" id="dashMobileRows">
+    <div class="dash-mobile-empty">按「搜尋」載入資料。</div>
+  </div>
+  <div class="dash-pager" id="dashPager">
+    <button class="dash-page-btn" id="dashPrevBtn" onclick="changeDashPage(-1)" type="button">上一頁</button>
+    <span class="dash-page-info" id="dashPageInfo">第 1 / 1 頁</span>
+    <button class="dash-page-btn" id="dashNextBtn" onclick="changeDashPage(1)" type="button">下一頁</button>
+  </div>
+  <div class="dash-table-wrap">
+    <table class="dash-table">
+      <thead>
+        <tr>
+          <th>日期</th><th>場地</th><th>PO</th><th>機型</th><th>機身號碼</th><th class="dash-geg-col">Void Seal</th><th class="dash-geg-col">New Void Seal</th>
+          <th>原因</th><th>處理</th><th>錯誤描述</th><th>Box</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="dashRows">
+        <tr><td colspan="12" class="dash-empty">按「搜尋」載入資料。</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div><!-- /dashboardPage -->
+
+<div style="height:16px"></div>
+<div id="appVersion"></div>
+<div style="height:8px"></div>
+<div class="toast" id="toast"></div>
+
+<!-- SN Numpad (7-8-9 / 4-5-6 / 1-2-3 / ⌫-0-✓) -->
+<div id="snPad">
+  <div id="snPadHeader">
+    <button id="snPadCloseBtn" onclick="hideSnPad()" type="button" title="關閉數字鍵盤">✕</button>
+    <div id="snPadDisplay">—</div>
+    <button id="soundToggleBtn" onclick="toggleSound()" title="切換鍵盤聲音">🔇</button>
+  </div>
+  <div id="snPadQueue"></div>
+  <div class="snpad-grid">
+    <div class="snpad-btn" onclick="snPadPress('7')">7</div>
+    <div class="snpad-btn" onclick="snPadPress('8')">8</div>
+    <div class="snpad-btn" onclick="snPadPress('9')">9</div>
+    <div class="snpad-btn" onclick="snPadPress('4')">4</div>
+    <div class="snpad-btn" onclick="snPadPress('5')">5</div>
+    <div class="snpad-btn" onclick="snPadPress('6')">6</div>
+    <div class="snpad-btn" onclick="snPadPress('1')">1</div>
+    <div class="snpad-btn" onclick="snPadPress('2')">2</div>
+    <div class="snpad-btn" onclick="snPadPress('3')">3</div>
+    <div class="snpad-btn snpad-back" onclick="snPadBack()">⌫</div>
+    <div class="snpad-btn" onclick="snPadPress('0')">0</div>
+    <div class="snpad-btn snpad-done" onclick="snPadDone()">✓</div>
+  </div>
+</div>
+
+<script>
+const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
+const _PS='JRM5b3kNYJd4Awi4yZg55g==';
+const _ITERS=3000000;
+const _APP_BUMP='2026.07.10-3';
+const _APP_VERSION='v0.944';
+const _isMob=document.documentElement.classList.contains('mob');
+
+// Render version label
+(function(){
+  const el=document.getElementById('appVersion');
+  if(el)el.textContent=_APP_VERSION;
+})();
+
+async function _pbkdf2(pin){
+  const salt=Uint8Array.from(atob(_PS),c=>c.charCodeAt(0));
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pin),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:_ITERS},key,256);
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+const COMPANIES=['Melco','MGM','SJM','SCL','GEG','Wynn'];
+const COMPANY_ORDER_KEY='_ml_company_order';
+const COMPANY_CASINOS={
+  Melco:['Altira','City of Dreams','Studio City'],
+  MGM:['MGM Macau','MGM Cotai'],
+  SJM:['Lisboa','Grand Lisboa','Grand Lisboa Palace','Oceanus','L’Arc'],
+  SCL:['Venetian','Parisian','Londoner','Plaza','Sands'],
+  GEG:['Galaxy','StarWorld'],
+  Wynn:['Wynn Macau','Wynn Palace']
+};
+let activePage='input';
+let activeCompany=localStorage.getItem('_ml_company')||'SCL';
+let setupVerifiedId='';
+let setupReturnState=null;
+function _companyKey(c){return `_ml_gas_${c}`;}
+function _casinoKey(c){return `_ml_casino_${c}`;}
+function casinoOptionsForCompany(company){return COMPANY_CASINOS[company]||COMPANY_CASINOS.SCL;}
+function _setCasinoSelectOptions(select,options,includeAll=false,extraValue=''){
+  if(!select)return;
+  const values=[...options];
+  if(extraValue&&!values.includes(extraValue))values.unshift(extraValue);
+  select.innerHTML=(includeAll?'<option value="">全部</option>':'')+values.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+}
+function getCompanyOrder(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(COMPANY_ORDER_KEY)||'[]');
+    const valid=saved.filter(c=>COMPANIES.includes(c));
+    return [...valid,...COMPANIES.filter(c=>!valid.includes(c))];
+  }catch(e){
+    return COMPANIES.slice();
+  }
+}
+function saveCompanyOrder(order){
+  localStorage.setItem(COMPANY_ORDER_KEY,JSON.stringify(order.filter(c=>COMPANIES.includes(c))));
+}
+function _dashVenueValue(company,casino=''){return `${company}|${casino}`;}
+function parseDashVenueFilter(){
+  const value=document.getElementById('dashCasino')?.value||'';
+  if(!value)return {company:'',casino:''};
+  const splitAt=value.indexOf('|');
+  if(splitAt<0)return {company:value,casino:''};
+  return {company:value.slice(0,splitAt),casino:value.slice(splitAt+1)};
+}
+function syncDashboardVenueOptions(keepValue=false){
+  const select=document.getElementById('dashCasino');
+  if(!select)return;
+  const current=keepValue?select.value:'';
+  let html='<option value="">請選擇</option>';
+  getCompanyOrder().forEach(company=>{
+    html+=`<option value="${esc(_dashVenueValue(company))}">${esc(company)}</option>`;
+    casinoOptionsForCompany(company).forEach(casino=>{
+      html+=`<option value="${esc(_dashVenueValue(company,casino))}">　${esc(casino)}</option>`;
+    });
+  });
+  select.innerHTML=html;
+  select.value=current&&Array.from(select.options).some(o=>o.value===current)?current:'';
+  updateDashboardSearchState();
+}
+function updateDashboardSearchState(){
+  const btn=document.getElementById('dashSearchBtn');
+  if(btn)btn.disabled=!document.getElementById('dashCasino')?.value;
+}
+function syncCasinoOptions(){
+  const options=casinoOptionsForCompany(activeCompany);
+  const casinoSel=document.getElementById('casino');
+  const current=casinoSel?casinoSel.value:'';
+  const stored=localStorage.getItem(_casinoKey(activeCompany))||localStorage.getItem('casino')||current;
+  if(casinoSel){
+    _setCasinoSelectOptions(casinoSel,options,false);
+    casinoSel.value=options.includes(stored)?stored:options[0];
+    localStorage.setItem(_casinoKey(activeCompany),casinoSel.value);
+  }
+}
+function _migrateCompanyCodes(){
+  const old=localStorage.getItem('_ml_gas');
+  if(old&&!localStorage.getItem(_companyKey('SCL')))localStorage.setItem(_companyKey('SCL'),old);
+}
+_migrateCompanyCodes();
+function getDeployId(company){return localStorage.getItem(_companyKey(company||activeCompany))||localStorage.getItem('_ml_gas')||'';}
+function getScriptUrl(){const id=getDeployId();if(!id)return '';if(id.startsWith('https://'))return id;return 'https://script.google.com/macros/s/'+id+'/exec';}
+function hasAnyDeployId(){return getCompanyOrder().some(c=>!!getDeployId(c));}
+function firstConfiguredCompany(){return getCompanyOrder().find(c=>!!getDeployId(c))||'';}
+function unlockApp(){document.body.classList.remove('auth-locked');}
+function normalizeDeployInput(id){return id.startsWith('https://')?id:'https://script.google.com/macros/s/'+id+'/exec';}
+function companyParam(){return 'company='+encodeURIComponent(activeCompany);}
+function syncCompanySpecificFields(){
+  document.body.classList.toggle('company-geg',activeCompany==='GEG');
+}
+function resetSetupVerification(){
+  setupVerifiedId='';
+  document.getElementById('setupSaveBtn').disabled=true;
+  const res=document.getElementById('setupTestResult');
+  res.className='';res.textContent='';res.style.display='none';
+}
+function saveSetup(){
+  const id=document.getElementById('gasUrlInput').value.trim();
+  if(!id||id.includes(' ')||id.length<20){document.getElementById('setupErr').textContent='請輸入有效 Deploy ID。';return;}
+  if(setupVerifiedId!==id){document.getElementById('setupErr').textContent='請先測試連線成功，再儲存。';return;}
+  localStorage.setItem('_ml_gas',id);
+  COMPANIES.forEach(c=>localStorage.setItem(_companyKey(c),id));
+  document.getElementById('setupScreen').classList.remove('show');
+  setupReturnState=null;setupVerifiedId='';
+  unlockApp();syncCompanySpecificFields();syncCasinoOptions();showPage('input');renderCompanyMenu();loadTodayRecords();
+}
+function cancelSetup(){
+  document.getElementById('setupScreen').classList.remove('show');
+  if(setupReturnState){
+    activeCompany=setupReturnState.company;
+    localStorage.setItem('_ml_company',activeCompany);
+    syncCompanySpecificFields();
+    syncCasinoOptions();
+    showPage(setupReturnState.page);
+    setupReturnState=null;
+  }
+  renderCompanyMenu();
+}
+async function testConnection(){
+  const id=document.getElementById('gasUrlInput').value.trim();
+  const res=document.getElementById('setupTestResult');
+  if(!id||id.length<20){res.className='setupTestResult err';res.textContent='先輸入 Deploy ID';res.style.display='block';return;}
+  const base=normalizeDeployInput(id);
+  const url=base+(base.includes('?')?'&':'?')+'action=today&'+companyParam();
+  const btn=document.getElementById('setupTestBtn');
+  btn.textContent='測試中…';btn.disabled=true;
+  res.className='';res.style.display='none';
+  try{
+    const r=await fetch(url);
+    const data=await r.json();
+    if(Array.isArray(data.records)){
+      res.className='setupTestResult ok';
+      res.textContent='✓ 連接成功！今日有 '+data.records.length+' 條記錄';
+      setupVerifiedId=id;
+      document.getElementById('setupSaveBtn').disabled=false;
+    }else{
+      res.className='setupTestResult err';
+      res.textContent='✗ GAS 返回格式錯誤';
+      setupVerifiedId='';
+      document.getElementById('setupSaveBtn').disabled=true;
+    }
+  }catch(e){
+    res.className='setupTestResult err';
+    res.textContent='✗ 連接失敗，請確認 Deploy ID 正確';
+    setupVerifiedId='';
+    document.getElementById('setupSaveBtn').disabled=true;
+  }
+  res.style.display='block';
+  btn.textContent='🔗 測試連線';btn.disabled=false;
+}
+function openGasSettings(opts={}){
+  setupReturnState=opts.returnState||null;
+  let cur=getDeployId();
+  if(cur.startsWith('https://script.google.com/macros/s/')){cur=cur.replace('https://script.google.com/macros/s/','').replace('/exec','');}
+  document.getElementById('gasUrlInput').value=cur;
+  document.getElementById('setupErr').textContent='';
+  document.getElementById('setupTitle').textContent='請輸入 Deploy ID';
+  resetSetupVerification();
+  document.getElementById('setupCancelBtn').style.display=(setupReturnState||cur)?'block':'none';
+  document.getElementById('setupScreen').classList.add('show');
+}
+function openMenu(){renderCompanyMenu();document.getElementById('menuOverlay').classList.add('show');document.getElementById('sideMenu').classList.add('show');}
+function closeMenu(){document.getElementById('menuOverlay').classList.remove('show');document.getElementById('sideMenu').classList.remove('show');}
+function showPage(page){
+  if(page==='dashboard'){
+    if(!hasAnyDeployId()){showToast('請先設定並測試其中一個網站代號','err');openGasSettings();return;}
+    if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);}
+    syncCasinoOptions();
+  }
+  activePage=page;
+  document.body.classList.toggle('dashboard-view',page==='dashboard');
+  document.getElementById('inputPage').classList.toggle('active',page==='input');
+  document.getElementById('dashboardPage').classList.toggle('active',page==='dashboard');
+  document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
+  renderCompanyMenu();
+  closeMenu();
+  if(page==='dashboard')initDashboardFilters();
+}
+function selectCompany(company){
+  const prev={company:activeCompany,page:activePage};
+  activeCompany=company;localStorage.setItem('_ml_company',company);
+  document.getElementById('activeCompanyLabel').textContent=company;
+  syncCompanySpecificFields();
+  syncCasinoOptions();
+  showPage('input');renderCompanyMenu();
+  if(!getDeployId(company))openGasSettings({returnState:prev});else loadTodayRecords();
+}
+function renderCompanyMenu(){
+  const el=document.getElementById('companyMenu');if(!el)return;
+  el.innerHTML=getCompanyOrder().map(c=>`<button class="menu-item ${c===activeCompany&&activePage==='input'?'active':''}" draggable="true" data-company="${esc(c)}" onclick="selectCompany('${c}')" type="button"><span>${c}</span><span class="menu-drag" title="拖拉更改順序">☰</span></button>`).join('');
+  bindCompanyMenuDrag();
+  document.getElementById('activeCompanyLabel').textContent=activeCompany;
+}
+function bindCompanyMenuDrag(){
+  const el=document.getElementById('companyMenu');
+  let dragged='';
+  el.querySelectorAll('.menu-item[data-company]').forEach(item=>{
+    item.addEventListener('dragstart',e=>{
+      dragged=item.dataset.company;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',dragged);
+    });
+    item.addEventListener('dragend',()=>item.classList.remove('dragging'));
+    item.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='move';});
+    item.addEventListener('drop',e=>{
+      e.preventDefault();
+      const target=item.dataset.company;
+      const source=dragged||e.dataTransfer.getData('text/plain');
+      if(!source||source===target)return;
+      const order=getCompanyOrder().filter(c=>c!==source);
+      order.splice(order.indexOf(target),0,source);
+      saveCompanyOrder(order);
+      renderCompanyMenu();
+      syncDashboardVenueOptions(true);
+    });
+  });
+}
+let _pin='',_pinBusy=false;
+// ── PIN Lockout ────────────────────────────────────────────
+const _FAILS_KEY='_ml_pf',_LOCK_KEY='_ml_pl';
+function _getFails(){return parseInt(localStorage.getItem(_FAILS_KEY)||'0',10);}
+function _getLock(){return parseInt(localStorage.getItem(_LOCK_KEY)||'0',10);}
+function _isLocked(){return Date.now()<_getLock();}
+function _lockMs(fails){
+  if(fails<=3)return 0;
+  if(fails===4)return 30000;
+  if(fails===5)return 300000;
+  if(fails===6)return 1800000;
+  return 3600000;
+}
+function _fmtRem(ms){
+  const s=Math.ceil(ms/1000);
+  if(s<60)return s+'s';
+  const m=Math.floor(s/60),rs=s%60;
+  if(m<60)return rs?`${m}m ${rs}s`:`${m}m`;
+  const h=Math.floor(m/60),rm=m%60;
+  return rm?`${h}h ${rm}m`:`${h}h`;
+}
+let _lockTimer=null;
+function _setPadDisabled(dis){
+  document.querySelectorAll('.pin-btn').forEach(b=>{b.style.pointerEvents=dis?'none':'';b.style.opacity=dis?'0.3':'';});
+}
+function _startLockUI(until){
+  _setPadDisabled(true);
+  if(_lockTimer)clearInterval(_lockTimer);
+  const err=document.getElementById('pinError');
+  err.textContent='嘗試次數過多';err.style.opacity='1';
+  function tick(){
+    const rem=until-Date.now();
+    if(rem<=0){
+      clearInterval(_lockTimer);_lockTimer=null;
+      _setPadDisabled(false);
+      document.getElementById('pinSub').textContent='請輸入 PIN';
+      err.style.opacity='0';
+      return;
+    }
+    document.getElementById('pinSub').textContent=`已鎖定，${_fmtRem(rem)} 後再試`;
+  }
+  tick();
+  _lockTimer=setInterval(tick,500);
+}
+// ──────────────────────────────────────────────────────────
+function _updateDots(){for(let i=0;i<6;i++)document.getElementById('d'+i).classList.toggle('filled',i<_pin.length);}
+function pinPress(n){
+  if(_isLocked()||_pinBusy||_pin.length>=6)return;
+  if(navigator.vibrate)navigator.vibrate(10);
+  _pin+=String(n);_updateDots();
+  if(_pin.length===6)_checkPin();
+}
+function pinBack(){if(_isLocked()||_pinBusy||!_pin.length)return;_pin=_pin.slice(0,-1);_updateDots();}
+async function _checkPin(){
+  _pinBusy=true;
+  document.getElementById('pinSub').textContent='驗證中…';
+  const hash=await _pbkdf2(_pin);
+  if(hash===_PH){
+    localStorage.removeItem(_FAILS_KEY);localStorage.removeItem(_LOCK_KEY);
+    localStorage.setItem('_ml_auth',_PH);
+    document.getElementById('pinScreen').style.display='none';
+    hideSnPad();
+    if(!hasAnyDeployId()){openGasSettings();}
+    else{
+      if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);renderCompanyMenu();}
+      unlockApp();loadTodayRecords();
+    }
+  }else{
+    _pin='';_pinBusy=false;_updateDots();
+    const fails=_getFails()+1;
+    localStorage.setItem(_FAILS_KEY,fails);
+    const lockMs=_lockMs(fails);
+    const box=document.getElementById('pinBox');
+    const err=document.getElementById('pinError');
+    box.classList.add('shake');
+    if(navigator.vibrate)navigator.vibrate([100,50,100]);
+    setTimeout(()=>box.classList.remove('shake'),400);
+    if(lockMs>0){
+      if(navigator.vibrate)navigator.vibrate([100,50,100,50,100]);
+      const until=Date.now()+lockMs;
+      localStorage.setItem(_LOCK_KEY,until);
+      _startLockUI(until);
+    }else{
+      err.textContent='PIN 錯誤';err.style.opacity='1';
+      document.getElementById('pinSub').textContent=`請輸入 PIN（錯誤 ${fails} 次）`;
+      setTimeout(()=>err.style.opacity='0',1500);
+    }
+  }
+}
+(function(){const u=_getLock();if(Date.now()<u)_startLockUI(u);})();
+document.addEventListener('keydown',function(e){
+  if(document.getElementById('pinScreen').style.display==='none')return;
+  if(_isLocked())return;
+  if(e.key>='0'&&e.key<='9')pinPress(e.key);
+  else if(e.key==='Backspace')pinBack();
+});
+document.getElementById('gasUrlInput').addEventListener('input',resetSetupVerification);
+document.getElementById('gasUrlInput').addEventListener('keydown',function(e){if(e.key==='Enter')saveSetup();});
+
+// ── Sound ──────────────────────────────────────────────────
+let _audioCtx=null;
+let _soundOn=localStorage.getItem('_ml_sound')==='true';
+function _getCtx(){if(!_audioCtx)_audioCtx=new(window.AudioContext||window.webkitAudioContext)();return _audioCtx;}
+function _beep(freq1,freq2,dur,vol){
+  try{
+    const ctx=_getCtx();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain);gain.connect(ctx.destination);
+    osc.type='sine';
+    osc.frequency.setValueAtTime(freq1,ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq2,ctx.currentTime+dur);
+    gain.gain.setValueAtTime(vol,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+    osc.start(ctx.currentTime);osc.stop(ctx.currentTime+dur);
+  }catch(e){}
+}
+function playTapSound(){if(_soundOn)_beep(900,500,0.07,0.2);}
+function playBackSound(){if(_soundOn)_beep(500,300,0.07,0.15);}
+function playDoneSound(){
+  if(!_soundOn)return;
+  _beep(600,600,0.06,0.2);
+  setTimeout(()=>_beep(900,900,0.1,0.2),70);
+}
+function toggleSound(){
+  _soundOn=!_soundOn;
+  localStorage.setItem('_ml_sound',_soundOn);
+  _updateSoundBtn();
+  if(_soundOn)playTapSound();
+}
+function _updateSoundBtn(){
+  const btn=document.getElementById('soundToggleBtn');
+  btn.textContent=_soundOn?'🔊':'🔇';
+  btn.classList.toggle('on',_soundOn);
+}
+_updateSoundBtn();
+// ───────────────────────────────────────────────────────────
+
+// ── SN Numpad ──────────────────────────────────────────────
+let _snPadHistoryPushed=false;
+function showSnPad(){
+  updateSnPadDisplay();
+  const pad=document.getElementById('snPad');
+  if(!pad.classList.contains('show')){
+    history.pushState({snPad:true},'');
+    _snPadHistoryPushed=true;
+  }
+  pad.classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function hideSnPad(){
+  document.getElementById('snPad').classList.remove('show');
+  document.body.style.overflow='';
+  if(_snPadHistoryPushed){
+    _snPadHistoryPushed=false;
+    history.back();
+  }
+}
+window.addEventListener('popstate',function(e){
+  const pad=document.getElementById('snPad');
+  if(pad.classList.contains('show')){
+    _snPadHistoryPushed=false;
+    pad.classList.remove('show');
+    document.body.style.overflow='';
+  }
+});
+function snPadPress(n){
+  const inp=document.getElementById('serialNo');
+  if((inp.value||'').length>=4)return;
+  if(navigator.vibrate)navigator.vibrate(15);
+  playTapSound();
+  inp.value=(inp.value||'')+n;
+  updateSnPadDisplay();
+}
+function snPadBack(){
+  if(navigator.vibrate)navigator.vibrate(15);
+  playBackSound();
+  const inp=document.getElementById('serialNo');
+  inp.value=(inp.value||'').slice(0,-1);
+  updateSnPadDisplay();
+}
+function snPadDone(){playDoneSound();addToQueue();}
+function updateSnPadDisplay(){
+  const v=document.getElementById('serialNo').value||'';
+  document.getElementById('snPadDisplay').textContent=v||'—';
+}
+document.addEventListener('click',function(e){
+  const pad=document.getElementById('snPad');
+  const inp=document.getElementById('serialNo');
+  if(pad.classList.contains('show')&&!pad.contains(e.target)&&e.target!==inp){hideSnPad();}
+});
+// ───────────────────────────────────────────────────────────
+
+const REASONS=['PM','Draw Time Out','Cannot Scan','Wrong Reading','Can Not Read Cutting Card',"Can't Read 1","Can't Read 2","Can't Draw (Error)","Can't Burn (Error)",'Bad Card Code','Mistake Dealing','More Draw','Stopper Problem','Card Reverse','Scope Holder Loose','Missing Sensor Screw','Lock Button Problem','Missing / Broken Sensor Cover','Missing Magnet','Missing Magnet Plate','Missing foot','Magnetic Sensor Problem','Hardware Problem','Button Not Good','Drawn 2 Cards Together','Hard to Draw Cards','Can Not Draw Cards','LCD Monitor Problem','Object Amplifier Problem','UV Amplifier Problem','Color Amplifier Problem','Key Hole Broken','Power Button Problem','Fiber Attachment Problem','CPU Problem','LED Problem','Void Seal Broken','Brush Loosen / Broken','No Communication to PC','DeepClean','Unknown','Sensor Not Good','Special Check','Setting Changed','Software Update','PO','Other'];
+const ACTION_MAP={'PM':'Preventive Maintenance','Draw Time Out':'Checked OK','Cannot Scan':'Checked OK','Wrong Reading':'Reteach','Can Not Read Cutting Card':'Reteach',"Can't Read 1":'Reteach',"Can't Read 2":'Reteach',"Can't Draw (Error)":'Checked OK',"Can't Burn (Error)":'Checked OK','Bad Card Code':'Reteach','Mistake Dealing':'Checked OK','More Draw':'Checked OK','Stopper Problem':'Adjusted','Card Reverse':'Checked OK','Scope Holder Loose':'Adjusted','Missing Sensor Screw':'Installed','Lock Button Problem':'Waiting Parts','Missing / Broken Sensor Cover':'Waiting Parts','Missing Magnet':'Installed','Missing Magnet Plate':'Installed','Missing foot':'Installed','Magnetic Sensor Problem':'Waiting Parts','Hardware Problem':'Waiting Parts','Button Not Good':'Urethane Changed','Drawn 2 Cards Together':'Checked OK','Hard to Draw Cards':'Checked OK','Can Not Draw Cards':'Checked OK','LCD Monitor Problem':'Adjusted','Object Amplifier Problem':'Waiting Parts','UV Amplifier Problem':'Waiting Parts','Color Amplifier Problem':'Waiting Parts','Key Hole Broken':'Waiting Parts','Power Button Problem':'Waiting Parts','Fiber Attachment Problem':'Waiting Parts','CPU Problem':'Waiting Parts','LED Problem':'Waiting Parts','Void Seal Broken':'Adjusted','Brush Loosen / Broken':'Installed','No Communication to PC':'Adjusted','DeepClean':'OK','Unknown':'Checked OK','Sensor Not Good':'Reteach','Special Check':'Checked OK','Setting Changed':'Setting Changed'};
+const ALL_ACTIONS=['Preventive Maintenance','Checked OK','Reteach','Adjusted','Installed','Waiting Parts','Urethane Changed','OK','Setting Changed','LCD Glass Broken, Waiting Parts'];
+const _comboRegistry={};
+let _comboSelecting=false;
+function _comboOption(o){return typeof o==='string'?{value:o,label:o}:o;}
+function _setupSearchCombo(inputId,menuId,getOptions){
+  const input=document.getElementById(inputId),menu=document.getElementById(menuId);
+  if(!input||!menu)return;
+  const box=input.closest('.combo');
+  const render=()=>{
+    if(_comboSelecting)return;
+    const q=(input.value||'').trim().toLowerCase();
+    const opts=getOptions().map(_comboOption)
+      .filter(o=>!q||o.value.toLowerCase().includes(q)||String(o.label||'').toLowerCase().includes(q))
+      .slice(0,40);
+    menu.innerHTML=opts.length?opts.map(o=>`<button class="combo-option" type="button" data-value="${esc(o.value)}">${esc(o.label||o.value)}</button>`).join(''):'<div class="combo-empty">沒有相符選項</div>';
+    if(box)box.classList.add('open');
+  };
+  _comboRegistry[inputId]={render};
+  input.addEventListener('focus',render);
+  input.addEventListener('click',render);
+  input.addEventListener('input',render);
+  input.addEventListener('blur',()=>setTimeout(()=>{if(box)box.classList.remove('open');},120));
+  menu.addEventListener('mousedown',e=>{
+    const btn=e.target.closest('.combo-option');if(!btn)return;
+    e.preventDefault();
+    _comboSelecting=true;
+    input.value=btn.dataset.value;
+    document.querySelectorAll('.combo.open').forEach(b=>b.classList.remove('open'));
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+    setTimeout(()=>{_comboSelecting=false;},0);
+  });
+}
+function _refreshSearchCombo(inputId){const c=_comboRegistry[inputId];if(c)c.render();}
+document.addEventListener('click',e=>{document.querySelectorAll('.combo.open').forEach(box=>{if(!box.contains(e.target))box.classList.remove('open');});});
+let _recentReasons=[];
+try{_recentReasons=JSON.parse(localStorage.getItem('_ml_recent_r')||'[]');}catch(e){}
+function _reasonOptions(){return _recentReasons.length?_recentReasons.concat(REASONS.filter(r=>!_recentReasons.includes(r))):REASONS;}
+function _rebuildReasonSelect(){
+  const rSel=document.getElementById('reason');
+  const cur=rSel.value||'PM';
+  rSel.value=cur;
+  if(!rSel.value)rSel.value=_recentReasons[0]||'PM';
+  _refreshSearchCombo('reason');
+}
+function _updateRecentReasons(reason){
+  _recentReasons=[reason,..._recentReasons.filter(r=>r!==reason)].slice(0,5);
+  localStorage.setItem('_ml_recent_r',JSON.stringify(_recentReasons));
+  const rSel=document.getElementById('reason');
+  const cur=rSel.value;
+  _rebuildReasonSelect();
+  rSel.value=cur;
+}
+_rebuildReasonSelect();
+_setupSearchCombo('reason','reasonMenu',_reasonOptions);
+_setupSearchCombo('actionDrop','actionMenu',()=>ALL_ACTIONS);
+_setupSearchCombo('itemCode','itemCodeMenu',()=>_partsCodes.map(p=>({value:p.code,label:p.label})));
+document.getElementById('actionDrop').value='Preventive Maintenance';
+const _t=new Date();
+document.getElementById('date').value=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
+['casino','poNumber'].forEach(k=>{const v=localStorage.getItem(k);if(v)document.getElementById(k).value=v;});
+syncCompanySpecificFields();
+syncCasinoOptions();
+const _savedModel=localStorage.getItem('model');if(_savedModel)document.getElementById('model').value=_savedModel;
+document.getElementById('model').addEventListener('change',function(){localStorage.setItem('model',this.value);});
+document.getElementById('poNumber').addEventListener('change',function(){localStorage.setItem('poNumber',this.value.trim());});
+let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='';
+let dashboardRecords=[],dashboardPage=1,dashboardEditingIdx=-1;
+const DASH_PAGE_SIZE=10;
+let selectedQueueIdxs=new Set();
+function saveQueue(){localStorage.setItem('_ml_queue',JSON.stringify(queue));}
+try{const _sq=localStorage.getItem('_ml_queue');if(_sq)queue=JSON.parse(_sq);}catch(e){}
+
+// ── Local Log & Stats ──────────────────────────────────────
+function _todayLogKey(){const t=new Date();return `_ml_log_${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;}
+function _appendLocalLog(records){
+  const key=_todayLogKey();let log=[];
+  try{log=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
+  localStorage.setItem(key,JSON.stringify(log.concat(records)));
+  _renderStats();
+}
+function _getLocalLog(){try{return JSON.parse(localStorage.getItem(_todayLogKey())||'[]');}catch(e){return[];}}
+function _renderStats(){
+  const log=_getLocalLog();
+  const card=document.getElementById('statsCard');
+  if(!log.length){card.style.display='none';return;}
+  card.style.display='block';
+  const counts={};log.forEach(r=>{counts[r.reason]=(counts[r.reason]||0)+1;});
+  const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1])
+    .map(([r,c])=>`<div class="stat-row"><span>${esc(r)}</span><span class="stat-count">${c}</span></div>`).join('');
+  document.getElementById('statsList').innerHTML=`<div class="stat-total">今日：<strong>${log.length}</strong> 部機</div>${rows}`;
+}
+
+// ── Retry Queue ────────────────────────────────────────────
+let _retryQueue=[];
+try{_retryQueue=JSON.parse(localStorage.getItem('_ml_retry')||'[]');}catch(e){}
+function _saveRetry(){localStorage.setItem('_ml_retry',JSON.stringify(_retryQueue));}
+function _updateRetryNotice(){
+  const el=document.getElementById('retryNotice');if(!el)return;
+  if(_retryQueue.length){
+    const total=_retryQueue.reduce((s,i)=>s+i.records.length,0);
+    document.getElementById('retryNoticeMsg').textContent=`${total} 筆記錄等待同步（已離線儲存）`;
+    el.style.display='flex';
+  }else{el.style.display='none';}
+}
+async function _attemptRetry(){
+  if(!_retryQueue.length)return;
+  const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL)return;
+  const item=_retryQueue[0];
+  const CHUNK=20;
+  let sentIdx=0;
+  try{
+    for(let i=0;i<item.records.length;i+=CHUNK){
+      const chunk=item.records.slice(i,i+CHUNK);
+      const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(chunk)});
+      const data=await r.json();
+      if(data.success){_appendLocalLog(chunk);sentIdx+=chunk.length;}
+      else break;
+    }
+  }catch(e){}
+  if(sentIdx===item.records.length){
+    _retryQueue.shift();_saveRetry();_updateRetryNotice();
+    showToast(`✓ ${item.records.length} 筆離線記錄已同步`);
+    if(_retryQueue.length)setTimeout(_attemptRetry,1000);
+  }else if(sentIdx>0){
+    _retryQueue[0]={records:item.records.slice(sentIdx)};_saveRetry();
+  }
+}
+window.addEventListener('online',()=>setTimeout(_attemptRetry,1000));
+
+// ── Broken Parts ───────────────────────────────────────────
+let _partsCodes=[];
+let _bpRepairDayMode='waiting';
+let _bpRemarkVisible=false;
+const _PARTS_KEY='_ml_parts';
+(function(){const sel=document.getElementById('bpQty');for(let i=1;i<=20;i++){const o=document.createElement('option');o.value=i;o.textContent=i;sel.appendChild(o);}})();
+(function(){const t=new Date();document.getElementById('bpRepairDayDate').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;})();
+function _rebuildItemCodeSelect(){
+  _refreshSearchCombo('itemCode');
+}
+function _updatePartsTs(ts){
+  const el=document.getElementById('bpUpdateTs');if(!el)return;
+  if(!ts){el.textContent='未載入';return;}
+  const d=new Date(ts);
+  el.textContent=`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+function _loadPartsFromCache(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(_PARTS_KEY)||'null');
+    if(cached&&Array.isArray(cached.data)&&cached.data.length){
+      _partsCodes=cached.data;_rebuildItemCodeSelect();_updatePartsTs(cached.ts);return;
+    }
+  }catch(e){}
+  _updatePartsTs(null);
+}
+async function fetchPartsCodes(){
+  const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL){showToast('尚未設定網站代號','err');return;}
+  const btn=document.getElementById('bpUpdateBtn');
+  if(btn){btn.textContent='…';btn.disabled=true;}
+  try{
+    const r=await fetch(SCRIPT_URL+'?action=parts&'+companyParam());
+    const data=await r.json();
+    if(Array.isArray(data.parts)&&data.parts.length){
+      _partsCodes=data.parts;
+      const ts=Date.now();
+      localStorage.setItem(_PARTS_KEY,JSON.stringify({data:_partsCodes,ts}));
+      _rebuildItemCodeSelect();_updatePartsTs(ts);
+      showToast('✓ 零件清單已更新（'+_partsCodes.length+' 項）');
+    }else{showToast('沒有零件資料','err');}
+  }catch(e){showToast('零件清單載入失敗','err');}
+  if(btn){btn.textContent='↻';btn.disabled=false;}
+}
+_loadPartsFromCache();
+function onBrokenPartsChange(){
+  const checked=document.getElementById('brokenPartsCheck').checked;
+  document.getElementById('bpFields').style.display=checked?'block':'none';
+}
+function toggleBpRepairDay(){
+  _bpRepairDayMode=_bpRepairDayMode==='waiting'?'date':'waiting';
+  const btn=document.getElementById('bpRepairDayBtn');
+  const inp=document.getElementById('bpRepairDayDate');
+  if(_bpRepairDayMode==='date'){
+    inp.style.display='block';btn.textContent='↩ 等待';btn.classList.add('active');
+  }else{
+    inp.style.display='none';btn.textContent='等待';btn.classList.remove('active');
+  }
+}
+function toggleBpRemark(){
+  _bpRemarkVisible=!_bpRemarkVisible;
+  document.getElementById('bpRemarkRow').style.display=_bpRemarkVisible?'block':'none';
+  document.getElementById('bpRemarkBtn').textContent=(_bpRemarkVisible?'▲':'▼')+' 備註';
+}
+function _getBpData(){
+  if(!document.getElementById('brokenPartsCheck').checked)return null;
+  const code=document.getElementById('itemCode').value;
+  const part=_partsCodes.find(p=>p.code===code)||{};
+  const repairDay=_bpRepairDayMode==='waiting'?'Waiting':fmtDate(document.getElementById('bpRepairDayDate').value);
+  return{brokenParts:code,bpDesc:part.desc||'',bpColC:part.colC||'',bpQty:document.getElementById('bpQty').value,bpRepairDay:repairDay,bpRemark:_bpRemarkVisible?document.getElementById('bpRemark').value.trim():''};
+}
+function _resetBpFields(){
+  document.getElementById('brokenPartsCheck').checked=false;
+  document.getElementById('bpFields').style.display='none';
+  document.getElementById('itemCode').value='';
+  document.getElementById('bpQty').value=1;
+  _bpRepairDayMode='waiting';
+  document.getElementById('bpRepairDayBtn').textContent='等待';
+  document.getElementById('bpRepairDayBtn').classList.remove('active');
+  document.getElementById('bpRepairDayDate').style.display='none';
+  _bpRemarkVisible=false;
+  document.getElementById('bpRemarkRow').style.display='none';
+  document.getElementById('bpRemarkBtn').textContent='▼ 備註';
+  document.getElementById('bpRemark').value='';
+}
+// ───────────────────────────────────────────────────────────
+
+// ── Batch Mode ─────────────────────────────────────────────
+let _batchMode=false;
+function toggleBatch(){
+  _batchMode=!_batchMode;
+  document.getElementById('batchArea').style.display=_batchMode?'block':'none';
+  document.getElementById('snSingleArea').style.display=_batchMode?'none':'block';
+  document.getElementById('addQueueBtn').style.display=_batchMode?'none':'block';
+  document.getElementById('batchToggleBtn').textContent=_batchMode?'✕ 單筆模式':'⊞ 批量模式';
+  if(_batchMode)hideSnPad();else document.getElementById('batchSns').value='';
+}
+function addBatchToQueue(){
+  let lines=document.getElementById('batchSns').value.split(/[\n,]+/).map(s=>s.trim()).filter(s=>/^\d{1,4}$/.test(s));
+  if(!lines.length){showToast('請輸入有效機身號碼（1–4 位數字）','err');return;}
+  const reason=document.getElementById('reason').value;
+  const action=getAction();
+  if(!action){showToast('請選擇處理方法','err');return;}
+  const model=document.getElementById('model').value;
+  const errorDescription=optionalVisible?document.getElementById('errorDescription').value.trim():'';
+  const boxId=optionalVisible?document.getElementById('boxId').value.trim():'';
+  const bpData=_getBpData()||{};
+  const sealData=getGegSealData();
+  let added=0,dups=0,internalDups=0;
+  const seenInBatch=new Set();
+  lines.forEach(sn=>{
+    if(seenInBatch.has(sn)){internalDups++;return;}
+    seenInBatch.add(sn);
+    if(todayRecords.some(r=>String(r.serialNo)===sn)||queue.some(q=>q.sn===sn)){dups++;return;}
+    queue.push({sn,model,reason,action,errorDescription,boxId,...sealData,...bpData});added++;
+  });
+  if(added){saveQueue();renderQueue();_updateRecentReasons(reason);}
+  document.getElementById('batchSns').value='';
+  if(internalDups)showToast(`✓ 已加入 ${added} 筆，略過 ${dups+internalDups} 筆重複（其中 ${internalDups} 筆為批量內重複）`,'warn');
+  else if(dups&&added)showToast(`✓ 已加入 ${added} 筆，略過 ${dups} 筆重複`,'warn');
+  else if(added)showToast(`✓ 已加入 ${added} 筆待提交`);
+  else showToast('全部機身號碼都重複','err');
+}
+
+function onReasonInput(){const r=document.getElementById('reason').value;if(REASONS.includes(r))onReasonChange();}
+function onReasonChange(){const r=document.getElementById('reason').value;const def=ACTION_MAP[r];if(def){switchToDrop();document.getElementById('actionDrop').value=def;}else{switchToCustom();document.getElementById('actionCustom').value='';}  _syncBpFromAction();}
+function _syncBpFromAction(){
+  const action=getAction();
+  const check=document.getElementById('brokenPartsCheck');
+  const shouldCheck=action==='Waiting Parts';
+  if(check.checked!==shouldCheck){check.checked=shouldCheck;onBrokenPartsChange();}
+}
+function switchToDrop(){document.getElementById('actionDropRow').style.display='flex';document.getElementById('actionCustomRow').style.display='none';}
+function switchToCustom(){document.getElementById('actionDropRow').style.display='none';document.getElementById('actionCustomRow').style.display='flex';document.getElementById('actionCustom').focus();}
+function getAction(){return document.getElementById('actionDropRow').style.display!=='none'?document.getElementById('actionDrop').value:document.getElementById('actionCustom').value.trim();}
+function toggleOptional(){optionalVisible=!optionalVisible;document.getElementById('optionalFields').classList.toggle('vis',optionalVisible);document.getElementById('optToggleBtn').textContent=optionalVisible?'▲ 錯誤描述 / Box ID':'▼ 錯誤描述 / Box ID';}
+function getGegSealData(){
+  if(activeCompany!=='GEG')return {};
+  return {
+    voidSeal:document.getElementById('voidSeal').value.trim(),
+    newVoidSeal:document.getElementById('newVoidSeal').value.trim()
+  };
+}
+function addToQueue(){
+  const sn=document.getElementById('serialNo').value.trim();
+  if(!sn){showToast('請輸入機身號碼','err');return;}
+  if(!/^\d{1,4}$/.test(sn)){showToast('機身號碼必須為 1–4 位數字','err');return;}
+  const reason=document.getElementById('reason').value;
+  const action=getAction();
+  if(!action){showToast('請選擇處理方法','err');return;}
+  const model=document.getElementById('model').value;
+  const errorDescription=optionalVisible?document.getElementById('errorDescription').value.trim():'';
+  const boxId=optionalVisible?document.getElementById('boxId').value.trim():'';
+  const bpData=_getBpData()||{};
+  const sealData=getGegSealData();
+  const isDupToday=todayRecords.some(r=>String(r.serialNo)===sn);
+  const isDupQueue=queue.some(q=>q.sn===sn);
+  if(isDupToday||isDupQueue){
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...bpData};
+    const where=isDupToday?'今日已提交記錄':'目前待提交清單';
+    document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 已存在於${where}。仍然加入？`;
+    document.getElementById('dupModal').classList.add('show');
+    return;
+  }
+  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...bpData});
+}
+function cancelDupAdd(){pendingAdd=null;document.getElementById('dupModal').classList.remove('show');}
+function confirmDupAdd(){if(pendingAdd)doAddToQueue(pendingAdd);pendingAdd=null;document.getElementById('dupModal').classList.remove('show');}
+function doAddToQueue(item){
+  queue.push(item);saveQueue();renderQueue();
+  document.getElementById('serialNo').value='';
+  updateSnPadDisplay();
+  if(activeCompany==='GEG'){document.getElementById('voidSeal').value='';document.getElementById('newVoidSeal').value='';}
+  if(optionalVisible){document.getElementById('errorDescription').value='';document.getElementById('boxId').value='';}
+  _resetBpFields();
+  _updateRecentReasons(item.reason);
+  document.getElementById('reason').value='PM';
+  switchToDrop();document.getElementById('actionDrop').value='Preventive Maintenance';
+  if(_isMob)showSnPad();else document.getElementById('serialNo').focus();
+}
+function startEditQueue(i){editingIdx=i;const item=queue[i];editTemp={sn:item.sn,model:item.model||'SAE',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',reason:item.reason,action:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',actionMode:ALL_ACTIONS.includes(item.action)?'drop':'custom'};renderQueue();}
+function cancelEditQueue(){editingIdx=-1;editTemp=null;renderQueue();}
+function captureEditTemp(){
+  if(editingIdx<0||!editTemp)return;
+  const g=id=>document.getElementById(id);
+  if(g('eq-sn'))editTemp.sn=g('eq-sn').value;
+  if(g('eq-model'))editTemp.model=g('eq-model').value;
+  if(g('eq-void-seal'))editTemp.voidSeal=g('eq-void-seal').value;
+  if(g('eq-new-void-seal'))editTemp.newVoidSeal=g('eq-new-void-seal').value;
+  if(g('eq-reason'))editTemp.reason=g('eq-reason').value;
+  if(editTemp.actionMode==='drop'&&g('eq-action-drop'))editTemp.action=g('eq-action-drop').value;
+  if(editTemp.actionMode==='custom'&&g('eq-action-custom'))editTemp.action=g('eq-action-custom').value;
+  if(g('eq-error'))editTemp.errorDescription=g('eq-error').value;
+  if(g('eq-boxid'))editTemp.boxId=g('eq-boxid').value;
+}
+function setEditActionMode(mode){captureEditTemp();editTemp.actionMode=mode;if(mode==='drop'&&ACTION_MAP[editTemp.reason])editTemp.action=ACTION_MAP[editTemp.reason];renderQueue();}
+function onEditReasonInput(){captureEditTemp();if(REASONS.includes(editTemp.reason))onEditReasonChange();}
+function onEditReasonChange(){captureEditTemp();const def=ACTION_MAP[editTemp.reason];if(def){editTemp.action=def;editTemp.actionMode='drop';}else{editTemp.actionMode='custom';editTemp.action='';}renderQueue();}
+function saveEditQueue(i){
+  captureEditTemp();
+  const sn=(editTemp.sn||'').trim();
+  if(!sn){showToast('請輸入機身號碼','err');return;}
+  const action=editTemp.actionMode==='drop'?editTemp.action:(editTemp.action||'').trim();
+  if(!action){showToast('請選擇處理方法','err');return;}
+  queue[i]={sn,model:editTemp.model||'SAE',voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
+  editingIdx=-1;editTemp=null;saveQueue();renderQueue();
+}
+function toggleQueueSelect(i,checked){
+  if(checked)selectedQueueIdxs.add(i);else selectedQueueIdxs.delete(i);
+  renderQueue();
+}
+function toggleQueueSelectAll(checked){
+  selectedQueueIdxs=checked?new Set(queue.map((_,i)=>i)):new Set();
+  renderQueue();
+}
+function clearQueueSelection(){selectedQueueIdxs.clear();renderQueue();}
+function bulkSetModel(model){
+  const idxs=[...selectedQueueIdxs].filter(i=>queue[i]);
+  if(!idxs.length){showToast('請先選擇記錄','err');return;}
+  idxs.forEach(i=>{queue[i].model=model;});
+  if(editingIdx>=0&&selectedQueueIdxs.has(editingIdx)&&editTemp)editTemp.model=model;
+  saveQueue();renderQueue();showToast(`✓ 已將 ${idxs.length} 筆記錄改為 ${model}`);
+}
+function removeFromQueue(i){
+  if(editingIdx===i){editingIdx=-1;editTemp=null;}
+  queue.splice(i,1);
+  selectedQueueIdxs=new Set([...selectedQueueIdxs].filter(idx=>idx!==i).map(idx=>idx>i?idx-1:idx));
+  saveQueue();renderQueue();
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
+function updateSnPadQueue(){
+  const el=document.getElementById('snPadQueue');
+  if(!el)return;
+  if(!queue.length){el.innerHTML='';return;}
+  const MAX=10;
+  const rev=[...queue].reverse();
+  const extra=rev.length>MAX?rev.length-MAX:0;
+  const shown=rev.slice(0,MAX);
+  el.innerHTML='<span class="spq-label">待提交：</span>'
+    +(extra?`<span class="spq-more">+${extra}</span>`:'')
+    +shown.map(item=>`<span class="spq-sn">${esc(item.sn)}</span>`).join('');
+}
+function renderQueue(){
+  const badge=document.getElementById('countBadge');
+  const card=document.getElementById('queueCard');
+  const btn=document.getElementById('submitBtn');
+  const list=document.getElementById('queueList');
+  selectedQueueIdxs=new Set([...selectedQueueIdxs].filter(i=>i>=0&&i<queue.length));
+  const selectedCount=selectedQueueIdxs.size;
+  badge.textContent=queue.length;
+  btn.disabled=queue.length===0;
+  card.style.display=queue.length?'block':'none';
+  const selectAll=document.getElementById('queueSelectAll');
+  const selectedLabel=document.getElementById('queueSelectedCount');
+  if(selectAll){selectAll.checked=queue.length>0&&selectedCount===queue.length;selectAll.indeterminate=selectedCount>0&&selectedCount<queue.length;}
+  if(selectedLabel)selectedLabel.textContent=`已選 ${selectedCount} 筆`;
+  ['bulkSaeBtn','bulkTaeBtn','bulkClearBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=selectedCount===0;});
+  if(!_isMob)document.getElementById('mainLayout').classList.toggle('has-queue',queue.length>0);
+  updateSnPadQueue();
+  const displayIdxs=[...queue.keys()].reverse();
+  list.innerHTML=displayIdxs.map(i=>{
+    const item=queue[i];
+    const checked=selectedQueueIdxs.has(i)?' checked':'';
+    if(editingIdx===i&&editTemp){
+      const aHtml=editTemp.actionMode==='drop'
+        ?`<div class="row-action"><div class="combo" data-combo="eq-action-drop"><input id="eq-action-drop" type="text" value="${esc(editTemp.action)}" placeholder="搜尋處理方法..." autocomplete="off"><div class="combo-menu" id="eq-action-menu"></div></div><button class="icon-btn" onclick="setEditActionMode('custom')" type="button">✏️</button></div>`
+        :`<div class="row-action"><input id="eq-action-custom" type="text" value="${esc(editTemp.action)}" placeholder="輸入處理方法..."><button class="icon-btn" onclick="setEditActionMode('drop')" type="button">☰</button></div>`;
+      const mOpts=['SAE','TAE'].map(m=>`<option${m===editTemp.model?' selected':''}>${m}</option>`).join('');
+      const sealEditHtml=activeCompany==='GEG'?`
+        <div class="ef-row"><label>Void Seal</label><input id="eq-void-seal" type="text" value="${esc(editTemp.voidSeal)}" placeholder="選填"></div>
+        <div class="ef-row"><label>New Void Seal</label><input id="eq-new-void-seal" type="text" value="${esc(editTemp.newVoidSeal)}" placeholder="如有更換才填"></div>`:'';
+      return `<div class="q-item q-editing"><div class="q-edit-form">
+        <div class="q-edit-top"><label class="q-select-label"><input class="q-select" type="checkbox" onchange="toggleQueueSelect(${i},this.checked)"${checked}> 選取</label></div>
+        <div class="ef-row"><label>機身號碼</label><input id="eq-sn" class="sn-input" type="text" value="${esc(editTemp.sn)}" inputmode="numeric"></div>
+        <div class="ef-row"><label>機型</label><select id="eq-model">${mOpts}</select></div>
+        ${sealEditHtml}
+        <div class="ef-row"><label>原因</label><div class="combo" data-combo="eq-reason"><input id="eq-reason" type="text" value="${esc(editTemp.reason)}" oninput="onEditReasonInput()" onchange="onEditReasonChange()" placeholder="搜尋原因..." autocomplete="off"><div class="combo-menu" id="eq-reason-menu"></div></div></div>
+        <div class="ef-row"><label>處理方法</label>${aHtml}</div>
+        <div class="ef-row"><label>錯誤描述</label><input id="eq-error" type="text" value="${esc(editTemp.errorDescription)}" placeholder="選填"></div>
+        <div class="ef-row"><label>Box ID</label><input id="eq-boxid" type="text" value="${esc(editTemp.boxId)}" placeholder="選填"></div>
+        <div class="q-edit-btns">
+          <button class="q-save-btn" onclick="saveEditQueue(${i})" type="button">✓ 儲存</button>
+          <button class="q-cancel-btn" onclick="cancelEditQueue()" type="button">✗ 取消</button>
+        </div>
+      </div></div>`;
+    }
+    return `<div class="q-item">
+      <input class="q-select" type="checkbox" onchange="toggleQueueSelect(${i},this.checked)"${checked}>
+      <div class="q-sn">${esc(item.sn)}</div>
+      <div class="q-info">
+        <div class="q-reason">${esc(item.model||'SAE')} · ${esc(item.reason)}</div>
+        <div class="q-action">${esc(item.action)}</div>
+        ${activeCompany==='GEG'&&(item.voidSeal||item.newVoidSeal)?`<div class="q-extra">Void：${esc(item.voidSeal||'-')}${item.newVoidSeal?' → '+esc(item.newVoidSeal):''}</div>`:''}
+        ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
+        ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
+        ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
+      </div>
+      <button class="q-edit-icon" onclick="startEditQueue(${i})" title="編輯" type="button">✏️</button>
+      <button class="q-del" onclick="removeFromQueue(${i})" type="button">✕</button>
+    </div>`;
+  }).join('');
+  if(editingIdx>=0&&editTemp){
+    _setupSearchCombo('eq-reason','eq-reason-menu',()=>REASONS);
+    if(editTemp.actionMode==='drop')_setupSearchCombo('eq-action-drop','eq-action-menu',()=>ALL_ACTIONS);
+  }
+}
+function loadTodayRecords(){
+  const SCRIPT_URL=getScriptUrl();
+  const casino=document.getElementById('casino').value;
+  fetch(SCRIPT_URL+'?action=today&'+companyParam()+'&casino='+encodeURIComponent(casino))
+    .then(r=>r.json())
+    .then(data=>{
+      todayRecords=data.records||[];
+      if(data.lastPO&&!document.getElementById('poNumber').value){document.getElementById('poNumber').value=data.lastPO;localStorage.setItem('poNumber',data.lastPO);}
+      renderTodayPanel();
+    })
+    .catch(()=>{});
+}
+function renderTodayPanel(){}
+function toggleToday(){}
+document.getElementById('casino').addEventListener('change',function(){localStorage.setItem(_casinoKey(activeCompany),this.value);localStorage.setItem('casino',this.value);});
+document.getElementById('casino').addEventListener('change',()=>{if(queue.length>0)showToast('⚠ 待提交記錄會改用新場地','warn');loadTodayRecords();});
+document.getElementById('date').addEventListener('change',()=>{if(queue.length>0)showToast('⚠ 待提交記錄會改用新日期','warn');});
+document.getElementById('dashCasino').addEventListener('change',updateDashboardSearchState);
+['dashFrom','dashTo'].forEach(id=>{
+  const input=document.getElementById(id);
+  input.addEventListener('click',()=>openDatePicker(input));
+  input.addEventListener('focus',()=>openDatePicker(input));
+  input.addEventListener('change',syncDashDateButtons);
+  input.addEventListener('input',syncDashDateButtons);
+});
+document.getElementById('dashSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loadDashboard();}});
+function fmtDate(s){const[y,m,d]=s.split('-');return`${y}/${+m}/${+d}`;}
+function dashDateToInput(s){
+  const parts=String(s||'').replace(/\//g,'-').split('-');
+  if(parts.length<3)return String(s||'').replace(/\//g,'-');
+  return `${parts[0]}-${String(parts[1]).padStart(2,'0')}-${String(parts[2]).padStart(2,'0')}`;
+}
+function dashInputToDate(s){return s?String(s).replace(/-/g,'/'):'';}
+function openDatePicker(input){
+  if(!input)return;
+  if(typeof input.showPicker==='function')input.showPicker();
+}
+function syncDashDateButtons(){
+  ['dashFrom','dashTo'].forEach(id=>{
+    const input=document.getElementById(id);
+    const btn=document.getElementById(id+'Unlimited');
+    if(btn)btn.classList.toggle('active',!input.value);
+  });
+}
+function clearDashDate(id){document.getElementById(id).value='';syncDashDateButtons();}
+function isDashFuzzy(){return document.getElementById('dashFuzzy')?.classList.contains('active');}
+function setDashFuzzy(on){
+  const btn=document.getElementById('dashFuzzy');
+  if(!btn)return;
+  btn.classList.toggle('active',!!on);
+  btn.setAttribute('aria-pressed',on?'true':'false');
+  syncDashboardSearchMode();
+}
+function toggleDashFuzzy(){setDashFuzzy(!isDashFuzzy());}
+function syncDashboardSearchMode(){
+  const fuzzy=isDashFuzzy();
+  const search=document.getElementById('dashSearch');
+  if(search)search.placeholder=fuzzy?'機身號碼、PO、原因、處理...':'請輸入準確S/N';
+}
+function clearDashboardResults(message='按「搜尋」載入資料。'){
+  dashboardRecords=[];
+  dashboardPage=1;
+  dashboardEditingIdx=-1;
+  const rowsEl=document.getElementById('dashRows');
+  if(rowsEl)rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">${esc(message)}</td></tr>`;
+  document.getElementById('dashMobileRows').innerHTML=`<div class="dash-mobile-empty">${esc(message)}</div>`;
+  updateDashboardPager();
+}
+function initDashboardFilters(){
+  syncDashboardVenueOptions(false);
+  currentDashboardCompany='';
+  document.body.classList.remove('dashboard-geg');
+  document.getElementById('dashFrom').value='';
+  document.getElementById('dashTo').value='';
+  document.getElementById('dashCasino').value='';
+  document.getElementById('dashModel').value='';
+  setDashFuzzy(false);
+  syncDashDateButtons();
+  updateDashboardSearchState();
+}
+function resetDashboardFilters(){
+  initDashboardFilters();
+  document.getElementById('dashSearch').value='';
+  clearDashboardResults('請先選擇公司或場地，再按搜尋');
+  document.getElementById('dashSummary').textContent='請先選擇查詢範圍';
+}
+function dashColspan(){return currentDashboardCompany==='GEG'?12:10;}
+async function loadDashboard(){
+  const SCRIPT_URL=getScriptUrl();
+  if(!SCRIPT_URL){showToast('尚未設定網站代號','err');return;}
+  const venueFilter=parseDashVenueFilter();
+  if(!venueFilter.company){
+    showToast('請先選擇公司或場地','err');
+    updateDashboardSearchState();
+    return;
+  }
+  const rowsEl=document.getElementById('dashRows');
+  const summary=document.getElementById('dashSummary');
+  currentDashboardCompany=venueFilter.company;
+  document.body.classList.toggle('dashboard-geg',currentDashboardCompany==='GEG');
+  rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入中...</td></tr>`;
+  document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
+  updateDashboardPager();
+  summary.textContent='正在載入記錄...';
+  const searchText=document.getElementById('dashSearch').value.trim();
+  const fuzzy=isDashFuzzy();
+  const qs=new URLSearchParams({
+    action:'dashboard',
+    company:venueFilter.company,
+    from:document.getElementById('dashFrom').value,
+    to:document.getElementById('dashTo').value,
+    casino:venueFilter.casino,
+    model:document.getElementById('dashModel').value,
+    q:fuzzy?searchText:'',
+    serialNo:fuzzy?'':searchText,
+    searchMode:fuzzy?'fuzzy':'serial',
+    limit:'200'
+  });
+  try{
+    const r=await fetch(SCRIPT_URL+'?'+qs.toString());
+    const data=await r.json();
+    if(!data.success){throw new Error(data.message||'載入失敗');}
+    renderDashboardRows(data.records||[]);
+    summary.textContent=searchText
+      ?`🔍 ${fuzzy?searchText:`Serial No. ${searchText}`} 共找到 ${data.returned||0} 筆記錄`
+      :`顯示 ${data.returned||0} 筆記錄`;
+  }catch(e){
+    rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入記錄失敗。</td></tr>`;
+    document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入記錄失敗。</div>';
+    updateDashboardPager();
+    summary.textContent='載入失敗';
+    showToast('資料查詢載入失敗','err');
+  }
+}
+function renderDashboardRows(records){
+  const rowsEl=document.getElementById('dashRows');
+  const mobileEl=document.getElementById('dashMobileRows');
+  dashboardRecords=records.slice();
+  dashboardPage=1;
+  dashboardEditingIdx=-1;
+  if(!records.length){
+    rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">沒有相符記錄。</td></tr>`;
+    mobileEl.innerHTML='<div class="dash-mobile-empty">沒有相符記錄。</div>';
+    updateDashboardPager();
+    return;
+  }
+  rowsEl.innerHTML='';
+  renderDashboardPage();
+}
+function cleanDashValue(value){
+  return String(value??'').replace(/[\u200B-\u200D\uFEFF]/g,'').trim();
+}
+function dashFieldRows(record, rowCompany){
+  const fields=[
+    ['CASINO',record.casino],
+    ['DATE',record.date],
+    ['PO Number',record.poNumber],
+    ['Model',record.model],
+    ['Serial No.',record.serialNo],
+    ...(rowCompany==='GEG'?[['Void Seal',record.voidSeal],['New Void Seal',record.newVoidSeal]]:[]),
+    ['Reason',record.reason],
+    ['Action Taken',record.actionTaken],
+    ['Error Description',record.errorDescription],
+    ['Box ID',record.boxId]
+  ];
+  return fields.map(([key,val])=>[key,cleanDashValue(val)]).filter(([,v])=>v!=='');
+}
+function renderDashboardMobileCard(record,index){
+  if(index===dashboardEditingIdx)return renderDashboardEditCard(record,index);
+  const rowCompany=record.company||currentDashboardCompany||activeCompany;
+  const rows=dashFieldRows(record,rowCompany).map(([key,val])=>`
+    <div class="dash-mobile-row">
+      <div class="dash-mobile-key">▸ ${esc(key)}</div>
+      <div class="dash-mobile-val">${esc(val)}</div>
+    </div>`).join('');
+  return `<section class="dash-mobile-card">
+    <div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span><button class="dash-card-btn" onclick="startDashboardCardEdit(${index})" type="button">編輯</button></div>
+    ${rows}
+  </section>`;
+}
+function renderDashboardEditCard(record,index){
+  const rowCompany=record.company||currentDashboardCompany||activeCompany;
+  const casinoValue=record.casino||'';
+  const casinoChoices=casinoOptionsForCompany(rowCompany);
+  const casinoList=casinoValue&&!casinoChoices.includes(casinoValue)?[casinoValue,...casinoChoices]:casinoChoices;
+  const model=record.model||'SAE';
+  return `<section class="dash-mobile-card" id="dashCardEdit${index}">
+    <div class="dash-mobile-title"><span>── 編輯記錄 ${index+1} ──</span></div>
+    <div class="dash-card-form">
+      ${dashEditField('日期','date',dashDateToInput(record.date),'date')}
+      <div><label>場地</label><select data-card-field="casino">${casinoList.map(c=>`<option value="${esc(c)}"${c===casinoValue?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      ${dashEditField('PO Number','poNumber',record.poNumber)}
+      <div><label>機型</label><select data-card-field="model"><option${model==='SAE'?' selected':''}>SAE</option><option${model==='TAE'?' selected':''}>TAE</option></select></div>
+      ${dashEditField('Serial No.','serialNo',record.serialNo)}
+      ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
+      ${dashEditField('Reason','reason',record.reason)}
+      ${dashEditField('Action Taken','actionTaken',record.actionTaken)}
+      ${dashEditField('Error Description','errorDescription',record.errorDescription)}
+      ${dashEditField('Box ID','boxId',record.boxId)}
+    </div>
+    <div class="dash-card-actions">
+      <button class="dash-card-btn" onclick="cancelDashboardCardEdit()" type="button">取消</button>
+      <button class="dash-card-btn primary" onclick="saveDashboardCard(${index},this)" type="button">儲存</button>
+    </div>
+  </section>`;
+}
+function dashEditField(label,field,value,type='text'){
+  return `<div><label>${esc(label)}</label><input type="${type}" data-card-field="${esc(field)}" value="${esc(value||'')}"></div>`;
+}
+function renderDashboardPage(){
+  const mobileEl=document.getElementById('dashMobileRows');
+  if(!dashboardRecords.length){
+    mobileEl.innerHTML='<div class="dash-mobile-empty">沒有相符記錄。</div>';
+    updateDashboardPager();
+    return;
+  }
+  const maxPage=Math.max(1,Math.ceil(dashboardRecords.length/DASH_PAGE_SIZE));
+  dashboardPage=Math.min(Math.max(1,dashboardPage),maxPage);
+  const start=(dashboardPage-1)*DASH_PAGE_SIZE;
+  mobileEl.innerHTML=dashboardRecords.slice(start,start+DASH_PAGE_SIZE).map((r,i)=>renderDashboardMobileCard(r,start+i)).join('');
+  updateDashboardPager();
+}
+function updateDashboardPager(){
+  const pager=document.getElementById('dashPager');
+  if(!pager)return;
+  const maxPage=Math.max(1,Math.ceil(dashboardRecords.length/DASH_PAGE_SIZE));
+  pager.classList.toggle('show',dashboardRecords.length>DASH_PAGE_SIZE);
+  document.getElementById('dashPageInfo').textContent=`第 ${dashboardPage} / ${maxPage} 頁`;
+  document.getElementById('dashPrevBtn').disabled=dashboardPage<=1;
+  document.getElementById('dashNextBtn').disabled=dashboardPage>=maxPage;
+}
+function changeDashPage(delta){
+  dashboardPage+=delta;
+  dashboardEditingIdx=-1;
+  renderDashboardPage();
+}
+function startDashboardCardEdit(index){
+  dashboardEditingIdx=index;
+  dashboardPage=Math.floor(index/DASH_PAGE_SIZE)+1;
+  renderDashboardPage();
+}
+function cancelDashboardCardEdit(){
+  dashboardEditingIdx=-1;
+  renderDashboardPage();
+}
+async function saveDashboardCard(index,btn){
+  const card=document.getElementById(`dashCardEdit${index}`);
+  const original=dashboardRecords[index];
+  if(!card||!original)return;
+  const record={rowNumber:original.rowNumber,company:original.company||currentDashboardCompany||activeCompany};
+  card.querySelectorAll('[data-card-field]').forEach(el=>{
+    record[el.dataset.cardField]=el.dataset.cardField==='date'?dashInputToDate(el.value):el.value.trim();
+  });
+  btn.disabled=true;btn.textContent='儲存中...';
+  try{
+    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateRecord',record})});
+    const data=await r.json();
+    if(!data.success)throw new Error(data.message||'儲存失敗');
+    dashboardRecords[index]={...original,...record};
+    dashboardEditingIdx=-1;
+    renderDashboardPage();
+    showToast('✓ 記錄已更新');
+  }catch(e){
+    btn.disabled=false;btn.textContent='儲存';
+    showToast('儲存失敗','err');
+  }
+}
+async function saveDashboardRow(rowNumber,btn){
+  const tr=document.querySelector(`#dashRows tr[data-row="${rowNumber}"]`);
+  if(!tr)return;
+  const record={rowNumber,company:tr.dataset.company||currentDashboardCompany||activeCompany};
+  tr.querySelectorAll('[data-field]').forEach(el=>{record[el.dataset.field]=el.dataset.field==='date'?dashInputToDate(el.value):el.value.trim();});
+  btn.disabled=true;btn.textContent='儲存中...';
+  try{
+    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateRecord',record})});
+    const data=await r.json();
+    if(!data.success)throw new Error(data.message||'儲存失敗');
+    btn.textContent='已儲存';
+    showToast('✓ 記錄已更新');
+    setTimeout(()=>{btn.disabled=false;btn.textContent='儲存';},900);
+  }catch(e){
+    btn.disabled=false;btn.textContent='儲存';
+    showToast('儲存失敗','err');
+  }
+}
+function submitAll(){
+  const casino=document.getElementById('casino').value;
+  const date=document.getElementById('date').value;
+  const poNumber=document.getElementById('poNumber').value.trim();
+  if(!poNumber){showToast('請輸入 PO 號碼','err');return;}
+  if(!queue.length){showToast('待提交清單是空的','err');return;}
+  const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
+  document.getElementById('confirmInfo').innerHTML=`
+    <div><span>場地</span><span>${esc(casino)}</span></div>
+    <div><span>日期</span><span>${fmtDate(date)}</span></div>
+    <div><span>PO 號碼</span><span>${esc(poNumber)}</span></div>
+    <div><span>機型</span><span>${esc(models)}</span></div>`;
+  document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄`;
+  document.getElementById('confirmOkBtn').disabled=false;
+  document.getElementById('confirmOkBtn').textContent='提交';
+  document.getElementById('confirmModal').classList.add('show');
+}
+function cancelConfirm(){document.getElementById('confirmModal').classList.remove('show');}
+function confirmSubmit(){
+  const btn=document.getElementById('confirmOkBtn');
+  btn.disabled=true;
+  btn.textContent='提交中...';
+  doSubmit();
+}
+async function doSubmit(){
+  if(isSubmitting)return;
+  isSubmitting=true;
+  document.getElementById('confirmModal').classList.remove('show');
+  const SCRIPT_URL=getScriptUrl();
+  const casino=document.getElementById('casino').value;
+  const date=document.getElementById('date').value;
+  const poNumber=document.getElementById('poNumber').value.trim();
+  localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);localStorage.setItem('poNumber',poNumber);
+  const btn=document.getElementById('submitBtn');
+  btn.disabled=true;
+  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
+  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
+  const CHUNK_SIZE=20;
+  const chunks=[];
+  for(let i=0;i<records.length;i+=CHUNK_SIZE)chunks.push(records.slice(i,i+CHUNK_SIZE));
+  let savedCount=0,sentIdx=0;
+  try{
+    for(let ci=0;ci<chunks.length;ci++){
+      const chunk=chunks[ci];
+      btn.textContent=chunks.length>1?`儲存中... (${ci+1}/${chunks.length})`:'儲存中...';
+      const body=JSON.stringify(chunk);
+      const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body});
+      const data=await r.json();
+      if(data.success){
+        savedCount+=chunk.length;
+        sentIdx+=chunk.length;
+        _appendLocalLog(chunk);
+      }else{
+        showToast('錯誤：'+(data.message||'伺服器錯誤'),'err');
+        btn.disabled=false;
+        btn.textContent='全部提交';
+        isSubmitting=false;
+        return;
+      }
+    }
+    if(navigator.vibrate)navigator.vibrate([80,40,80]);
+    showToast(`✓ 已儲存 ${savedCount} 筆記錄`);
+    clearQueue();
+  }catch(e){
+    const unsent=records.slice(sentIdx);
+    if(unsent.length){for(let i=0;i<unsent.length;i+=CHUNK_SIZE)_retryQueue.push({records:unsent.slice(i,i+CHUNK_SIZE)});_saveRetry();_updateRetryNotice();}
+    showToast('離線：已暫存在本機，連線後會自動同步','warn');
+    clearQueue();
+  }
+  btn.textContent='全部提交';
+  isSubmitting=false;
+}
+function showToast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type?' '+type:'')+' show';setTimeout(()=>el.className='toast'+(type?' '+type:''),2800);}
+if(!_isMob){
+  const snInp=document.getElementById('serialNo');
+  snInp.removeAttribute('readonly');
+  snInp.removeAttribute('onclick');
+  snInp.removeAttribute('onfocus');
+  snInp.setAttribute('inputmode','numeric');
+  snInp.setAttribute('maxlength','4');
+  document.getElementById('snLabel').textContent='機身號碼';
+  document.getElementById('snPadBtn').style.display='flex';
+  snInp.addEventListener('input',updateSnPadDisplay);
+  ['actionCustom','errorDescription','boxId'].forEach(id=>{
+    document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addToQueue();}});
+  });
+}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+renderCompanyMenu();
+syncCompanySpecificFields();
+if(localStorage.getItem('_ml_auth')===_PH){
+  document.getElementById('pinScreen').style.display='none';
+  if(!hasAnyDeployId()){openGasSettings();}
+  else{
+    if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);renderCompanyMenu();syncCompanySpecificFields();}
+    unlockApp();loadTodayRecords();
+  }
+}
+initDashboardFilters();
+if(queue.length>0){renderQueue();setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
+_renderStats();
+_updateRetryNotice();
+</script>
+</body>
+</html>
