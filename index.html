@@ -90,6 +90,8 @@
     .sn-input{font-size:44px !important;font-weight:800;text-align:center;letter-spacing:4px;padding:20px !important;color:#58a6ff !important;border:2px solid #388bfd !important;cursor:pointer}
     .row-action{display:flex;gap:10px;align-items:stretch}
     .row-action select,.row-action input,.row-action .combo{flex:1}
+    .label-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .mini-edit-btn{padding:5px 10px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .icon-btn{flex-shrink:0;width:46px;font-size:16px;background:#21262d;border:1px solid #30363d;border-radius:14px;cursor:pointer;color:#e6edf3;display:flex;align-items:center;justify-content:center}
     .add-btn{width:100%;margin-top:16px;padding:14px;font-size:16px;background:#238636;color:#fff;border:none;border-radius:16px;font-weight:700;cursor:pointer}
     .add-btn:active{background:#2ea043}
@@ -151,6 +153,19 @@
     .confirm-btns{display:flex;gap:10px}
     .confirm-cancel{flex:1;padding:11px;font-size:14px;font-weight:700;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:12px;cursor:pointer}
     .confirm-ok{flex:1;padding:11px;font-size:14px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:12px;cursor:pointer}
+    #templateModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8890;align-items:center;justify-content:center;padding:18px}
+    #templateModal.show{display:flex}
+    #templateBox{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
+    .template-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .template-title{font-size:16px;font-weight:800;color:#e6edf3}
+    .template-note{font-size:12px;color:#8b949e;margin-bottom:12px}
+    .template-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px;gap:8px;margin-bottom:8px}
+    .template-row input{font-size:13px;padding:9px 10px;border-radius:10px}
+    .template-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer}
+    .template-actions{display:flex;gap:10px;margin-top:14px}
+    .template-actions button{flex:1;padding:11px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer}
+    .template-add{background:#21262d;border:1px solid #30363d;color:#e6edf3}
+    .template-save{background:#238636;border:none;color:#fff}
     #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
     #menuBtn{width:38px;height:34px;background:#161b22;border:1px solid #30363d;border-radius:10px;color:#e6edf3;font-size:20px;cursor:pointer}
     #appTitle{flex:1;text-align:center;font-size:11px;font-weight:600;color:#484f58;letter-spacing:1.5px;text-transform:uppercase;padding:4px 0}
@@ -438,6 +453,21 @@
   </div>
 </div>
 
+<div id="templateModal">
+  <div id="templateBox">
+    <div class="template-head">
+      <div class="template-title">編輯原因 / 處理方法</div>
+      <button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeTemplateEditor()" type="button">關閉</button>
+    </div>
+    <div class="template-note">資料會儲存在目前公司 Sheet 的 Template 工作表。A 欄是原因，B 欄是處理方法。</div>
+    <div id="templateRows"></div>
+    <div class="template-actions">
+      <button class="template-add" onclick="addTemplateRow()" type="button">＋ 新增一行</button>
+      <button class="template-save" id="templateSaveBtn" onclick="saveTemplateEditor()" type="button">儲存</button>
+    </div>
+  </div>
+</div>
+
 <div id="menuOverlay" onclick="closeMenu()"></div>
 <nav id="sideMenu" aria-label="主選單">
   <div class="menu-head">
@@ -519,7 +549,7 @@
     </div>
   </div>
   <div style="margin-bottom:14px">
-    <label>原因</label>
+    <div class="label-row"><label>原因</label><button class="mini-edit-btn" onclick="openTemplateEditor()" type="button">編輯</button></div>
     <div class="combo" data-combo="reason">
       <input type="text" id="reason" oninput="onReasonInput()" onchange="onReasonChange()" placeholder="搜尋原因..." autocomplete="off">
       <div class="combo-menu" id="reasonMenu"></div>
@@ -713,8 +743,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.10-8';
-const _APP_VERSION='v0.949';
+const _APP_BUMP='2026.07.10-9';
+const _APP_VERSION='v0.950';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -911,6 +941,7 @@ function selectCompany(company){
   document.getElementById('activeCompanyLabel').textContent=company;
   syncCompanySpecificFields();
   syncCasinoOptions();
+  loadTemplateMappings();
   showPage('input');renderCompanyMenu();
   if(!getDeployId(company))openGasSettings({returnState:prev});else loadTodayRecords();
 }
@@ -1173,9 +1204,13 @@ document.addEventListener('click',function(e){
 });
 // ───────────────────────────────────────────────────────────
 
-const REASONS=['PM','Draw Time Out','Cannot Scan','Wrong Reading','Can Not Read Cutting Card',"Can't Read 1","Can't Read 2","Can't Draw (Error)","Can't Burn (Error)",'Bad Card Code','Mistake Dealing','More Draw','Stopper Problem','Card Reverse','Scope Holder Loose','Missing Sensor Screw','Lock Button Problem','Missing / Broken Sensor Cover','Missing Magnet','Missing Magnet Plate','Missing foot','Magnetic Sensor Problem','Hardware Problem','Button Not Good','Drawn 2 Cards Together','Hard to Draw Cards','Can Not Draw Cards','LCD Monitor Problem','Object Amplifier Problem','UV Amplifier Problem','Color Amplifier Problem','Key Hole Broken','Power Button Problem','Fiber Attachment Problem','CPU Problem','LED Problem','Void Seal Broken','Brush Loosen / Broken','No Communication to PC','DeepClean','Unknown','Sensor Not Good','Special Check','Setting Changed','Software Update','PO','Other'];
-const ACTION_MAP={'PM':'Preventive Maintenance','Draw Time Out':'Checked OK','Cannot Scan':'Checked OK','Wrong Reading':'Reteach','Can Not Read Cutting Card':'Reteach',"Can't Read 1":'Reteach',"Can't Read 2":'Reteach',"Can't Draw (Error)":'Checked OK',"Can't Burn (Error)":'Checked OK','Bad Card Code':'Reteach','Mistake Dealing':'Checked OK','More Draw':'Checked OK','Stopper Problem':'Adjusted','Card Reverse':'Checked OK','Scope Holder Loose':'Adjusted','Missing Sensor Screw':'Installed','Lock Button Problem':'Waiting Parts','Missing / Broken Sensor Cover':'Waiting Parts','Missing Magnet':'Installed','Missing Magnet Plate':'Installed','Missing foot':'Installed','Magnetic Sensor Problem':'Waiting Parts','Hardware Problem':'Waiting Parts','Button Not Good':'Urethane Changed','Drawn 2 Cards Together':'Checked OK','Hard to Draw Cards':'Checked OK','Can Not Draw Cards':'Checked OK','LCD Monitor Problem':'Adjusted','Object Amplifier Problem':'Waiting Parts','UV Amplifier Problem':'Waiting Parts','Color Amplifier Problem':'Waiting Parts','Key Hole Broken':'Waiting Parts','Power Button Problem':'Waiting Parts','Fiber Attachment Problem':'Waiting Parts','CPU Problem':'Waiting Parts','LED Problem':'Waiting Parts','Void Seal Broken':'Adjusted','Brush Loosen / Broken':'Installed','No Communication to PC':'Adjusted','DeepClean':'OK','Unknown':'Checked OK','Sensor Not Good':'Reteach','Special Check':'Checked OK','Setting Changed':'Setting Changed'};
-const ALL_ACTIONS=['Preventive Maintenance','Checked OK','Reteach','Adjusted','Installed','Waiting Parts','Urethane Changed','OK','Setting Changed','LCD Glass Broken, Waiting Parts'];
+const DEFAULT_REASONS=['PM','Draw Time Out','Cannot Scan','Wrong Reading','Can Not Read Cutting Card',"Can't Read 1","Can't Read 2","Can't Draw (Error)","Can't Burn (Error)",'Bad Card Code','Mistake Dealing','More Draw','Stopper Problem','Card Reverse','Scope Holder Loose','Missing Sensor Screw','Lock Button Problem','Missing / Broken Sensor Cover','Missing Magnet','Missing Magnet Plate','Missing foot','Magnetic Sensor Problem','Hardware Problem','Button Not Good','Drawn 2 Cards Together','Hard to Draw Cards','Can Not Draw Cards','LCD Monitor Problem','Object Amplifier Problem','UV Amplifier Problem','Color Amplifier Problem','Key Hole Broken','Power Button Problem','Fiber Attachment Problem','CPU Problem','LED Problem','Void Seal Broken','Brush Loosen / Broken','No Communication to PC','DeepClean','Unknown','Sensor Not Good','Special Check','Setting Changed','Software Update','PO','Other'];
+const DEFAULT_ACTION_MAP={'PM':'Preventive Maintenance','Draw Time Out':'Checked OK','Cannot Scan':'Checked OK','Wrong Reading':'Reteach','Can Not Read Cutting Card':'Reteach',"Can't Read 1":'Reteach',"Can't Read 2":'Reteach',"Can't Draw (Error)":'Checked OK',"Can't Burn (Error)":'Checked OK','Bad Card Code':'Reteach','Mistake Dealing':'Checked OK','More Draw':'Checked OK','Stopper Problem':'Adjusted','Card Reverse':'Checked OK','Scope Holder Loose':'Adjusted','Missing Sensor Screw':'Installed','Lock Button Problem':'Waiting Parts','Missing / Broken Sensor Cover':'Waiting Parts','Missing Magnet':'Installed','Missing Magnet Plate':'Installed','Missing foot':'Installed','Magnetic Sensor Problem':'Waiting Parts','Hardware Problem':'Waiting Parts','Button Not Good':'Urethane Changed','Drawn 2 Cards Together':'Checked OK','Hard to Draw Cards':'Checked OK','Can Not Draw Cards':'Checked OK','LCD Monitor Problem':'Adjusted','Object Amplifier Problem':'Waiting Parts','UV Amplifier Problem':'Waiting Parts','Color Amplifier Problem':'Waiting Parts','Key Hole Broken':'Waiting Parts','Power Button Problem':'Waiting Parts','Fiber Attachment Problem':'Waiting Parts','CPU Problem':'Waiting Parts','LED Problem':'Waiting Parts','Void Seal Broken':'Adjusted','Brush Loosen / Broken':'Installed','No Communication to PC':'Adjusted','DeepClean':'OK','Unknown':'Checked OK','Sensor Not Good':'Reteach','Special Check':'Checked OK','Setting Changed':'Setting Changed'};
+const DEFAULT_ACTIONS=['Preventive Maintenance','Checked OK','Reteach','Adjusted','Installed','Waiting Parts','Urethane Changed','OK','Setting Changed','LCD Glass Broken, Waiting Parts'];
+let REASONS=DEFAULT_REASONS.slice();
+let ACTION_MAP={...DEFAULT_ACTION_MAP};
+let ALL_ACTIONS=DEFAULT_ACTIONS.slice();
+let _templateMappings=[];
 const _comboRegistry={};
 let _comboSelecting=false;
 function _comboOption(o){return typeof o==='string'?{value:o,label:o}:o;}
@@ -1213,6 +1248,78 @@ document.addEventListener('click',e=>{document.querySelectorAll('.combo.open').f
 let _recentReasons=[];
 try{_recentReasons=JSON.parse(localStorage.getItem('_ml_recent_r')||'[]');}catch(e){}
 function _reasonOptions(){return _recentReasons.length?_recentReasons.concat(REASONS.filter(r=>!_recentReasons.includes(r))):REASONS;}
+function applyTemplateMappings(mappings){
+  _templateMappings=(mappings||[]).map(m=>({reason:String(m.reason||'').trim(),action:String(m.action||'').trim()})).filter(m=>m.reason||m.action);
+  const reasons=[],actions=[],map={};
+  _templateMappings.forEach(m=>{
+    if(m.reason&&!reasons.includes(m.reason))reasons.push(m.reason);
+    if(m.action&&!actions.includes(m.action))actions.push(m.action);
+    if(m.reason&&m.action)map[m.reason]=m.action;
+  });
+  REASONS=reasons.length?reasons:DEFAULT_REASONS.slice();
+  ACTION_MAP=reasons.length?map:{...DEFAULT_ACTION_MAP};
+  ALL_ACTIONS=[...actions,...DEFAULT_ACTIONS.filter(a=>!actions.includes(a))];
+  _refreshSearchCombo('reason');
+  _refreshSearchCombo('actionDrop');
+}
+async function loadTemplateMappings(){
+  const SCRIPT_URL=getScriptUrl();
+  if(!SCRIPT_URL)return;
+  try{
+    const r=await fetch(SCRIPT_URL+'?action=template&'+companyParam());
+    const data=await r.json();
+    if(data.success)applyTemplateMappings(data.mappings||[]);
+  }catch(e){}
+}
+function closeTemplateEditor(){document.getElementById('templateModal').classList.remove('show');}
+function renderTemplateEditorRows(){
+  const rows=_templateMappings.length?_templateMappings:[{reason:'',action:''}];
+  document.getElementById('templateRows').innerHTML=rows.map((m,i)=>`
+    <div class="template-row">
+      <input data-template-field="reason" value="${esc(m.reason)}" placeholder="原因">
+      <input data-template-field="action" value="${esc(m.action)}" placeholder="處理方法">
+      <button class="template-del" onclick="deleteTemplateRow(${i})" type="button">×</button>
+    </div>`).join('');
+}
+async function openTemplateEditor(){
+  document.getElementById('templateModal').classList.add('show');
+  document.getElementById('templateRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
+  await loadTemplateMappings();
+  renderTemplateEditorRows();
+}
+function collectTemplateRows(){
+  return Array.from(document.querySelectorAll('#templateRows .template-row')).map(row=>({
+    reason:row.querySelector('[data-template-field="reason"]').value.trim(),
+    action:row.querySelector('[data-template-field="action"]').value.trim()
+  })).filter(m=>m.reason||m.action);
+}
+function addTemplateRow(){
+  _templateMappings=collectTemplateRows();
+  _templateMappings.push({reason:'',action:''});
+  renderTemplateEditorRows();
+}
+function deleteTemplateRow(index){
+  _templateMappings=collectTemplateRows();
+  _templateMappings.splice(index,1);
+  renderTemplateEditorRows();
+}
+async function saveTemplateEditor(){
+  const btn=document.getElementById('templateSaveBtn');
+  const mappings=collectTemplateRows();
+  btn.disabled=true;btn.textContent='儲存中...';
+  try{
+    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateTemplate',company:activeCompany,mappings})});
+    const data=await r.json();
+    if(!data.success)throw new Error(data.message||'儲存失敗');
+    applyTemplateMappings(data.mappings||mappings);
+    closeTemplateEditor();
+    showToast('✓ Template 已更新');
+  }catch(e){
+    showToast('Template 儲存失敗','err');
+  }finally{
+    btn.disabled=false;btn.textContent='儲存';
+  }
+}
 function _rebuildReasonSelect(){
   const rSel=document.getElementById('reason');
   const cur=rSel.value||'PM';
@@ -1995,6 +2102,7 @@ if(!_isMob){
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 renderCompanyMenu();
 syncCompanySpecificFields();
+loadTemplateMappings();
 if(localStorage.getItem('_ml_auth')===_PH){
   document.getElementById('pinScreen').style.display='none';
   if(!hasAnyDeployId()){openGasSettings();}
