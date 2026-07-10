@@ -1,6 +1,6 @@
 {
-  "name": "Akira Maintain Record System",
-  "short_name": "Akira ML",
+  "name": "AMRS",
+  "short_name": "AMRS",
   "description": "Equipment maintenance log input tool",
   "start_url": "./",
   "scope": "./",
