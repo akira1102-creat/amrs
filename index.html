@@ -166,6 +166,13 @@
     .template-actions button{flex:1;padding:11px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer}
     .template-add{background:#21262d;border:1px solid #30363d;color:#e6edf3}
     .template-save{background:#238636;border:none;color:#fff}
+    #bpListModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8890;align-items:center;justify-content:center;padding:18px}
+    #bpListModal.show{display:flex}
+    #bpListBox{width:min(980px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
+    .bp-list-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) 40px;gap:8px;margin-bottom:8px}
+    .bp-list-row input{font-size:12px;padding:8px 9px;border-radius:10px}
+    .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer}
+    .bp-list-empty{padding:14px;color:#8b949e;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
     #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
     #menuBtn{width:38px;height:34px;background:#161b22;border:1px solid #30363d;border-radius:10px;color:#e6edf3;font-size:20px;cursor:pointer}
     #appTitle{flex:1;text-align:center;font-size:11px;font-weight:600;color:#484f58;letter-spacing:1.5px;text-transform:uppercase;padding:4px 0}
@@ -260,6 +267,8 @@
     .mob .confirm-info div{font-size:12px}
     .mob .confirm-count{font-size:14px}
     .mob .confirm-cancel,.mob .confirm-ok{padding:13px;font-size:15px}
+    .mob .bp-list-row{grid-template-columns:1fr 1fr}
+    .mob .bp-list-del{grid-column:1/-1;height:40px}
     .mob .q-save-btn,.mob .q-cancel-btn{padding:12px;font-size:15px}
     .mob .t-sn{font-size:14px;min-width:48px}
     .mob .t-main{font-size:12px}
@@ -468,6 +477,21 @@
   </div>
 </div>
 
+<div id="bpListModal">
+  <div id="bpListBox">
+    <div class="template-head">
+      <div class="template-title">損壞零件列表</div>
+      <button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeBrokenPartsListEditor()" type="button">關閉</button>
+    </div>
+    <div class="template-note" id="bpListNote">資料來自目前公司 Sheet 的 Broken Parts List 工作表。</div>
+    <div id="bpListRows"></div>
+    <div class="template-actions">
+      <button class="template-add" onclick="addBrokenPartsListRow()" type="button">＋ 新增一行</button>
+      <button class="template-save" id="bpListSaveBtn" onclick="saveBrokenPartsListEditor()" type="button">儲存</button>
+    </div>
+  </div>
+</div>
+
 <div id="menuOverlay" onclick="closeMenu()"></div>
 <nav id="sideMenu" aria-label="主選單">
   <div class="menu-head">
@@ -572,6 +596,7 @@
   <div class="bp-row">
     <input type="checkbox" id="brokenPartsCheck" class="bp-check" onchange="onBrokenPartsChange()">
     <label for="brokenPartsCheck" class="bp-label">🔧 損壞零件</label>
+    <button class="mini-edit-btn" onclick="openBrokenPartsListEditor()" type="button">損壞零件列表</button>
   </div>
   <div id="bpFields" style="display:none">
     <div style="margin-bottom:10px">
@@ -743,8 +768,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.10-9';
-const _APP_VERSION='v0.950';
+const _APP_BUMP='2026.07.10-10';
+const _APP_VERSION='v0.951';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1416,6 +1441,8 @@ window.addEventListener('online',()=>setTimeout(_attemptRetry,1000));
 let _partsCodes=[];
 let _bpRepairDayMode='waiting';
 let _bpRemarkVisible=false;
+let _bpListRecords=[];
+let _bpListDeleted=[];
 const _PARTS_KEY='_ml_parts';
 (function(){const sel=document.getElementById('bpQty');for(let i=1;i<=20;i++){const o=document.createElement('option');o.value=i;o.textContent=i;sel.appendChild(o);}})();
 (function(){const t=new Date();document.getElementById('bpRepairDayDate').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;})();
@@ -1494,6 +1521,87 @@ function _resetBpFields(){
   document.getElementById('bpRemarkRow').style.display='none';
   document.getElementById('bpRemarkBtn').textContent='▼ 備註';
   document.getElementById('bpRemark').value='';
+}
+function closeBrokenPartsListEditor(){document.getElementById('bpListModal').classList.remove('show');}
+function bpListFilterSerial(){return document.getElementById('serialNo').value.trim();}
+function bpListBlankRecord(){
+  const sn=bpListFilterSerial();
+  return {rowNumber:'',casino:document.getElementById('casino').value,model:document.getElementById('model').value,serialNo:sn,brokenParts:'',bpDesc:'',bpColC:'',bpQty:'1',bpRepairDay:'Waiting',date:fmtDate(document.getElementById('date').value),bpRemark:''};
+}
+async function openBrokenPartsListEditor(){
+  const serialNo=bpListFilterSerial();
+  const modal=document.getElementById('bpListModal');
+  modal.classList.add('show');
+  document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
+  document.getElementById('bpListNote').textContent=serialNo
+    ?`只顯示 Serial No. ${serialNo} 的 Broken Parts List 項目。`
+    :'顯示目前公司 Broken Parts List 工作表內所有項目。';
+  _bpListDeleted=[];
+  try{
+    const r=await fetch(getScriptUrl()+`?action=brokenPartsList&${companyParam()}&serialNo=${encodeURIComponent(serialNo)}`);
+    const data=await r.json();
+    _bpListRecords=data.records||[];
+  }catch(e){
+    _bpListRecords=[];
+    showToast('損壞零件列表載入失敗','err');
+  }
+  renderBrokenPartsListRows();
+}
+function bpListField(label,field,value){
+  return `<input data-bp-field="${esc(field)}" value="${esc(value??'')}" placeholder="${esc(label)}">`;
+}
+function renderBrokenPartsListRows(){
+  const rows=_bpListRecords.length?_bpListRecords:[bpListBlankRecord()];
+  document.getElementById('bpListRows').innerHTML=rows.length?rows.map((r,i)=>`
+    <div class="bp-list-row" data-row-number="${esc(r.rowNumber||'')}">
+      ${bpListField('場地','casino',r.casino)}
+      ${bpListField('機型','model',r.model)}
+      ${bpListField('Serial No.','serialNo',r.serialNo)}
+      ${bpListField('零件','brokenParts',r.brokenParts)}
+      ${bpListField('描述','bpDesc',r.bpDesc)}
+      ${bpListField('補充欄','bpColC',r.bpColC)}
+      ${bpListField('數量','bpQty',r.bpQty)}
+      ${bpListField('維修日','bpRepairDay',r.bpRepairDay)}
+      ${bpListField('日期','date',r.date)}
+      ${bpListField('備註','bpRemark',r.bpRemark)}
+      <button class="bp-list-del" onclick="deleteBrokenPartsListRow(${i})" type="button">×</button>
+    </div>`).join(''):'<div class="bp-list-empty">沒有項目</div>';
+}
+function collectBrokenPartsListRows(){
+  return Array.from(document.querySelectorAll('#bpListRows .bp-list-row')).map(row=>{
+    const rec={rowNumber:row.dataset.rowNumber||''};
+    row.querySelectorAll('[data-bp-field]').forEach(input=>{rec[input.dataset.bpField]=input.value.trim();});
+    return rec;
+  }).filter(r=>Object.keys(r).some(k=>k!=='rowNumber'&&r[k]));
+}
+function addBrokenPartsListRow(){
+  _bpListRecords=collectBrokenPartsListRows();
+  _bpListRecords.push(bpListBlankRecord());
+  renderBrokenPartsListRows();
+}
+function deleteBrokenPartsListRow(index){
+  const rows=collectBrokenPartsListRows();
+  const rec=rows[index];
+  if(rec&&rec.rowNumber)_bpListDeleted.push(Number(rec.rowNumber));
+  rows.splice(index,1);
+  _bpListRecords=rows;
+  renderBrokenPartsListRows();
+}
+async function saveBrokenPartsListEditor(){
+  const btn=document.getElementById('bpListSaveBtn');
+  const records=collectBrokenPartsListRows();
+  btn.disabled=true;btn.textContent='儲存中...';
+  try{
+    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records,deletedRowNumbers:_bpListDeleted})});
+    const data=await r.json();
+    if(!data.success)throw new Error(data.message||'儲存失敗');
+    closeBrokenPartsListEditor();
+    showToast('✓ 損壞零件列表已更新');
+  }catch(e){
+    showToast('損壞零件列表儲存失敗','err');
+  }finally{
+    btn.disabled=false;btn.textContent='儲存';
+  }
 }
 // ───────────────────────────────────────────────────────────
 
