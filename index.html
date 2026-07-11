@@ -170,14 +170,17 @@
     #bpListModal.show{display:flex}
     #bpListBox{width:min(1180px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
     .bp-list-table{overflow:auto;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .bp-list-head,.bp-list-row{display:grid;grid-template-columns:120px 82px 92px 100px 180px 180px 60px 105px 105px 150px 40px;gap:0;min-width:1214px}
+    .bp-list-head,.bp-list-row{display:grid;grid-template-columns:120px 82px 92px 100px 180px 180px 60px 105px 105px 150px 105px 40px;gap:0;min-width:1319px}
     .bp-list-head{position:sticky;top:0;z-index:1;background:#161b22;border-bottom:1px solid #30363d}
     .bp-list-head div{padding:8px 9px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
     .bp-list-row{border-bottom:1px solid #21262d}
     .bp-list-row:last-child{border-bottom:none}
-    .bp-list-row input{font-size:12px;padding:8px 9px;border-radius:10px}
+    .bp-list-row input,.bp-list-row select{font-size:12px;padding:8px 9px;border-radius:10px}
     .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer;margin:4px}
     .bp-list-empty{padding:14px;color:#8b949e;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
+    .bp-list-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
+    .bp-list-filters input,.bp-list-filters select{font-size:12px;padding:9px 10px;border-radius:10px}
+    .bp-list-filters button{padding:8px 13px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
     #menuBtn{width:38px;height:34px;background:#161b22;border:1px solid #30363d;border-radius:10px;color:#e6edf3;font-size:20px;cursor:pointer}
     #appTitle{flex:1;text-align:center;font-size:11px;font-weight:600;color:#484f58;letter-spacing:1.5px;text-transform:uppercase;padding:4px 0}
@@ -339,6 +342,18 @@
     .dash-btn{width:100%;padding:10px 12px;font-size:13px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:12px;cursor:pointer}
     .dash-btn.secondary{background:#21262d;color:#e6edf3;border:1px solid #30363d}
     .dash-summary{font-size:12px;color:#8b949e;margin:12px 0 10px;min-height:18px}
+    .dash-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+    .dash-tool-btn{padding:8px 11px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .dash-tool-btn.primary{background:#1f6feb;border-color:#388bfd;color:#fff}
+    .dash-tool-btn:disabled{color:#484f58;cursor:not-allowed}
+    .dash-selected-count{font-size:12px;color:#58a6ff;font-weight:800;margin-left:auto}
+    .dash-insights{display:none;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+    .dash-insights.show{display:grid}
+    .dash-insight{border:1px solid #21262d;background:#0d1117;border-radius:10px;padding:10px}
+    .dash-insight-label{font-size:11px;color:#8b949e;margin-bottom:4px}
+    .dash-insight-value{font-size:14px;color:#e6edf3;font-weight:800;line-height:1.35;word-break:break-word}
+    .dash-history{grid-column:1/-1;border-left:3px solid #58a6ff}
+    .dash-select{width:18px;height:18px;accent-color:#388bfd;flex-shrink:0}
     .dash-table-wrap{display:none}
     .dash-table{width:100%;border-collapse:collapse;min-width:980px}
     .dash-table th{position:sticky;top:0;background:#161b22;color:#8b949e;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:9px 8px;border-bottom:1px solid #30363d}
@@ -371,6 +386,14 @@
     .dash-page-info{font-size:12px;color:#8b949e;font-weight:700;min-width:76px;text-align:center}
     .dash-page-btn{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .dash-page-btn:disabled{color:#484f58;cursor:not-allowed}
+    #bulkEditModal,#auditModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #bulkEditModal.show,#auditModal.show{display:flex}
+    .work-modal-box{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
+    .bulk-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .bulk-edit-grid label{display:block;font-size:12px;color:#8b949e;margin-bottom:5px}
+    .audit-item{border:1px solid #21262d;background:#0d1117;border-radius:12px;padding:11px;margin-bottom:8px}
+    .audit-top{display:flex;justify-content:space-between;gap:8px;color:#e6edf3;font-size:12px;font-weight:800}
+    .audit-detail{font-size:11px;color:#8b949e;margin-top:5px;line-height:1.5}
     .geg-only{display:none}
     body.company-geg .geg-only{display:block}
     .mob #dashboardCard{max-width:none}
@@ -385,6 +408,9 @@
     .mob .dash-search-line{grid-template-columns:minmax(0,1fr) 100px}
     .mob .dash-actions{grid-column:1/-1}
     .mob .dash-card-form{grid-template-columns:1fr}
+    .mob .dash-insights{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .mob .dash-selected-count{width:100%;margin-left:0}
+    .mob .bp-list-filters,.mob .bulk-edit-grid{grid-template-columns:1fr}
     .mob body.company-geg .sn-seal-row,body.mob.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
     #appVersion{text-align:center;font-size:11px;color:#30363d;padding:8px 0 4px;max-width:640px;margin:0 auto;letter-spacing:.5px}
     #mainLayout{max-width:640px;margin:0 auto;}
@@ -492,11 +518,40 @@
       <button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeBrokenPartsListEditor()" type="button">關閉</button>
     </div>
     <div class="template-note" id="bpListNote">資料來自目前公司 Sheet 的 Broken Parts List 工作表。</div>
+    <div class="bp-list-filters">
+      <input id="bpFilterCasino" type="text" placeholder="場地">
+      <input id="bpFilterParts" type="text" placeholder="零件編號">
+      <select id="bpFilterStatus"><option value="">全部狀態</option><option>待訂購</option><option>已訂購</option><option>已到貨</option><option>已更換</option></select>
+      <button onclick="loadBrokenPartsListEditor()" type="button">篩選</button>
+    </div>
     <div id="bpListRows"></div>
     <div class="template-actions">
       <button class="template-add" onclick="addBrokenPartsListRow()" type="button">＋ 新增一行</button>
       <button class="template-save" id="bpListSaveBtn" onclick="saveBrokenPartsListEditor()" type="button">儲存</button>
     </div>
+  </div>
+</div>
+
+<div id="bulkEditModal">
+  <div class="work-modal-box">
+    <div class="template-head"><div class="template-title">批量修改記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeBulkEdit()" type="button">關閉</button></div>
+    <div class="template-note">留空代表不更改。修改會記錄在 Audit Log，可從操作記錄復原。</div>
+    <div class="bulk-edit-grid">
+      <div><label>日期</label><input id="bulkDashDate" type="date"></div>
+      <div><label>場地</label><select id="bulkDashCasino"><option value="">不更改</option></select></div>
+      <div><label>機型</label><select id="bulkDashModel"><option value="">不更改</option><option>SAE</option><option>TAE</option></select></div>
+      <div><label>原因</label><input id="bulkDashReason" type="text" placeholder="不更改"></div>
+      <div style="grid-column:1/-1"><label>處理方法</label><input id="bulkDashAction" type="text" placeholder="不更改"></div>
+    </div>
+    <div class="template-actions"><button class="template-save" id="bulkDashSaveBtn" onclick="saveBulkDashboardEdit()" type="button">套用修改</button></div>
+  </div>
+</div>
+
+<div id="auditModal">
+  <div class="work-modal-box">
+    <div class="template-head"><div class="template-title">操作記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeAuditLog()" type="button">關閉</button></div>
+    <div class="template-note">顯示目前公司最近 30 次新增或修改。只有修改記錄可以復原。</div>
+    <div id="auditRows"><div class="dash-mobile-empty">載入中...</div></div>
   </div>
 </div>
 
@@ -631,6 +686,10 @@
         <input type="date" id="bpRepairDayDate" style="display:none;margin-top:6px">
       </div>
     </div>
+    <div style="margin-bottom:10px">
+      <label>零件狀態</label>
+      <select id="bpStatus"><option>待訂購</option><option>已訂購</option><option>已到貨</option><option>已更換</option></select>
+    </div>
     <button class="opt-toggle" id="bpRemarkBtn" onclick="toggleBpRemark()" type="button" style="margin-top:0">▼ 備註</button>
     <div id="bpRemarkRow" style="display:none;margin-top:10px">
       <input type="text" id="bpRemark" placeholder="選填">
@@ -719,6 +778,16 @@
     </div>
   </div>
   <div class="dash-summary" id="dashSummary">毋須打開試算表，可直接搜尋及修改資料。</div>
+  <div class="dash-tools" id="dashTools">
+    <button class="dash-tool-btn" onclick="toggleDashboardPageSelection()" type="button">選取本頁</button>
+    <button class="dash-tool-btn primary" id="dashBulkEditBtn" onclick="openBulkEdit()" type="button" disabled>批量修改</button>
+    <button class="dash-tool-btn" onclick="exportDashboard('xls')" type="button">Excel</button>
+    <button class="dash-tool-btn" onclick="exportDashboard('csv')" type="button">CSV</button>
+    <button class="dash-tool-btn" onclick="exportDashboard('pdf')" type="button">PDF</button>
+    <button class="dash-tool-btn" onclick="openAuditLog()" type="button">操作記錄</button>
+    <span class="dash-selected-count" id="dashSelectedCount">已選 0 筆</span>
+  </div>
+  <div class="dash-insights" id="dashInsights"></div>
   <div class="dash-mobile-list" id="dashMobileRows">
     <div class="dash-mobile-empty">按「搜尋」載入資料。</div>
   </div>
@@ -776,8 +845,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.11-1';
-const _APP_VERSION='v0.954';
+const _APP_BUMP='2026.07.11-2';
+const _APP_VERSION='v0.955';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1381,8 +1450,9 @@ syncCasinoOptions();
 const _savedModel=localStorage.getItem('model');if(_savedModel)document.getElementById('model').value=_savedModel;
 document.getElementById('model').addEventListener('change',function(){localStorage.setItem('model',this.value);});
 document.getElementById('poNumber').addEventListener('change',function(){localStorage.setItem('poNumber',this.value.trim());});
-let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='';
-let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null;
+let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='';
+let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null;
+let dashboardSelectedRecords=new Map();
 const DASH_PAGE_SIZE=10;
 let selectedQueueIdxs=new Set();
 function saveQueue(){localStorage.setItem('_ml_queue',JSON.stringify(queue));}
@@ -1514,7 +1584,7 @@ function _getBpData(){
   const code=document.getElementById('itemCode').value;
   const part=_partsCodes.find(p=>p.code===code)||{};
   const repairDay=_bpRepairDayMode==='waiting'?'Waiting':fmtDate(document.getElementById('bpRepairDayDate').value);
-  return{brokenParts:code,bpDesc:part.desc||'',bpColC:part.colC||'',bpQty:document.getElementById('bpQty').value,bpRepairDay:repairDay,bpRemark:_bpRemarkVisible?document.getElementById('bpRemark').value.trim():''};
+  return{brokenParts:code,bpDesc:part.desc||'',bpColC:part.colC||'',bpQty:document.getElementById('bpQty').value,bpRepairDay:repairDay,bpRemark:_bpRemarkVisible?document.getElementById('bpRemark').value.trim():'',bpStatus:document.getElementById('bpStatus').value};
 }
 function _resetBpFields(){
   document.getElementById('brokenPartsCheck').checked=false;
@@ -1529,24 +1599,33 @@ function _resetBpFields(){
   document.getElementById('bpRemarkRow').style.display='none';
   document.getElementById('bpRemarkBtn').textContent='▼ 備註';
   document.getElementById('bpRemark').value='';
+  document.getElementById('bpStatus').value='待訂購';
 }
 function closeBrokenPartsListEditor(){document.getElementById('bpListModal').classList.remove('show');}
 function bpListFilterSerial(){return document.getElementById('serialNo').value.trim();}
 function bpListBlankRecord(){
   const sn=bpListFilterSerial();
-  return {rowNumber:'',casino:document.getElementById('casino').value,model:document.getElementById('model').value,serialNo:sn,brokenParts:'',bpDesc:'',bpColC:'',bpQty:'1',bpRepairDay:'Waiting',date:fmtDate(document.getElementById('date').value),bpRemark:''};
+  return {rowNumber:'',casino:document.getElementById('casino').value,model:document.getElementById('model').value,serialNo:sn,brokenParts:'',bpDesc:'',bpColC:'',bpQty:'1',bpRepairDay:'Waiting',date:fmtDate(document.getElementById('date').value),bpRemark:'',bpStatus:'待訂購'};
 }
 async function openBrokenPartsListEditor(){
   const serialNo=bpListFilterSerial();
   const modal=document.getElementById('bpListModal');
   modal.classList.add('show');
+  document.getElementById('bpFilterCasino').value='';
+  document.getElementById('bpFilterParts').value='';
+  document.getElementById('bpFilterStatus').value='';
+  await loadBrokenPartsListEditor();
+}
+async function loadBrokenPartsListEditor(){
+  const serialNo=bpListFilterSerial();
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
   document.getElementById('bpListNote').textContent=serialNo
     ?`只顯示 Serial No. ${serialNo} 的 Broken Parts List 項目。`
     :'顯示目前公司 Broken Parts List 工作表內所有項目。';
   _bpListDeleted=[];
   try{
-    const r=await fetch(getScriptUrl()+`?action=brokenPartsList&${companyParam()}&serialNo=${encodeURIComponent(serialNo)}`);
+    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value});
+    const r=await fetch(getScriptUrl()+'?'+qs.toString());
     const data=await r.json();
     _bpListRecords=data.records||[];
   }catch(e){
@@ -1558,9 +1637,10 @@ async function openBrokenPartsListEditor(){
 function bpListField(label,field,value){
   return `<input data-bp-field="${esc(field)}" value="${esc(value??'')}" placeholder="${esc(label)}">`;
 }
+function bpListStatus(value){return `<select data-bp-field="bpStatus">${['','待訂購','已訂購','已到貨','已更換'].map(v=>`<option value="${esc(v)}"${v===(value||'')?' selected':''}>${esc(v||'未設定')}</option>`).join('')}</select>`;}
 function renderBrokenPartsListRows(){
   const rows=_bpListRecords.length?_bpListRecords:[bpListBlankRecord()];
-  const head='<div class="bp-list-head"><div>CASINO</div><div>Model</div><div>Serial No.</div><div>Parts No.</div><div>Required Parts(JP)</div><div>Required Parts(EN)</div><div>Qty</div><div>Repair Day</div><div>Found Day</div><div>Remark</div><div></div></div>';
+  const head='<div class="bp-list-head"><div>CASINO</div><div>Model</div><div>Serial No.</div><div>Parts No.</div><div>Required Parts(JP)</div><div>Required Parts(EN)</div><div>Qty</div><div>Repair Day</div><div>Found Day</div><div>Remark</div><div>Status</div><div></div></div>';
   const body=rows.length?rows.map((r,i)=>`
     <div class="bp-list-row" data-row-number="${esc(r.rowNumber||'')}">
       ${bpListField('CASINO','casino',r.casino)}
@@ -1573,6 +1653,7 @@ function renderBrokenPartsListRows(){
       ${bpListField('Repair Day','bpRepairDay',r.bpRepairDay)}
       ${bpListField('Found Day','date',r.date)}
       ${bpListField('Remark','bpRemark',r.bpRemark)}
+      ${bpListStatus(r.bpStatus)}
       <button class="bp-list-del" onclick="deleteBrokenPartsListRow(${i})" type="button">×</button>
     </div>`).join(''):'<div class="bp-list-empty">沒有項目</div>';
   document.getElementById('bpListRows').innerHTML=`<div class="bp-list-table">${head}${body}</div>`;
@@ -1625,8 +1706,11 @@ function toggleBatch(){
   document.getElementById('batchToggleBtn').textContent=_batchMode?'✕ 單筆模式':'⊞ 批量模式';
   if(_batchMode)hideSnPad();else document.getElementById('batchSns').value='';
 }
-function addBatchToQueue(){
-  let lines=document.getElementById('batchSns').value.split(/[\n,]+/).map(s=>s.trim()).filter(s=>/^\d{1,4}$/.test(s));
+async function addBatchToQueue(){
+  const rawLines=document.getElementById('batchSns').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+  const invalid=rawLines.filter(s=>!/^\d{1,4}$/.test(s));
+  if(invalid.length){showToast(`格式錯誤：${invalid.slice(0,3).join('、')}`,'err');return;}
+  let lines=rawLines;
   if(!lines.length){showToast('請輸入有效機身號碼（1–4 位數字）','err');return;}
   const reason=document.getElementById('reason').value;
   const action=getAction();
@@ -1636,20 +1720,44 @@ function addBatchToQueue(){
   const boxId=optionalVisible?document.getElementById('boxId').value.trim():'';
   const bpData=_getBpData()||{};
   const sealData=getGegSealData();
-  let added=0,dups=0,internalDups=0;
-  const seenInBatch=new Set();
-  lines.forEach(sn=>{
-    if(seenInBatch.has(sn)){internalDups++;return;}
-    seenInBatch.add(sn);
-    if(todayRecords.some(r=>String(r.serialNo)===sn)||queue.some(q=>q.sn===sn)){dups++;return;}
-    queue.push({sn,model,reason,action,errorDescription,boxId,...sealData,...bpData});added++;
+  const items=lines.map(sn=>({sn,model,reason,action,errorDescription,boxId,...sealData,...bpData}));
+  const counts={};lines.forEach(sn=>{counts[sn]=(counts[sn]||0)+1;});
+  const duplicateNotes=[];
+  Object.keys(counts).forEach(sn=>{
+    const locations=[];
+    if(counts[sn]>1)locations.push(`批量內出現 ${counts[sn]} 次`);
+    if(todayRecords.some(r=>String(r.serialNo)===sn))locations.push('今日已提交');
+    if(queue.some(q=>q.sn===sn))locations.push('待提交清單已有');
+    if(locations.length)duplicateNotes.push(`${sn}（${locations.join('、')}）`);
   });
-  if(added){saveQueue();renderQueue();_updateRecentReasons(reason);}
+  const faultDuplicates=await fetchDuplicateFaults(lines,reason);
+  Object.keys(faultDuplicates).forEach(sn=>duplicateNotes.push(`${sn}（30 日內有 ${faultDuplicates[sn].length} 次相同非 PM 故障）`));
+  if(duplicateNotes.length){
+    pendingBatchAdd=items;
+    document.getElementById('dupTitle').textContent='⚠ 發現重複記錄';
+    document.getElementById('dupMsg').textContent=`以下機身號碼重複：\n${[...new Set(duplicateNotes)].join('\n')}\n仍然全部加入？`;
+    document.getElementById('dupMsg').style.whiteSpace='pre-line';
+    document.getElementById('dupModal').classList.add('show');
+    return;
+  }
+  doAddBatchToQueue(items);
+}
+
+function doAddBatchToQueue(items){
+  queue.push(...items);saveQueue();renderQueue();
   document.getElementById('batchSns').value='';
-  if(internalDups)showToast(`✓ 已加入 ${added} 筆，略過 ${dups+internalDups} 筆重複（其中 ${internalDups} 筆為批量內重複）`,'warn');
-  else if(dups&&added)showToast(`✓ 已加入 ${added} 筆，略過 ${dups} 筆重複`,'warn');
-  else if(added)showToast(`✓ 已加入 ${added} 筆待提交`);
-  else showToast('全部機身號碼都重複','err');
+  _updateRecentReasons(items[0]?.reason||'');
+  showToast(`✓ 已加入 ${items.length} 筆待提交`);
+}
+
+async function fetchDuplicateFaults(serialNos,reason){
+  if(!reason||reason.trim().toUpperCase()==='PM')return {};
+  try{
+    const qs=new URLSearchParams({action:'duplicateFault',company:activeCompany,serialNos:[...new Set(serialNos)].join(','),reason,date:fmtDate(document.getElementById('date').value)});
+    const r=await fetch(getScriptUrl()+'?'+qs.toString());
+    const data=await r.json();
+    return data.duplicates||{};
+  }catch(e){return {};}
 }
 
 function onReasonInput(){const r=document.getElementById('reason').value;if(REASONS.includes(r))onReasonChange();}
@@ -1671,7 +1779,7 @@ function getGegSealData(){
     newVoidSeal:document.getElementById('newVoidSeal').value.trim()
   };
 }
-function addToQueue(){
+async function addToQueue(){
   const sn=document.getElementById('serialNo').value.trim();
   if(!sn){showToast('請輸入機身號碼','err');return;}
   if(!/^\d{1,4}$/.test(sn)){showToast('機身號碼必須為 1–4 位數字','err');return;}
@@ -1688,14 +1796,27 @@ function addToQueue(){
   if(isDupToday||isDupQueue){
     pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...bpData};
     const where=isDupToday?'今日已提交記錄':'目前待提交清單';
+    document.getElementById('dupTitle').textContent='⚠ 機身號碼重複';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 已存在於${where}。仍然加入？`;
+    document.getElementById('dupModal').classList.add('show');
+    return;
+  }
+  const faultDuplicates=await fetchDuplicateFaults([sn],reason);
+  if(faultDuplicates[sn]?.length){
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...bpData};
+    document.getElementById('dupTitle').textContent='⚠ 重複故障警告';
+    document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 在最近 30 日已有 ${faultDuplicates[sn].length} 次「${reason}」記錄。仍然加入？`;
     document.getElementById('dupModal').classList.add('show');
     return;
   }
   doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...bpData});
 }
-function cancelDupAdd(){pendingAdd=null;document.getElementById('dupModal').classList.remove('show');}
-function confirmDupAdd(){if(pendingAdd)doAddToQueue(pendingAdd);pendingAdd=null;document.getElementById('dupModal').classList.remove('show');}
+function cancelDupAdd(){pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');}
+function confirmDupAdd(){
+  if(pendingAdd)doAddToQueue(pendingAdd);
+  if(pendingBatchAdd)doAddBatchToQueue(pendingBatchAdd);
+  pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');
+}
 function doAddToQueue(item){
   queue.push(item);saveQueue();renderQueue();
   document.getElementById('serialNo').value='';
@@ -1732,7 +1853,7 @@ function saveEditQueue(i){
   if(!sn){showToast('請輸入機身號碼','err');return;}
   const action=editTemp.actionMode==='drop'?editTemp.action:(editTemp.action||'').trim();
   if(!action){showToast('請選擇處理方法','err');return;}
-  queue[i]={sn,model:editTemp.model||'SAE',voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
+  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
   editingIdx=-1;editTemp=null;saveQueue();renderQueue();
 }
 function toggleQueueSelect(i,checked){
@@ -1823,7 +1944,7 @@ function renderQueue(){
         ${activeCompany==='GEG'&&(item.voidSeal||item.newVoidSeal)?`<div class="q-extra">Void：${esc(item.voidSeal||'-')}${item.newVoidSeal?' → '+esc(item.newVoidSeal):''}</div>`:''}
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
         ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
-        ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
+        ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}${item.bpStatus?' · '+esc(item.bpStatus):''}</div>`:''}
       </div>
       <button class="q-edit-icon" onclick="startEditQueue(${i})" title="編輯" type="button">✏️</button>
       <button class="q-del" onclick="removeFromQueue(${i})" type="button">✕</button>
@@ -1899,6 +2020,9 @@ function clearDashboardResults(message='按「搜尋」載入資料。'){
   dashboardTotalPages=1;
   dashboardTotalMatches=0;
   dashboardEditingIdx=-1;
+  dashboardSelectedRecords.clear();
+  renderDashboardInsights(null,null);
+  updateDashboardSelectionTools();
   const rowsEl=document.getElementById('dashRows');
   if(rowsEl)rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">${esc(message)}</td></tr>`;
   document.getElementById('dashMobileRows').innerHTML=`<div class="dash-mobile-empty">${esc(message)}</div>`;
@@ -1942,6 +2066,7 @@ async function loadDashboard(page=1){
   summary.textContent='正在載入記錄...';
   const searchText=document.getElementById('dashSearch').value.trim();
   const fuzzy=isDashFuzzy();
+  if(page===1){dashboardSelectedRecords.clear();updateDashboardSelectionTools();}
   dashboardRequest?.abort();
   dashboardRequest=new AbortController();
   const qs=new URLSearchParams({
@@ -1957,6 +2082,7 @@ async function loadDashboard(page=1){
     page:String(Math.max(1,page)),
     pageSize:String(DASH_PAGE_SIZE)
   });
+  dashboardLastQuery=Object.fromEntries(qs.entries());
   try{
     const r=await fetch(SCRIPT_URL+'?'+qs.toString(),{signal:dashboardRequest.signal});
     const data=await r.json();
@@ -1965,6 +2091,7 @@ async function loadDashboard(page=1){
     dashboardTotalPages=data.totalPages||1;
     dashboardTotalMatches=data.totalMatches??data.returned??0;
     renderDashboardRows(data.records||[]);
+    renderDashboardInsights(data.stats||null,data.history||null);
     summary.textContent=searchText
       ?`🔍 ${fuzzy?searchText:`Serial No. ${searchText}`} 共找到 ${dashboardTotalMatches} 筆記錄`
       :`共找到 ${dashboardTotalMatches} 筆記錄`;
@@ -2018,8 +2145,9 @@ function renderDashboardMobileCard(record,index){
       <div class="dash-mobile-val">${esc(val)}</div>
     </div>`).join('');
   const displayNumber=(dashboardPage-1)*DASH_PAGE_SIZE+index+1;
+  const selected=dashboardSelectedRecords.has(String(record.rowNumber))?' checked':'';
   return `<section class="dash-mobile-card">
-    <div class="dash-mobile-title"><span>── 記錄 ${displayNumber} ──</span><button class="dash-card-btn" onclick="startDashboardCardEdit(${index})" type="button">編輯</button></div>
+    <div class="dash-mobile-title"><input class="dash-select" type="checkbox" onchange="toggleDashboardRecord(${index},this.checked)"${selected}><span style="flex:1">── 記錄 ${displayNumber} ──</span><button class="dash-card-btn" onclick="startDashboardCardEdit(${index})" type="button">編輯</button></div>
     ${rows}
   </section>`;
 }
@@ -2061,6 +2189,7 @@ function renderDashboardPage(){
     return;
   }
   mobileEl.innerHTML=dashboardRecords.map((r,i)=>renderDashboardMobileCard(r,i)).join('');
+  updateDashboardSelectionTools();
   updateDashboardPager();
 }
 function updateDashboardPager(){
@@ -2077,6 +2206,117 @@ function changeDashPage(delta){
   if(nextPage===dashboardPage)return;
   dashboardEditingIdx=-1;
   loadDashboard(nextPage);
+}
+function renderDashboardInsights(stats,history){
+  const el=document.getElementById('dashInsights');
+  if(!el)return;
+  if(!stats){el.classList.remove('show');el.innerHTML='';return;}
+  const list=items=>(items||[]).map(i=>`${esc(i.label)} (${i.count})`).join('、')||'沒有資料';
+  const models=Object.entries(stats.models||{}).map(([k,v])=>`${esc(k)} ${v}`).join(' / ')||'沒有資料';
+  let html=`
+    <div class="dash-insight"><div class="dash-insight-label">記錄總數</div><div class="dash-insight-value">${Number(stats.total||0)}</div></div>
+    <div class="dash-insight"><div class="dash-insight-label">機型分佈</div><div class="dash-insight-value">${models}</div></div>
+    <div class="dash-insight"><div class="dash-insight-label">常見原因</div><div class="dash-insight-value">${list(stats.topReasons)}</div></div>
+    <div class="dash-insight"><div class="dash-insight-label">常用零件</div><div class="dash-insight-value">${list(stats.topParts)}</div></div>
+    <div class="dash-insight"><div class="dash-insight-label">場地分佈</div><div class="dash-insight-value">${list(stats.topCasinos)}</div></div>
+    <div class="dash-insight"><div class="dash-insight-label">重複維修較多 S/N</div><div class="dash-insight-value">${list(stats.repeatSerials)}</div></div>`;
+  if(history){
+    const parts=(history.parts||[]).map(p=>`${esc(p.brokenParts||'未填編號')} · ${esc(p.bpStatus||'未設定')} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
+    html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件履歷：<br>${parts}</div></div>`;
+  }
+  el.innerHTML=html;el.classList.add('show');
+}
+function toggleDashboardRecord(index,checked){
+  const record=dashboardRecords[index];if(!record)return;
+  const key=String(record.rowNumber);
+  if(checked)dashboardSelectedRecords.set(key,record);else dashboardSelectedRecords.delete(key);
+  updateDashboardSelectionTools();
+}
+function toggleDashboardPageSelection(){
+  const allSelected=dashboardRecords.length&&dashboardRecords.every(r=>dashboardSelectedRecords.has(String(r.rowNumber)));
+  dashboardRecords.forEach(r=>{const key=String(r.rowNumber);if(allSelected)dashboardSelectedRecords.delete(key);else dashboardSelectedRecords.set(key,r);});
+  renderDashboardPage();
+}
+function updateDashboardSelectionTools(){
+  const count=dashboardSelectedRecords.size;
+  const label=document.getElementById('dashSelectedCount');if(label)label.textContent=`已選 ${count} 筆`;
+  const btn=document.getElementById('dashBulkEditBtn');if(btn)btn.disabled=count===0;
+}
+function openBulkEdit(){
+  if(!dashboardSelectedRecords.size)return;
+  const select=document.getElementById('bulkDashCasino');
+  select.innerHTML='<option value="">不更改</option>'+casinoOptionsForCompany(currentDashboardCompany).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  ['bulkDashDate','bulkDashReason','bulkDashAction'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('bulkDashModel').value='';
+  document.getElementById('bulkEditModal').classList.add('show');
+}
+function closeBulkEdit(){document.getElementById('bulkEditModal').classList.remove('show');}
+async function saveBulkDashboardEdit(){
+  const changes={
+    date:dashInputToDate(document.getElementById('bulkDashDate').value),casino:document.getElementById('bulkDashCasino').value,
+    model:document.getElementById('bulkDashModel').value,reason:document.getElementById('bulkDashReason').value.trim(),
+    actionTaken:document.getElementById('bulkDashAction').value.trim()
+  };
+  Object.keys(changes).forEach(key=>{if(changes[key]==='')delete changes[key];});
+  if(!Object.keys(changes).length){showToast('請至少選擇一項修改','err');return;}
+  const btn=document.getElementById('bulkDashSaveBtn');btn.disabled=true;btn.textContent='儲存中...';
+  try{
+    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'bulkUpdateRecords',company:currentDashboardCompany,rowNumbers:[...dashboardSelectedRecords.keys()],changes})});
+    const data=await r.json();if(!data.success)throw new Error(data.message||'修改失敗');
+    closeBulkEdit();dashboardSelectedRecords.clear();showToast(`✓ 已修改 ${data.saved} 筆記錄`);await loadDashboard(dashboardPage);
+  }catch(e){showToast('批量修改失敗','err');}
+  finally{btn.disabled=false;btn.textContent='套用修改';}
+}
+function dashboardQueryForPage(page,pageSize=50){
+  const params={...(dashboardLastQuery||{})};params.page=String(page);params.pageSize=String(pageSize);return new URLSearchParams(params);
+}
+async function fetchAllDashboardRecords(){
+  if(!dashboardLastQuery)throw new Error('請先搜尋');
+  const first=await (await fetch(getScriptUrl()+'?'+dashboardQueryForPage(1,50))).json();
+  if(!first.success)throw new Error(first.message||'匯出失敗');
+  const records=[...(first.records||[])];
+  for(let page=2;page<=first.totalPages;page++){
+    const data=await (await fetch(getScriptUrl()+'?'+dashboardQueryForPage(page,50))).json();records.push(...(data.records||[]));
+  }
+  return records;
+}
+function exportColumns(){
+  const cols=[['company','Company'],['casino','CASINO'],['date','DATE'],['poNumber','PO Number'],['model','Model'],['serialNo','Serial No.']];
+  if(currentDashboardCompany==='GEG')cols.push(['voidSeal','Void Seal'],['newVoidSeal','New Void Seal']);
+  return cols.concat([['reason','Reason'],['actionTaken','Action Taken'],['errorDescription','Error Description'],['boxId','Box ID']]);
+}
+function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+async function exportDashboard(type){
+  let printWindow=null;if(type==='pdf')printWindow=window.open('','_blank');
+  try{
+    showToast('正在準備匯出...');const records=await fetchAllDashboardRecords();const cols=exportColumns();
+    if(!records.length)throw new Error('沒有資料');
+    const stamp=new Date().toISOString().slice(0,10);const base=`AMRS_${currentDashboardCompany}_${stamp}`;
+    if(type==='csv'){
+      const csv=[cols.map(c=>c[1]),...records.map(r=>cols.map(c=>r[c[0]]??''))].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+      downloadBlob(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),base+'.csv');
+    }else{
+      const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${records.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      if(type==='xls')downloadBlob(new Blob([`<html><meta charset="utf-8"><body>${table}</body></html>`],{type:'application/vnd.ms-excel'}),base+'.xls');
+      else if(printWindow){printWindow.document.write(`<html><head><title>${base}</title><style>body{font-family:Arial;font-size:10px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left}</style></head><body><h2>AMRS ${esc(currentDashboardCompany)} 維修記錄</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
+    }
+    showToast(`✓ 已準備 ${records.length} 筆記錄`);
+  }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
+}
+function closeAuditLog(){document.getElementById('auditModal').classList.remove('show');}
+async function openAuditLog(){
+  if(!currentDashboardCompany){showToast('請先搜尋一間公司','err');return;}
+  document.getElementById('auditModal').classList.add('show');document.getElementById('auditRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
+  try{
+    const data=await (await fetch(getScriptUrl()+`?action=auditLog&company=${encodeURIComponent(currentDashboardCompany)}&limit=30`)).json();
+    const rows=data.records||[];document.getElementById('auditRows').innerHTML=rows.length?rows.map(a=>{
+      const rec=a.after||a.before||{};return `<div class="audit-item"><div class="audit-top"><span>${esc(a.action)} · S/N ${esc(rec.serialNo||'')}</span><span>${esc(a.timestamp)}</span></div><div class="audit-detail">第 ${esc(a.rowNumber)} 行 · ${esc(rec.casino||'')} · ${esc(rec.reason||'')}</div>${a.undoable&&!a.undone?`<button class="dash-tool-btn" style="margin-top:8px" onclick="undoAudit(${a.auditRow},this)" type="button">復原修改</button>`:a.undone?'<div class="audit-detail">已復原</div>':''}</div>`;
+    }).join(''):'<div class="dash-mobile-empty">沒有操作記錄</div>';
+  }catch(e){document.getElementById('auditRows').innerHTML='<div class="dash-mobile-empty">載入失敗</div>';}
+}
+async function undoAudit(auditRow,btn){
+  btn.disabled=true;btn.textContent='復原中...';
+  try{const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'undoAudit',company:currentDashboardCompany,auditRow})})).json();if(!data.success)throw new Error();showToast('✓ 修改已復原');await openAuditLog();await loadDashboard(dashboardPage);}catch(e){btn.disabled=false;btn.textContent='復原修改';showToast('復原失敗','err');}
 }
 function startDashboardCardEdit(index){
   dashboardEditingIdx=index;
@@ -2130,15 +2370,29 @@ function submitAll(){
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
-  if(!poNumber){showToast('請輸入 PO 號碼','err');return;}
+  if(!/^\d{4,10}$/.test(poNumber)){showToast('PO／月份號碼必須為 4–10 位數字','err');return;}
   if(!queue.length){showToast('待提交清單是空的','err');return;}
+  const errors=[];const warnings=[];
+  queue.forEach((item,index)=>{
+    if(!/^\d{1,4}$/.test(String(item.sn||'')))errors.push(`第 ${index+1} 筆機身號碼格式錯誤`);
+    if(!String(item.reason||'').trim())errors.push(`S/N ${item.sn} 未填原因`);
+    if(!String(item.action||'').trim())errors.push(`S/N ${item.sn} 未填處理方法`);
+    if(activeCompany==='GEG'&&item.voidSeal&&!/^\d{5}$/.test(item.voidSeal))errors.push(`S/N ${item.sn} Void Seal 必須為 5 位`);
+  });
+  if(errors.length){showToast(errors[0],'err');return;}
+  const snCounts={};queue.forEach(item=>snCounts[item.sn]=(snCounts[item.sn]||0)+1);
+  const repeatedSn=Object.keys(snCounts).filter(sn=>snCounts[sn]>1);if(repeatedSn.length)warnings.push(`待提交內重複 S/N：${repeatedSn.join('、')}`);
+  const todayDup=[...new Set(queue.filter(item=>todayRecords.some(r=>String(r.serialNo)===item.sn)).map(item=>item.sn))];if(todayDup.length)warnings.push(`今日已提交：${todayDup.join('、')}`);
+  const seals=queue.map(item=>item.voidSeal).filter(Boolean);const repeatedSeals=[...new Set(seals.filter((seal,i)=>seals.indexOf(seal)!==i))];if(repeatedSeals.length)warnings.push(`Void Seal 重複：${repeatedSeals.join('、')}`);
+  const today=new Date();today.setHours(0,0,0,0);if(new Date(date+'T00:00:00')>today)warnings.push('所選日期是未來日期');
   const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
   document.getElementById('confirmInfo').innerHTML=`
     <div><span>場地</span><span>${esc(casino)}</span></div>
     <div><span>日期</span><span>${fmtDate(date)}</span></div>
     <div><span>PO 號碼</span><span>${esc(poNumber)}</span></div>
-    <div><span>機型</span><span>${esc(models)}</span></div>`;
-  document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄`;
+    <div><span>機型</span><span>${esc(models)}</span></div>
+    ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(esc).join('<br>')}</div>`:''}`;
+  document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length?'（有提示，請確認）':''}`;
   document.getElementById('confirmOkBtn').disabled=false;
   document.getElementById('confirmOkBtn').textContent='提交';
   document.getElementById('confirmModal').classList.add('show');
@@ -2161,7 +2415,7 @@ async function doSubmit(){
   localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);localStorage.setItem('poNumber',poNumber);
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
-  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
+  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||'',bpStatus:item.bpStatus||''}));
   const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
