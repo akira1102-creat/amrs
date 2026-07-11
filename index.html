@@ -776,8 +776,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.10-12';
-const _APP_VERSION='v0.953';
+const _APP_BUMP='2026.07.11-1';
+const _APP_VERSION='v0.954';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1382,7 +1382,7 @@ const _savedModel=localStorage.getItem('model');if(_savedModel)document.getEleme
 document.getElementById('model').addEventListener('change',function(){localStorage.setItem('model',this.value);});
 document.getElementById('poNumber').addEventListener('change',function(){localStorage.setItem('poNumber',this.value.trim());});
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='';
-let dashboardRecords=[],dashboardPage=1,dashboardEditingIdx=-1;
+let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null;
 const DASH_PAGE_SIZE=10;
 let selectedQueueIdxs=new Set();
 function saveQueue(){localStorage.setItem('_ml_queue',JSON.stringify(queue));}
@@ -1896,6 +1896,8 @@ function syncDashboardSearchMode(){
 function clearDashboardResults(message='按「搜尋」載入資料。'){
   dashboardRecords=[];
   dashboardPage=1;
+  dashboardTotalPages=1;
+  dashboardTotalMatches=0;
   dashboardEditingIdx=-1;
   const rowsEl=document.getElementById('dashRows');
   if(rowsEl)rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">${esc(message)}</td></tr>`;
@@ -1921,7 +1923,7 @@ function resetDashboardFilters(){
   document.getElementById('dashSummary').textContent='請先選擇查詢範圍';
 }
 function dashColspan(){return currentDashboardCompany==='GEG'?12:10;}
-async function loadDashboard(){
+async function loadDashboard(page=1){
   const SCRIPT_URL=getScriptUrl();
   if(!SCRIPT_URL){showToast('尚未設定網站代號','err');return;}
   const venueFilter=parseDashVenueFilter();
@@ -1940,6 +1942,8 @@ async function loadDashboard(){
   summary.textContent='正在載入記錄...';
   const searchText=document.getElementById('dashSearch').value.trim();
   const fuzzy=isDashFuzzy();
+  dashboardRequest?.abort();
+  dashboardRequest=new AbortController();
   const qs=new URLSearchParams({
     action:'dashboard',
     company:venueFilter.company,
@@ -1950,17 +1954,22 @@ async function loadDashboard(){
     q:fuzzy?searchText:'',
     serialNo:fuzzy?'':searchText,
     searchMode:fuzzy?'fuzzy':'serial',
-    limit:'200'
+    page:String(Math.max(1,page)),
+    pageSize:String(DASH_PAGE_SIZE)
   });
   try{
-    const r=await fetch(SCRIPT_URL+'?'+qs.toString());
+    const r=await fetch(SCRIPT_URL+'?'+qs.toString(),{signal:dashboardRequest.signal});
     const data=await r.json();
     if(!data.success){throw new Error(data.message||'載入失敗');}
+    dashboardPage=data.page||Math.max(1,page);
+    dashboardTotalPages=data.totalPages||1;
+    dashboardTotalMatches=data.totalMatches??data.returned??0;
     renderDashboardRows(data.records||[]);
     summary.textContent=searchText
-      ?`🔍 ${fuzzy?searchText:`Serial No. ${searchText}`} 共找到 ${data.returned||0} 筆記錄`
-      :`顯示 ${data.returned||0} 筆記錄`;
+      ?`🔍 ${fuzzy?searchText:`Serial No. ${searchText}`} 共找到 ${dashboardTotalMatches} 筆記錄`
+      :`共找到 ${dashboardTotalMatches} 筆記錄`;
   }catch(e){
+    if(e.name==='AbortError')return;
     rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入記錄失敗。</td></tr>`;
     document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入記錄失敗。</div>';
     updateDashboardPager();
@@ -1972,7 +1981,6 @@ function renderDashboardRows(records){
   const rowsEl=document.getElementById('dashRows');
   const mobileEl=document.getElementById('dashMobileRows');
   dashboardRecords=records.slice();
-  dashboardPage=1;
   dashboardEditingIdx=-1;
   if(!records.length){
     rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">沒有相符記錄。</td></tr>`;
@@ -2009,8 +2017,9 @@ function renderDashboardMobileCard(record,index){
       <div class="dash-mobile-key">▸ ${esc(key)}</div>
       <div class="dash-mobile-val">${esc(val)}</div>
     </div>`).join('');
+  const displayNumber=(dashboardPage-1)*DASH_PAGE_SIZE+index+1;
   return `<section class="dash-mobile-card">
-    <div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span><button class="dash-card-btn" onclick="startDashboardCardEdit(${index})" type="button">編輯</button></div>
+    <div class="dash-mobile-title"><span>── 記錄 ${displayNumber} ──</span><button class="dash-card-btn" onclick="startDashboardCardEdit(${index})" type="button">編輯</button></div>
     ${rows}
   </section>`;
 }
@@ -2020,8 +2029,9 @@ function renderDashboardEditCard(record,index){
   const casinoChoices=casinoOptionsForCompany(rowCompany);
   const casinoList=casinoValue&&!casinoChoices.includes(casinoValue)?[casinoValue,...casinoChoices]:casinoChoices;
   const model=record.model||'SAE';
+  const displayNumber=(dashboardPage-1)*DASH_PAGE_SIZE+index+1;
   return `<section class="dash-mobile-card" id="dashCardEdit${index}">
-    <div class="dash-mobile-title"><span>── 編輯記錄 ${index+1} ──</span></div>
+    <div class="dash-mobile-title"><span>── 編輯記錄 ${displayNumber} ──</span></div>
     <div class="dash-card-form">
       ${dashEditField('日期','date',dashDateToInput(record.date),'date')}
       <div><label>場地</label><select data-card-field="casino">${casinoList.map(c=>`<option value="${esc(c)}"${c===casinoValue?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
@@ -2050,29 +2060,26 @@ function renderDashboardPage(){
     updateDashboardPager();
     return;
   }
-  const maxPage=Math.max(1,Math.ceil(dashboardRecords.length/DASH_PAGE_SIZE));
-  dashboardPage=Math.min(Math.max(1,dashboardPage),maxPage);
-  const start=(dashboardPage-1)*DASH_PAGE_SIZE;
-  mobileEl.innerHTML=dashboardRecords.slice(start,start+DASH_PAGE_SIZE).map((r,i)=>renderDashboardMobileCard(r,start+i)).join('');
+  mobileEl.innerHTML=dashboardRecords.map((r,i)=>renderDashboardMobileCard(r,i)).join('');
   updateDashboardPager();
 }
 function updateDashboardPager(){
   const pager=document.getElementById('dashPager');
   if(!pager)return;
-  const maxPage=Math.max(1,Math.ceil(dashboardRecords.length/DASH_PAGE_SIZE));
-  pager.classList.toggle('show',dashboardRecords.length>DASH_PAGE_SIZE);
+  const maxPage=Math.max(1,dashboardTotalPages);
+  pager.classList.toggle('show',dashboardTotalMatches>DASH_PAGE_SIZE);
   document.getElementById('dashPageInfo').textContent=`第 ${dashboardPage} / ${maxPage} 頁`;
   document.getElementById('dashPrevBtn').disabled=dashboardPage<=1;
   document.getElementById('dashNextBtn').disabled=dashboardPage>=maxPage;
 }
 function changeDashPage(delta){
-  dashboardPage+=delta;
+  const nextPage=Math.min(Math.max(1,dashboardPage+delta),dashboardTotalPages);
+  if(nextPage===dashboardPage)return;
   dashboardEditingIdx=-1;
-  renderDashboardPage();
+  loadDashboard(nextPage);
 }
 function startDashboardCardEdit(index){
   dashboardEditingIdx=index;
-  dashboardPage=Math.floor(index/DASH_PAGE_SIZE)+1;
   renderDashboardPage();
 }
 function cancelDashboardCardEdit(){
