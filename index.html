@@ -180,7 +180,7 @@
     .bp-list-row input,.bp-list-row select{font-size:12px;padding:8px 9px;border-radius:10px}
     .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer;margin:4px}
     .bp-list-empty{padding:14px;color:#8b949e;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .bp-list-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
+    .bp-list-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
     .bp-list-filters input,.bp-list-filters select{font-size:12px;padding:9px 10px;border-radius:10px}
     .bp-list-filters button{padding:8px 13px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
@@ -553,9 +553,15 @@
       <input id="bpFilterCasino" type="text" placeholder="場地">
       <input id="bpFilterParts" type="text" placeholder="零件編號">
       <select id="bpFilterStatus"><option value="">全部狀態</option><option>待訂購</option><option>已訂購</option><option>已到貨</option><option>已更換</option></select>
-      <button onclick="loadBrokenPartsListEditor()" type="button">篩選</button>
+      <select id="bpFilterSort" onchange="loadBrokenPartsListEditor(1)"><option value="newest">最新優先</option><option value="oldest">最舊優先</option></select>
+      <button onclick="loadBrokenPartsListEditor(1)" type="button">篩選</button>
     </div>
     <div id="bpListRows"></div>
+    <div class="dash-pager show" id="bpListPager">
+      <button class="dash-page-btn" id="bpListPrevBtn" onclick="changeBpListPage(-1)" type="button">上一頁</button>
+      <span class="dash-page-info" id="bpListPageInfo">第 1 / 1 頁</span>
+      <button class="dash-page-btn" id="bpListNextBtn" onclick="changeBpListPage(1)" type="button">下一頁</button>
+    </div>
     <div class="template-actions">
       <button class="template-add" onclick="addBrokenPartsListRow()" type="button">＋ 新增一行</button>
       <button class="template-save" id="bpListSaveBtn" onclick="saveBrokenPartsListEditor()" type="button">儲存</button>
@@ -905,8 +911,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-4';
-const _APP_VERSION='v0.959';
+const _APP_BUMP='2026.07.13-5';
+const _APP_VERSION='v0.960';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -924,7 +930,7 @@ async function _pbkdf2(pin){
 const COMPANIES=['Melco','MGM','SJM','SCL','GEG','Wynn'];
 const COMPANY_ORDER_KEY='_ml_company_order';
 const COMPANY_CASINOS={
-  Melco:['Altira','City of Dreams','Studio City'],
+  Melco:['ALT','COD','SC'],
   MGM:['MGM Macau','MGM Cotai'],
   SJM:['Lisboa','Grand Lisboa','Grand Lisboa Palace','Oceanus','Jai Alai','L’Arc'],
   SCL:['Venetian','Parisian','Londoner','Plaza','Sands'],
@@ -1712,6 +1718,7 @@ let _bpRepairDayMode='waiting';
 let _bpRemarkVisible=false;
 let _bpListRecords=[];
 let _bpListDeleted=[];
+let _bpListPage=1,_bpListTotalPages=1,_bpListTotalMatches=0;
 const _PARTS_KEY='_ml_parts';
 (function(){const sel=document.getElementById('bpQty');for(let i=1;i<=20;i++){const o=document.createElement('option');o.value=i;o.textContent=i;sel.appendChild(o);}})();
 (function(){const t=new Date();document.getElementById('bpRepairDayDate').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;})();
@@ -1805,25 +1812,38 @@ async function openBrokenPartsListEditor(){
   document.getElementById('bpFilterCasino').value='';
   document.getElementById('bpFilterParts').value='';
   document.getElementById('bpFilterStatus').value='';
-  await loadBrokenPartsListEditor();
+  document.getElementById('bpFilterSort').value='newest';
+  await loadBrokenPartsListEditor(1);
 }
-async function loadBrokenPartsListEditor(){
+async function loadBrokenPartsListEditor(page=_bpListPage){
   const serialNo=bpListFilterSerial();
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
-  document.getElementById('bpListNote').textContent=serialNo
-    ?`只顯示 Serial No. ${serialNo} 的 Broken Parts List 項目。`
-    :'顯示目前公司 Broken Parts List 工作表內所有項目。';
   _bpListDeleted=[];
   try{
-    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value});
+    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:'10'});
     const r=await fetch(getScriptUrl()+'?'+qs.toString());
     const data=await r.json();
+    if(!data.success)throw new Error(data.message||'載入失敗');
     _bpListRecords=data.records||[];
+    _bpListPage=data.page||1;_bpListTotalPages=data.totalPages||1;_bpListTotalMatches=data.totalMatches||0;
+    const order=data.sort==='oldest'?'最舊優先':'最新優先';
+    document.getElementById('bpListNote').textContent=`${serialNo?`Serial No. ${serialNo} · `:''}${order} · 共 ${_bpListTotalMatches} 筆，每頁顯示 10 筆。`;
   }catch(e){
     _bpListRecords=[];
+    _bpListPage=1;_bpListTotalPages=1;_bpListTotalMatches=0;
     showToast('損壞零件列表載入失敗','err');
   }
   renderBrokenPartsListRows();
+  updateBpListPager();
+}
+function changeBpListPage(delta){
+  const page=Math.min(Math.max(1,_bpListPage+delta),_bpListTotalPages);
+  if(page!==_bpListPage)loadBrokenPartsListEditor(page);
+}
+function updateBpListPager(){
+  document.getElementById('bpListPageInfo').textContent=`第 ${_bpListPage} / ${_bpListTotalPages} 頁`;
+  document.getElementById('bpListPrevBtn').disabled=_bpListPage<=1;
+  document.getElementById('bpListNextBtn').disabled=_bpListPage>=_bpListTotalPages;
 }
 function bpListField(label,field,value){
   return `<input data-bp-field="${esc(field)}" value="${esc(value??'')}" placeholder="${esc(label)}">`;
