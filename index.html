@@ -410,6 +410,8 @@
     .dash-mobile-row:last-child{border-bottom:none}
     .dash-mobile-key{font-size:12px;color:#8b949e;font-weight:700}
     .dash-mobile-val{font-size:13px;color:#e6edf3;line-height:1.35;word-break:break-word;white-space:pre-wrap}
+    .dash-aa-load{margin-left:8px;padding:5px 8px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#58a6ff;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+    .dash-aa-load:disabled{color:#484f58;cursor:not-allowed}
     .dash-card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
     .dash-card-btn{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .dash-card-btn.primary{background:#238636;border-color:#2ea043;color:#fff}
@@ -959,8 +961,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-8';
-const _APP_VERSION='v0.963';
+const _APP_BUMP='2026.07.13-9';
+const _APP_VERSION='v0.964';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1354,6 +1356,7 @@ function updateMgmLocationButtons(){
   });
 }
 function getMgmLocationData(){return activeCompany==='MGM'?{location:_mgmLocation}:{};}
+function getMgmAaTagData(){return activeCompany==='MGM'?{aaTag:canonicalAaTag(document.getElementById('aaTag').value)}:{};}
 function canonicalAaTag(value){
   const digits=String(value||'').toUpperCase().replace(/^TAE/,'').replace(/\D/g,'').slice(0,4);
   return digits?`TAE${digits.padStart(4,'0')}`:'';
@@ -1377,8 +1380,9 @@ function updateAaTagLoadStatus(){
   status.textContent=loaded?`已載入 ${_aaTags.length} 個 AA Tag 號碼`:'尚未載入 AA Tag 號碼';
   status.classList.toggle('loaded',loaded);
 }
-async function fetchAaTags(){
-  const btn=document.getElementById('aaTagLoadBtn');
+async function fetchAaTags(triggerBtn){
+  const btn=triggerBtn||document.getElementById('aaTagLoadBtn');
+  const originalText=btn.textContent;
   btn.disabled=true;btn.textContent='載入中...';
   try{
     const r=await fetch(getScriptUrl()+'?action=aaTags&company=MGM&refresh=1');
@@ -1386,9 +1390,10 @@ async function fetchAaTags(){
     if(!data.success||!Array.isArray(data.tags))throw new Error(data.message||'載入失敗');
     setAaTags(data.tags);
     localStorage.setItem(_AA_TAG_KEY,JSON.stringify({data:_aaTags,ts:Date.now()}));
+    if(currentDashboardCompany==='MGM'&&dashboardRecords.length)renderDashboardPage();
     showToast(`✓ 已載入 ${_aaTags.length} 個 AA Tag 號碼`);
   }catch(e){showToast('AA Tag 號碼載入失敗','err');}
-  finally{btn.disabled=false;btn.textContent='↻ 載入 AA Tag';}
+  finally{btn.disabled=false;btn.textContent=originalText;}
 }
 function syncAaTagFromSerial(){
   if(activeCompany!=='MGM')return;
@@ -2197,11 +2202,12 @@ async function addToQueue(){
   const bpData=_getBpData()||{};
   const sealData=getGegSealData();
   const locationData=getMgmLocationData();
+  const aaTagData=getMgmAaTagData();
   const inspectorData=getWynnInspectorData();
   const isDupToday=todayRecords.some(r=>String(r.serialNo)===sn);
   const isDupQueue=queue.some(q=>q.sn===sn);
   if(isDupToday||isDupQueue){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData};
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...bpData};
     const where=isDupToday?'今日已提交記錄':'目前待提交清單';
     document.getElementById('dupTitle').textContent='⚠ 機身號碼重複';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 已存在於${where}。仍然加入？`;
@@ -2210,13 +2216,13 @@ async function addToQueue(){
   }
   const faultDuplicates=await fetchDuplicateFaults([sn],reason);
   if(faultDuplicates[sn]?.length){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData};
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...bpData};
     document.getElementById('dupTitle').textContent='⚠ 重複故障警告';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 在最近 30 日已有 ${faultDuplicates[sn].length} 次「${reason}」記錄。仍然加入？`;
     document.getElementById('dupModal').classList.add('show');
     return;
   }
-  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData});
+  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...bpData});
 }
 function cancelDupAdd(){pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');}
 function confirmDupAdd(){
@@ -2237,13 +2243,14 @@ function doAddToQueue(item){
   switchToDrop();document.getElementById('actionDrop').value='Preventive Maintenance';
   if(_isMob)showSnPad();else document.getElementById('serialNo').focus();
 }
-function startEditQueue(i){editingIdx=i;const item=queue[i];editTemp={sn:item.sn,model:item.model||'SAE',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,action:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',actionMode:ALL_ACTIONS.includes(item.action)?'drop':'custom'};renderQueue();}
+function startEditQueue(i){editingIdx=i;const item=queue[i];editTemp={sn:item.sn,model:item.model||'SAE',aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,action:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',actionMode:ALL_ACTIONS.includes(item.action)?'drop':'custom'};renderQueue();}
 function cancelEditQueue(){editingIdx=-1;editTemp=null;renderQueue();}
 function captureEditTemp(){
   if(editingIdx<0||!editTemp)return;
   const g=id=>document.getElementById(id);
   if(g('eq-sn'))editTemp.sn=g('eq-sn').value;
   if(g('eq-model'))editTemp.model=g('eq-model').value;
+  if(g('eq-aa-tag'))editTemp.aaTag=g('eq-aa-tag').value;
   if(g('eq-void-seal'))editTemp.voidSeal=g('eq-void-seal').value;
   if(g('eq-new-void-seal'))editTemp.newVoidSeal=g('eq-new-void-seal').value;
   if(g('eq-location'))editTemp.location=g('eq-location').value;
@@ -2263,7 +2270,7 @@ function saveEditQueue(i){
   if(!sn){showToast('請輸入機身號碼','err');return;}
   const action=editTemp.actionMode==='drop'?editTemp.action:(editTemp.action||'').trim();
   if(!action){showToast('請選擇處理方法','err');return;}
-  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
+  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',aaTag:canonicalAaTag(editTemp.aaTag),voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
   editingIdx=-1;editTemp=null;saveQueue();renderQueue();
 }
 function toggleQueueSelect(i,checked){
@@ -2330,6 +2337,7 @@ function renderQueue(){
       const sealEditHtml=activeCompany==='GEG'?`
         <div class="ef-row"><label>Void Seal</label><input id="eq-void-seal" type="text" value="${esc(editTemp.voidSeal)}" placeholder="選填"></div>
         <div class="ef-row"><label>New Void Seal</label><input id="eq-new-void-seal" type="text" value="${esc(editTemp.newVoidSeal)}" placeholder="如有更換才填"></div>`:'';
+      const aaTagEditHtml=activeCompany==='MGM'?`<div class="ef-row"><label>AA Tag</label><input id="eq-aa-tag" type="text" value="${esc(editTemp.aaTag)}" placeholder="TAE0000" inputmode="numeric"></div>`:'';
       const locationEditHtml=activeCompany==='MGM'?`<div class="ef-row"><label>場所</label><select id="eq-location"><option value="Floor"${editTemp.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${editTemp.location==='Workshop'?' selected':''}>場下</option></select></div>`:'';
       const inspectorEditHtml=activeCompany==='Wynn'?`<div class="ef-row"><label>調查人員</label><input id="eq-inspector" type="text" value="${esc(editTemp.inspector)}" placeholder="選填"></div>`:'';
       return `<div class="q-item q-editing"><div class="q-edit-form">
@@ -2337,6 +2345,7 @@ function renderQueue(){
         <div class="ef-row"><label>機身號碼</label><input id="eq-sn" class="sn-input" type="text" value="${esc(editTemp.sn)}" inputmode="numeric"></div>
         <div class="ef-row"><label>機型</label><select id="eq-model">${mOpts}</select></div>
         ${sealEditHtml}
+        ${aaTagEditHtml}
         ${locationEditHtml}
         ${inspectorEditHtml}
         <div class="ef-row"><label>原因</label><div class="combo" data-combo="eq-reason"><input id="eq-reason" type="text" value="${esc(editTemp.reason)}" oninput="onEditReasonInput()" onchange="onEditReasonChange()" placeholder="搜尋原因..." autocomplete="off"><div class="combo-menu" id="eq-reason-menu"></div></div></div>
@@ -2356,6 +2365,7 @@ function renderQueue(){
         <div class="q-reason">${esc(item.model||'SAE')} · ${esc(item.reason)}</div>
         <div class="q-action">${esc(item.action)}</div>
         ${activeCompany==='GEG'&&(item.voidSeal||item.newVoidSeal)?`<div class="q-extra">Void：${esc(item.voidSeal||'-')}${item.newVoidSeal?' → '+esc(item.newVoidSeal):''}</div>`:''}
+        ${activeCompany==='MGM'&&item.aaTag?`<div class="q-extra">AA Tag：${esc(item.aaTag)}</div>`:''}
         ${activeCompany==='MGM'&&item.location?`<div class="q-extra">場所：${item.location==='Floor'?'場上':'場下'}</div>`:''}
         ${activeCompany==='Wynn'&&item.inspector?`<div class="q-extra">Inspector：${esc(item.inspector)}</div>`:''}
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
@@ -2538,14 +2548,17 @@ function cleanDashValue(value){
   return String(value??'').replace(/[\u200B-\u200D\uFEFF]/g,'').trim();
 }
 function dashFieldRows(record, rowCompany){
+  const serialNo=cleanDashValue(record.serialNo);
+  const aaTag=rowCompany==='MGM'&&_aaTags.length?_aaBySerial[serialNo]||'未有對應 AA Tag':'';
+  const serialDisplay=aaTag?`${serialNo} · ${aaTag}`:serialNo;
   const fields=[
     ['CASINO',record.casino],
     ['DATE',record.date],
     ['PO Number',record.poNumber],
     ['Model',record.model],
-    ['Serial No.',record.serialNo],
+    ['Serial No.',serialDisplay],
     ...(rowCompany==='GEG'?[['Void Seal',record.voidSeal],['New Void Seal',record.newVoidSeal]]:[]),
-    ...(rowCompany==='MGM'?[['場所',record.location]]:[]),
+    ...(rowCompany==='MGM'?[['Location',record.location]]:[]),
     ...(rowCompany==='Wynn'?[['Inspector',record.inspector]]:[]),
     ['Reason',record.reason],
     ['Action Taken',record.actionTaken],
@@ -2557,10 +2570,11 @@ function dashFieldRows(record, rowCompany){
 function renderDashboardMobileCard(record,index){
   if(index===dashboardEditingIdx)return renderDashboardEditCard(record,index);
   const rowCompany=record.company||currentDashboardCompany||activeCompany;
+  const needsAaTags=rowCompany==='MGM'&&!_aaTags.length;
   const rows=dashFieldRows(record,rowCompany).map(([key,val])=>`
     <div class="dash-mobile-row">
       <div class="dash-mobile-key">▸ ${esc(key)}</div>
-      <div class="dash-mobile-val">${esc(val)}</div>
+      <div class="dash-mobile-val">${esc(val)}${key==='Serial No.'&&needsAaTags?' <button class="dash-aa-load" onclick="fetchAaTags(this)" type="button">載入 AA Tag</button>':''}</div>
     </div>`).join('');
   const displayNumber=(dashboardPage-1)*DASH_PAGE_SIZE+index+1;
   const selected=dashboardSelectedRecords.has(String(record.rowNumber))?' checked':'';
@@ -2585,7 +2599,7 @@ function renderDashboardEditCard(record,index){
       <div><label>機型</label><select data-card-field="model"><option${model==='SAE'?' selected':''}>SAE</option><option${model==='TAE'?' selected':''}>TAE</option></select></div>
       ${dashEditField('Serial No.','serialNo',record.serialNo)}
       ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
-      ${rowCompany==='MGM'?`<div><label>場所</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
+      ${rowCompany==='MGM'?`<div><label>Location</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
       ${rowCompany==='Wynn'?dashEditField('Inspector','inspector',record.inspector):''}
       ${dashEditField('Reason','reason',record.reason)}
       ${dashEditField('Action Taken','actionTaken',record.actionTaken)}
@@ -2703,7 +2717,7 @@ async function fetchAllDashboardRecords(){
 function exportColumns(){
   const cols=[['company','Company'],['casino','CASINO'],['date','DATE'],['poNumber','PO Number'],['model','Model'],['serialNo','Serial No.']];
   if(currentDashboardCompany==='GEG')cols.push(['voidSeal','Void Seal'],['newVoidSeal','New Void Seal']);
-  if(currentDashboardCompany==='MGM')cols.push(['location','場所']);
+  if(currentDashboardCompany==='MGM')cols.push(['location','Location']);
   if(currentDashboardCompany==='Wynn')cols.push(['inspector','Inspector']);
   return cols.concat([['reason','Reason'],['actionTaken','Action Taken'],['errorDescription','Error Description'],['boxId','Box ID']]);
 }
@@ -2833,7 +2847,7 @@ async function doSubmit(){
   localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);localStorage.setItem('poNumber',poNumber);
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
-  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
+  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
   const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
