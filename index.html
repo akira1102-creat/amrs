@@ -347,20 +347,21 @@
     #poRepairPanel.show{display:block}
     .po-repair-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .po-repair-title{flex:1;color:#e6edf3;font-size:13px;font-weight:800}
-    .po-repair-close{padding:6px 9px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#8b949e;font-size:11px;font-weight:800;cursor:pointer}
+    .po-repair-close{padding:6px 9px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#8b949e;font-size:10px;font-weight:800;white-space:nowrap;cursor:pointer}
     .po-repair-note{font-size:11px;color:#8b949e;line-height:1.5;margin-bottom:9px}
     .po-repair-grid{border:1px solid #21262d;border-radius:10px;overflow:hidden}
-    .po-repair-row{display:grid;grid-template-columns:80px 105px minmax(180px,1fr) 52px 100px 86px;align-items:center;border-bottom:1px solid #21262d}
+    .po-repair-row{display:grid;grid-template-columns:minmax(68px,.72fr) minmax(76px,.78fr) minmax(110px,1.35fr) minmax(34px,.38fr) minmax(72px,.72fr) minmax(68px,max-content);align-items:center;border-bottom:1px solid #21262d}
     .po-repair-row:last-child{border-bottom:none}
     .po-repair-row.selected{box-shadow:inset 3px 0 #3fb950;background:#0b1510}
     .po-repair-row>div{padding:8px;font-size:12px;color:#e6edf3;min-width:0;word-break:break-word}
     .po-repair-header{background:#161b22}
     .po-repair-header>div{font-size:10px;color:#8b949e;font-weight:800}
-    .po-repair-done{margin:5px;padding:7px;border:1px solid #2ea043;border-radius:8px;background:#238636;color:#fff;font-size:11px;font-weight:800;cursor:pointer}
+    .po-repair-done{min-width:64px;margin:4px 6px 4px 2px;padding:7px 8px;border:1px solid #2ea043;border-radius:8px;background:#238636;color:#fff;font-size:10px;font-weight:800;white-space:nowrap;cursor:pointer}
     .po-repair-done:disabled{background:#21262d;border-color:#30363d;color:#484f58;cursor:not-allowed}
     #poRepairHint{display:none;margin-top:8px;padding:9px 11px;border:1px solid #2ea043;border-radius:10px;background:#0b1510;color:#3fb950;font-size:12px;font-weight:700;line-height:1.45}
     #poRepairHint.manual{display:block;border-color:#9a6700;background:#2d1f00;color:#f0883e}
     #actionCustom[readonly]{color:#8b949e;background:#161b22;cursor:not-allowed}
+    #actionCustomModeBtn{width:auto;min-width:52px;padding:0 8px;font-size:10px;line-height:1;white-space:nowrap}
     .sn-seal-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:end}
     body.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
     body.company-mgm .sn-seal-row{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -1015,8 +1016,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-11';
-const _APP_VERSION='v0.966';
+const _APP_BUMP='2026.07.13-12';
+const _APP_VERSION='v0.967';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
