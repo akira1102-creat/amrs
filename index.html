@@ -473,8 +473,9 @@
     .parts-list-summary{font-size:12px;color:#8b949e}
     .parts-list-refresh{flex:0 0 auto;padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .parts-list-refresh:disabled{color:#484f58;cursor:not-allowed}
+    .parts-list-index{display:none}
     .parts-list-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
-    .parts-list-group{min-width:0}
+    .parts-list-group{min-width:0;scroll-margin-top:72px}
     .parts-list-group+.parts-list-group{border-left:1px solid #30363d;padding-left:18px}
     .parts-list-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px 9px;border-bottom:1px solid #30363d;color:#e6edf3;font-size:14px;font-weight:800}
     .parts-list-count{color:#58a6ff;font-size:11px}
@@ -510,6 +511,9 @@
     .mob .dash-selected-count{width:100%;margin-left:0}
     .mob #partsListCard.card{padding:16px 15px}
     .mob .parts-list-toolbar{align-items:flex-start}
+    .mob .parts-list-index{position:sticky;top:8px;z-index:5;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:14px;padding:6px;background:#161b22;border:1px solid #30363d;border-radius:10px}
+    .mob .parts-list-index button{height:36px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .mob .parts-list-index button:active{background:#1f6feb;border-color:#58a6ff;color:#fff}
     .mob .parts-list-columns{grid-template-columns:1fr;gap:24px}
     .mob .parts-list-group+.parts-list-group{border-left:none;padding-left:0}
     .mob .bp-list-filters,.mob .bulk-edit-grid{grid-template-columns:1fr}
@@ -518,11 +522,13 @@
     .mob .bp-list-row>.bp-list-date{grid-column:1/-1}
     .mob .bp-list-date input{min-width:0}
     .mob .aa-tag-input{font-size:21px !important;letter-spacing:0}
-    body.mob.company-mgm .sn-input{font-size:27px !important;letter-spacing:1px}
-    body.mob.company-mgm .aa-tag-input{font-size:18px !important;letter-spacing:0}
-    .mob body.company-geg .sn-seal-row,body.mob.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-    .mob body.company-mgm .sn-seal-row,body.mob.company-mgm .sn-seal-row{grid-template-columns:repeat(3,minmax(0,1fr))}
-    .mob .location-choice button{height:34px;font-size:12px}
+    .mob body.company-mgm .sn-input{font-size:25px !important;letter-spacing:1px;padding:12px 6px !important}
+    .mob body.company-mgm .aa-tag-input{font-size:17px !important;letter-spacing:0}
+    .mob body.company-geg .sn-seal-row{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr)}
+    .mob body.company-geg .sn-input{font-size:26px !important;letter-spacing:1px;padding:12px 6px !important}
+    .mob body.company-mgm .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 62px}
+    .mob body.company-mgm #mgmLocationInline{width:62px;min-width:62px}
+    .mob .location-choice button{height:34px;padding:0 5px;font-size:12px;white-space:nowrap}
     #appVersion{text-align:center;font-size:11px;color:#30363d;padding:8px 0 4px;max-width:640px;margin:0 auto;letter-spacing:.5px}
     #mainLayout{max-width:640px;margin:0 auto;}
     #mainRight{}
@@ -989,6 +995,11 @@
       <div class="parts-list-summary" id="partsListSummary">載入零件資料中...</div>
       <button class="parts-list-refresh" id="partsListRefreshBtn" onclick="refreshPartsListPage()" type="button">重新整理</button>
     </div>
+    <div class="parts-list-index" aria-label="零件分類快速索引">
+      <button onclick="scrollPartsListGroup('partsGroupAe')" type="button">AE</button>
+      <button onclick="scrollPartsListGroup('partsGroupTae')" type="button">TAE</button>
+      <button onclick="scrollPartsListGroup('partsGroupOther')" type="button">其他</button>
+    </div>
     <div class="parts-list-columns" id="partsListColumns"></div>
   </div>
 </div><!-- /partsListPage -->
@@ -1026,8 +1037,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-14';
-const _APP_VERSION='v0.969';
+const _APP_BUMP='2026.07.13-16';
+const _APP_VERSION='v0.971';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1867,13 +1878,13 @@ function renderPartsListPage(){
   const summary=document.getElementById('partsListSummary');
   if(!root||!summary)return;
   const groups=[
-    {title:'AE- 零件',items:_partsCodes.filter(p=>/^AE-/i.test(String(p.code||'')))},
-    {title:'TAE- 零件',items:_partsCodes.filter(p=>/^TAE-/i.test(String(p.code||'')))},
-    {title:'其他',items:_partsCodes.filter(p=>!/^AE-/i.test(String(p.code||''))&&!/^TAE-/i.test(String(p.code||'')))}
+    {id:'partsGroupAe',title:'AE- 零件',items:_partsCodes.filter(p=>/^AE-/i.test(String(p.code||'')))},
+    {id:'partsGroupTae',title:'TAE- 零件',items:_partsCodes.filter(p=>/^TAE-/i.test(String(p.code||'')))},
+    {id:'partsGroupOther',title:'其他',items:_partsCodes.filter(p=>!/^AE-/i.test(String(p.code||''))&&!/^TAE-/i.test(String(p.code||'')))}
   ];
   groups.forEach(group=>group.items.sort(partCodeSort));
   summary.textContent=_partsCodes.length?`共 ${_partsCodes.length} 項零件`:'沒有零件資料';
-  root.innerHTML=groups.map(group=>`<section class="parts-list-group">
+  root.innerHTML=groups.map(group=>`<section class="parts-list-group" id="${group.id}">
     <div class="parts-list-heading"><span>${group.title}</span><span class="parts-list-count">${group.items.length} 項</span></div>
     ${group.items.length?group.items.map(part=>`<div class="parts-list-row">
       <div class="parts-list-code">${esc(part.code||'')}</div>
@@ -1882,6 +1893,7 @@ function renderPartsListPage(){
     </div>`).join(''):'<div class="parts-list-empty">沒有項目</div>'}
   </section>`).join('');
 }
+function scrollPartsListGroup(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});}
 async function loadPartsListPage(){
   if(_partsCodes.length){renderPartsListPage();return;}
   const root=document.getElementById('partsListColumns');
