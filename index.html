@@ -337,11 +337,30 @@
     .bp-update-btn:not(:disabled):hover{color:#e6edf3;border-color:#484f58}
     .bp-update-btn:disabled{color:#484f58;cursor:not-allowed}
     .bp-update-ts{font-size:11px;color:#484f58}
+    .bp-update-ts.loaded{color:#3fb950;font-weight:800}
     .bp-code-label{display:flex;align-items:center;gap:8px;min-width:0}
     .bp-lang-switch{display:inline-flex;border:1px solid #30363d;border-radius:8px;overflow:hidden}
     .bp-lang-btn{padding:4px 8px;border:0;border-right:1px solid #30363d;background:#21262d;color:#8b949e;font-size:11px;font-weight:800;cursor:pointer}
     .bp-lang-btn:last-child{border-right:0}
     .bp-lang-btn.active{background:#1f6feb;color:#fff}
+    #poRepairPanel{display:none;margin-top:12px;padding:12px;border:1px solid #30363d;border-radius:14px;background:#0d1117}
+    #poRepairPanel.show{display:block}
+    .po-repair-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .po-repair-title{flex:1;color:#e6edf3;font-size:13px;font-weight:800}
+    .po-repair-close{padding:6px 9px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#8b949e;font-size:11px;font-weight:800;cursor:pointer}
+    .po-repair-note{font-size:11px;color:#8b949e;line-height:1.5;margin-bottom:9px}
+    .po-repair-grid{border:1px solid #21262d;border-radius:10px;overflow:hidden}
+    .po-repair-row{display:grid;grid-template-columns:80px 105px minmax(180px,1fr) 52px 100px 86px;align-items:center;border-bottom:1px solid #21262d}
+    .po-repair-row:last-child{border-bottom:none}
+    .po-repair-row.selected{box-shadow:inset 3px 0 #3fb950;background:#0b1510}
+    .po-repair-row>div{padding:8px;font-size:12px;color:#e6edf3;min-width:0;word-break:break-word}
+    .po-repair-header{background:#161b22}
+    .po-repair-header>div{font-size:10px;color:#8b949e;font-weight:800}
+    .po-repair-done{margin:5px;padding:7px;border:1px solid #2ea043;border-radius:8px;background:#238636;color:#fff;font-size:11px;font-weight:800;cursor:pointer}
+    .po-repair-done:disabled{background:#21262d;border-color:#30363d;color:#484f58;cursor:not-allowed}
+    #poRepairHint{display:none;margin-top:8px;padding:9px 11px;border:1px solid #2ea043;border-radius:10px;background:#0b1510;color:#3fb950;font-size:12px;font-weight:700;line-height:1.45}
+    #poRepairHint.manual{display:block;border-color:#9a6700;background:#2d1f00;color:#f0883e}
+    #actionCustom[readonly]{color:#8b949e;background:#161b22;cursor:not-allowed}
     .sn-seal-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:end}
     body.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
     body.company-mgm .sn-seal-row{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -363,6 +382,28 @@
     .location-choice button{height:38px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#8b949e;font-size:13px;font-weight:800;cursor:pointer}
     .location-choice button.active{background:#1f6feb;border-color:#58a6ff;color:#fff;box-shadow:0 0 0 3px rgba(31,111,235,.16)}
     .mob .bp-label{font-size:13px}
+    .mob .po-repair-header{display:none}
+    .mob .po-repair-row{grid-template-columns:1fr 1fr;padding:9px;gap:8px}
+    .mob .po-repair-row>div{padding:2px;font-size:12px}
+    .mob .po-repair-row>div:nth-child(3),.mob .po-repair-row>button{grid-column:1/-1}
+    .mob .po-repair-row:not(.po-repair-header)>div::before{display:block;margin-bottom:3px;color:#8b949e;font-size:9px;font-weight:800}
+    .mob .po-repair-row>div:nth-child(1)::before{content:'Serial No.'}
+    .mob .po-repair-row>div:nth-child(2)::before{content:'Parts No.'}
+    .mob .po-repair-row>div:nth-child(3)::before{content:'Required Parts'}
+    .mob .po-repair-row>div:nth-child(4)::before{content:'Qty'}
+    .mob .po-repair-row>div:nth-child(5)::before{content:'Found Day'}
+    @media(max-width:700px){
+      .po-repair-header{display:none}
+      .po-repair-row{grid-template-columns:1fr 1fr;padding:9px;gap:8px}
+      .po-repair-row>div{padding:2px;font-size:12px}
+      .po-repair-row>div:nth-child(3),.po-repair-row>button{grid-column:1/-1}
+      .po-repair-row:not(.po-repair-header)>div::before{display:block;margin-bottom:3px;color:#8b949e;font-size:9px;font-weight:800}
+      .po-repair-row>div:nth-child(1)::before{content:'Serial No.'}
+      .po-repair-row>div:nth-child(2)::before{content:'Parts No.'}
+      .po-repair-row>div:nth-child(3)::before{content:'Required Parts'}
+      .po-repair-row>div:nth-child(4)::before{content:'Qty'}
+      .po-repair-row>div:nth-child(5)::before{content:'Found Day'}
+    }
     #dashboardCard{max-width:1100px}
     .dash-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
     .dash-date-row{display:flex;gap:8px}
@@ -753,7 +794,20 @@
     </div>
     <div class="row-action" id="actionCustomRow" style="display:none">
       <input type="text" id="actionCustom" placeholder="自訂處理方法...">
-      <button class="icon-btn" onclick="switchToDrop()" type="button">☰</button>
+      <button class="icon-btn" id="actionCustomModeBtn" onclick="switchToDrop()" type="button">☰</button>
+    </div>
+    <div id="poRepairHint"></div>
+    <div id="poRepairPanel">
+      <div class="po-repair-head">
+        <div class="po-repair-title" id="poRepairTitle">PO Repaired</div>
+        <div class="bp-lang-switch" aria-label="Required Parts 語言">
+          <button class="bp-lang-btn active" id="poLangJp" onclick="setPoPartsLanguage('jp')" type="button">日文</button>
+          <button class="bp-lang-btn" id="poLangEn" onclick="setPoPartsLanguage('en')" type="button">英文</button>
+        </div>
+        <button class="po-repair-close" onclick="detachPoRepairMode(true)" type="button">自行修改</button>
+      </div>
+      <div class="po-repair-note">選擇已完成修理的零件，提交時會同時更新 Broken Parts List 的 Repair Day。</div>
+      <div id="poRepairRows"><div class="po-repair-note">載入中...</div></div>
     </div>
   </div>
   <div class="bp-row">
@@ -777,7 +831,7 @@
         </div>
       </div>
       <div class="combo" data-combo="itemCode">
-        <input type="text" id="itemCode" placeholder="按 ↻ 載入零件清單" autocomplete="off">
+        <input type="text" id="itemCode" placeholder="請輸入相關文字(1字以上)才會顯示清單" autocomplete="off">
         <div class="combo-menu" id="itemCodeMenu"></div>
       </div>
     </div>
@@ -961,8 +1015,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-9';
-const _APP_VERSION='v0.964';
+const _APP_BUMP='2026.07.13-11';
+const _APP_VERSION='v0.966';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1457,7 +1511,7 @@ function snPadPress(n){
   if(navigator.vibrate)navigator.vibrate(15);
   playTapSound();
   inp.value=current+n;
-  if(_snPadTarget==='serialNo')syncAaTagFromSerial();
+  if(_snPadTarget==='serialNo'){syncAaTagFromSerial();schedulePoRepairReload();}
   if(_snPadTarget==='aaTag')syncSerialFromAaTag();
   updateSnPadDisplay();
 }
@@ -1466,7 +1520,7 @@ function snPadBack(){
   playBackSound();
   const inp=_snPadInput();
   inp.value=_snPadDigits().slice(0,-1);
-  if(_snPadTarget==='serialNo')syncAaTagFromSerial();
+  if(_snPadTarget==='serialNo'){syncAaTagFromSerial();schedulePoRepairReload();}
   if(_snPadTarget==='aaTag')syncSerialFromAaTag();
   updateSnPadDisplay();
 }
@@ -1753,24 +1807,16 @@ async function _attemptRetry(){
   if(!_retryQueue.length)return;
   const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL)return;
   const item=_retryQueue[0];
-  const CHUNK=20;
-  let sentIdx=0;
   try{
-    for(let i=0;i<item.records.length;i+=CHUNK){
-      const chunk=item.records.slice(i,i+CHUNK);
-      const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(chunk)});
-      const data=await r.json();
-      if(data.success){_appendLocalLog(chunk);sentIdx+=chunk.length;}
-      else break;
-    }
-  }catch(e){}
-  if(sentIdx===item.records.length){
-    _retryQueue.shift();_saveRetry();_updateRetryNotice();
-    showToast(`✓ ${item.records.length} 筆離線記錄已同步`);
-    if(_retryQueue.length)setTimeout(_attemptRetry,1000);
-  }else if(sentIdx>0){
-    _retryQueue[0]={records:item.records.slice(sentIdx)};_saveRetry();
-  }
+    const body=item.repairs?.length?{action:'submitRecords',records:item.records,brokenPartsRepairs:item.repairs}:item.records;
+    const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
+    const data=await r.json();
+    if(!data.success)return;
+    _appendLocalLog(item.records);
+  }catch(e){return;}
+  _retryQueue.shift();_saveRetry();_updateRetryNotice();
+  showToast(`✓ ${item.records.length} 筆離線記錄已同步`);
+  if(_retryQueue.length)setTimeout(_attemptRetry,1000);
 }
 window.addEventListener('online',()=>setTimeout(_attemptRetry,1000));
 
@@ -1841,9 +1887,9 @@ async function refreshPartsListPage(){
 }
 function _updatePartsTs(ts){
   const el=document.getElementById('bpUpdateTs');if(!el)return;
-  if(!ts){el.textContent='未載入';return;}
-  const d=new Date(ts);
-  el.textContent=`${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+  el.classList.toggle('loaded',!!ts);
+  if(!ts){el.textContent='未載入零件清單';return;}
+  el.textContent=`已載入零件清單（${_partsCodes.length} 項）`;
 }
 function _loadPartsFromCache(){
   try{
@@ -2105,6 +2151,7 @@ function toggleBatch(){
   document.getElementById('batchToggleBtn').textContent=_batchMode?'✕ 單筆模式':'⊞ 批量模式';
   updateBatchModeLayout();
   if(_batchMode)hideSnPad();else clearBatchInputs();
+  onReasonChange();
 }
 async function addBatchToQueue(){
   const pairRows=isPairedBatchCompany()?Array.from(document.querySelectorAll('#batchPairRows .batch-pair-row')).map(row=>({sn:row.querySelector('.batch-pair-sn').value.trim(),detail:row.querySelector('.batch-pair-detail').value.trim()})).filter(row=>row.sn||row.detail):[];
@@ -2168,16 +2215,92 @@ async function fetchDuplicateFaults(serialNos,reason){
   }catch(e){return {};}
 }
 
+let _poRepairMode=false,_poRepairRecords=[],_poRepairSelected=null,_poRepairLanguage='jp',_poRepairToken=0,_poSnTimer=null;
 function onReasonInput(){const r=document.getElementById('reason').value;if(REASONS.includes(r))onReasonChange();}
-function onReasonChange(){const r=document.getElementById('reason').value;const def=ACTION_MAP[r];if(def){switchToDrop();document.getElementById('actionDrop').value=def;}else{switchToCustom();document.getElementById('actionCustom').value='';}  _syncBpFromAction();}
+function onReasonChange(){
+  const r=document.getElementById('reason').value;
+  if(r==='PO'&&!_batchMode){enterPoRepairMode();return;}
+  if(_poRepairMode)detachPoRepairMode(false);
+  const def=ACTION_MAP[r];
+  if(def){switchToDrop();document.getElementById('actionDrop').value=def;}
+  else{switchToCustom();document.getElementById('actionCustom').value='';}
+  _syncBpFromAction();
+}
+function showCustomAction(){document.getElementById('actionDropRow').style.display='none';document.getElementById('actionCustomRow').style.display='flex';}
+function setPoPartsLanguage(language){_poRepairLanguage=language==='en'?'en':'jp';renderPoRepairRows();}
+function updatePoLanguageButtons(){
+  [['jp','poLangJp'],['en','poLangEn']].forEach(([language,id])=>document.getElementById(id)?.classList.toggle('active',_poRepairLanguage===language));
+}
+async function enterPoRepairMode(){
+  _poRepairMode=true;_poRepairSelected=null;
+  showCustomAction();
+  const input=document.getElementById('actionCustom');
+  input.value='PO Repaired';input.readOnly=true;
+  document.getElementById('actionCustomModeBtn').textContent='自行修改';
+  document.getElementById('poRepairHint').className='';document.getElementById('poRepairHint').style.display='none';
+  document.getElementById('poRepairPanel').classList.add('show');
+  await loadPoRepairRecords();
+}
+async function loadPoRepairRecords(){
+  if(!_poRepairMode)return;
+  const sn=document.getElementById('serialNo').value.trim();
+  document.getElementById('poRepairTitle').textContent=`PO Repaired${sn?' · S/N '+sn:''}`;
+  if(!/^\d{1,4}$/.test(sn)){
+    _poRepairRecords=[];document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">請先輸入有效機身號碼。</div>';return;
+  }
+  const token=++_poRepairToken;
+  document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">載入損壞零件中...</div>';
+  try{
+    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:sn,sort:'newest',page:'1',pageSize:'50'});
+    const data=await (await fetch(getScriptUrl()+'?'+qs.toString())).json();
+    if(token!==_poRepairToken||!_poRepairMode)return;
+    if(!data.success)throw new Error(data.message||'載入失敗');
+    _poRepairRecords=(data.records||[]).filter(record=>!String(record.bpRepairDay||'').trim()||/^waiting$/i.test(String(record.bpRepairDay||'').trim()));
+    renderPoRepairRows();
+  }catch(e){
+    if(token===_poRepairToken)document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">損壞零件列表載入失敗。</div>';
+  }
+}
+function renderPoRepairRows(){
+  updatePoLanguageButtons();
+  const root=document.getElementById('poRepairRows');if(!root)return;
+  if(!_poRepairRecords.length){root.innerHTML='<div class="po-repair-note">此機身號碼沒有等待維修的損壞零件。</div>';return;}
+  const header='<div class="po-repair-row po-repair-header"><div>Serial No.</div><div>Parts No.</div><div>Required Parts</div><div>Qty</div><div>Found Day</div><div></div></div>';
+  const rows=_poRepairRecords.map((record,index)=>{
+    const name=_poRepairLanguage==='en'?(record.bpColC||''):(record.bpDesc||record.bpColC||'');
+    const selected=Number(_poRepairSelected?.rowNumber)===Number(record.rowNumber);
+    return `<div class="po-repair-row${selected?' selected':''}"><div>${esc(record.serialNo)}</div><div>${esc(record.brokenParts)}</div><div>${esc(name||'—')}</div><div>${esc(record.bpQty||'1')}</div><div>${esc(record.date||'')}</div><button class="po-repair-done" onclick="selectPoRepair(${index})" type="button"${!record.bpColC?' disabled title="缺少英文零件名稱"':''}>${selected?'已選擇':'完成修理'}</button></div>`;
+  }).join('');
+  root.innerHTML=`<div class="po-repair-grid">${header}${rows}</div>`;
+}
+function selectPoRepair(index){
+  const record=_poRepairRecords[index];if(!record?.bpColC)return;
+  _poRepairSelected={...record};
+  document.getElementById('actionCustom').value=`${String(record.bpColC).trim()}×${record.bpQty||1} Repaired`;
+  const hint=document.getElementById('poRepairHint');hint.className='';hint.style.display='block';hint.textContent='提交時會同時更新壞零件列表的 Repair Day。';
+  renderPoRepairRows();
+}
+function detachPoRepairMode(showNotice){
+  _poRepairMode=false;_poRepairSelected=null;_poRepairToken++;
+  document.getElementById('poRepairPanel').classList.remove('show');
+  document.getElementById('actionCustom').readOnly=false;
+  document.getElementById('actionCustomModeBtn').textContent='☰';
+  const hint=document.getElementById('poRepairHint');
+  if(showNotice){hint.className='manual';hint.style.display='block';hint.textContent='已取消自動更新，提交後需自行修改壞零件列表。';}
+  else{hint.className='';hint.style.display='none';hint.textContent='';}
+}
+function schedulePoRepairReload(){
+  if(!_poRepairMode)return;
+  clearTimeout(_poSnTimer);_poSnTimer=setTimeout(()=>{_poRepairSelected=null;document.getElementById('actionCustom').value='PO Repaired';loadPoRepairRecords();},250);
+}
 function _syncBpFromAction(){
   const action=getAction();
   const check=document.getElementById('brokenPartsCheck');
   const shouldCheck=action==='Waiting Parts';
   if(check.checked!==shouldCheck){check.checked=shouldCheck;onBrokenPartsChange();}
 }
-function switchToDrop(){document.getElementById('actionDropRow').style.display='flex';document.getElementById('actionCustomRow').style.display='none';}
-function switchToCustom(){document.getElementById('actionDropRow').style.display='none';document.getElementById('actionCustomRow').style.display='flex';document.getElementById('actionCustom').focus();}
+function switchToDrop(){if(_poRepairMode){detachPoRepairMode(true);showCustomAction();document.getElementById('actionCustom').focus();return;}document.getElementById('actionDropRow').style.display='flex';document.getElementById('actionCustomRow').style.display='none';}
+function switchToCustom(){if(_poRepairMode)detachPoRepairMode(true);showCustomAction();document.getElementById('actionCustom').focus();}
 function getAction(){return document.getElementById('actionDropRow').style.display!=='none'?document.getElementById('actionDrop').value:document.getElementById('actionCustom').value.trim();}
 function toggleOptional(){optionalVisible=!optionalVisible;document.getElementById('optionalFields').classList.toggle('vis',optionalVisible);document.getElementById('optToggleBtn').textContent=(optionalVisible?'▲ ':'▼ ')+'Check Request (錯誤描述 / Box ID)';}
 function getWynnInspectorData(){return activeCompany==='Wynn'?{inspector:optionalVisible?document.getElementById('inspector').value.trim():''}:{};}
@@ -2195,6 +2318,7 @@ async function addToQueue(){
   const reason=document.getElementById('reason').value;
   const action=getAction();
   if(!action){showToast('請選擇處理方法','err');return;}
+  if(reason==='PO'&&_poRepairMode&&!_poRepairSelected){showToast('請先選擇已完成修理的零件，或按「自行修改」','err');return;}
   const model=document.getElementById('model').value;
   if(activeCompany==='MGM'&&!_mgmLocation){showToast('請選擇場所：場上或場下','err');return;}
   const errorDescription=optionalVisible?document.getElementById('errorDescription').value.trim():'';
@@ -2204,10 +2328,11 @@ async function addToQueue(){
   const locationData=getMgmLocationData();
   const aaTagData=getMgmAaTagData();
   const inspectorData=getWynnInspectorData();
+  const poRepairData=_poRepairMode&&_poRepairSelected?{poRepair:{record:{..._poRepairSelected},lockedAction:action}}:{};
   const isDupToday=todayRecords.some(r=>String(r.serialNo)===sn);
   const isDupQueue=queue.some(q=>q.sn===sn);
   if(isDupToday||isDupQueue){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...bpData};
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
     const where=isDupToday?'今日已提交記錄':'目前待提交清單';
     document.getElementById('dupTitle').textContent='⚠ 機身號碼重複';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 已存在於${where}。仍然加入？`;
@@ -2216,13 +2341,13 @@ async function addToQueue(){
   }
   const faultDuplicates=await fetchDuplicateFaults([sn],reason);
   if(faultDuplicates[sn]?.length){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...bpData};
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
     document.getElementById('dupTitle').textContent='⚠ 重複故障警告';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 在最近 30 日已有 ${faultDuplicates[sn].length} 次「${reason}」記錄。仍然加入？`;
     document.getElementById('dupModal').classList.add('show');
     return;
   }
-  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...bpData});
+  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData});
 }
 function cancelDupAdd(){pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');}
 function confirmDupAdd(){
@@ -2240,6 +2365,7 @@ function doAddToQueue(item){
   _resetBpFields();
   _updateRecentReasons(item.reason);
   document.getElementById('reason').value='PM';
+  if(_poRepairMode)detachPoRepairMode(false);
   switchToDrop();document.getElementById('actionDrop').value='Preventive Maintenance';
   if(_isMob)showSnPad();else document.getElementById('serialNo').focus();
 }
@@ -2270,7 +2396,8 @@ function saveEditQueue(i){
   if(!sn){showToast('請輸入機身號碼','err');return;}
   const action=editTemp.actionMode==='drop'?editTemp.action:(editTemp.action||'').trim();
   if(!action){showToast('請選擇處理方法','err');return;}
-  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',aaTag:canonicalAaTag(editTemp.aaTag),voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
+  const linkedRepair=queue[i].poRepair&&action===queue[i].poRepair.lockedAction?queue[i].poRepair:null;
+  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',aaTag:canonicalAaTag(editTemp.aaTag),voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim(),poRepair:linkedRepair};
   editingIdx=-1;editTemp=null;saveQueue();renderQueue();
 }
 function toggleQueueSelect(i,checked){
@@ -2371,6 +2498,7 @@ function renderQueue(){
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
         ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
         ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
+        ${item.poRepair?`<div class="q-extra" style="color:#3fb950">提交時同步更新 Repair Day</div>`:''}
       </div>
       <button class="q-edit-icon" onclick="startEditQueue(${i})" title="編輯" type="button">✏️</button>
       <button class="q-del" onclick="removeFromQueue(${i})" type="button">✕</button>
@@ -2851,19 +2979,24 @@ async function doSubmit(){
   const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
-  for(let i=0;i<records.length;i+=CHUNK_SIZE)chunks.push(records.slice(i,i+CHUNK_SIZE));
-  let savedCount=0,sentIdx=0;
+  for(let i=0;i<records.length;i+=CHUNK_SIZE){
+    const chunkItems=queue.slice(i,i+CHUNK_SIZE);
+    const repairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>({company:activeCompany,record:{...item.poRepair.record,bpRepairDay:fmtDate(date)}}));
+    chunks.push({records:records.slice(i,i+CHUNK_SIZE),repairs});
+  }
+  let savedCount=0,completedChunks=0;
   try{
     for(let ci=0;ci<chunks.length;ci++){
       const chunk=chunks[ci];
       btn.textContent=chunks.length>1?`儲存中... (${ci+1}/${chunks.length})`:'儲存中...';
-      const body=JSON.stringify(chunk);
+      const payload=chunk.repairs.length?{action:'submitRecords',records:chunk.records,brokenPartsRepairs:chunk.repairs}:chunk.records;
+      const body=JSON.stringify(payload);
       const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body});
       const data=await r.json();
       if(data.success){
-        savedCount+=chunk.length;
-        sentIdx+=chunk.length;
-        _appendLocalLog(chunk);
+        savedCount+=chunk.records.length;
+        completedChunks=ci+1;
+        _appendLocalLog(chunk.records);
       }else{
         showToast('錯誤：'+(data.message||'伺服器錯誤'),'err');
         btn.disabled=false;
@@ -2876,8 +3009,8 @@ async function doSubmit(){
     showToast(`✓ 已儲存 ${savedCount} 筆記錄`);
     clearQueue();
   }catch(e){
-    const unsent=records.slice(sentIdx);
-    if(unsent.length){for(let i=0;i<unsent.length;i+=CHUNK_SIZE)_retryQueue.push({records:unsent.slice(i,i+CHUNK_SIZE)});_saveRetry();_updateRetryNotice();}
+    chunks.slice(completedChunks).forEach(chunk=>_retryQueue.push({records:chunk.records,repairs:chunk.repairs}));
+    if(chunks.length>completedChunks){_saveRetry();_updateRetryNotice();}
     showToast('離線：已暫存在本機，連線後會自動同步','warn');
     clearQueue();
   }
@@ -2902,7 +3035,7 @@ if(!_isMob){
   document.getElementById('snLabel').textContent='機身號碼';
   document.getElementById('snPadBtn').style.display='flex';
   snInp.addEventListener('focus',()=>{_snPadTarget='serialNo';updateSnPadDisplay();});
-  snInp.addEventListener('input',()=>{snInp.value=snInp.value.replace(/\D/g,'').slice(0,4);updateSnPadDisplay();});
+  snInp.addEventListener('input',()=>{snInp.value=snInp.value.replace(/\D/g,'').slice(0,4);updateSnPadDisplay();schedulePoRepairReload();});
   snInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='serialNo';handleSnEnter();}});
   sealInp.addEventListener('focus',()=>{_snPadTarget='voidSeal';updateSnPadDisplay();});
   sealInp.addEventListener('input',()=>{sealInp.value=sealInp.value.replace(/\D/g,'').slice(0,5);updateSnPadDisplay();});
