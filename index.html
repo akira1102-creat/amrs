@@ -172,15 +172,19 @@
     #bpListModal.show{display:flex}
     #bpListBox{width:min(1180px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
     .bp-list-table{overflow:auto;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .bp-list-head,.bp-list-row{display:grid;grid-template-columns:120px 82px 92px 100px 180px 180px 60px 105px 105px 150px 105px 40px;gap:0;min-width:1319px}
+    .bp-list-head,.bp-list-row{display:grid;grid-template-columns:120px 82px 92px 100px 180px 180px 60px 150px 130px 150px 40px;gap:0;min-width:1284px}
     .bp-list-head{position:sticky;top:0;z-index:1;background:#161b22;border-bottom:1px solid #30363d}
     .bp-list-head div{padding:8px 9px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
     .bp-list-row{border-bottom:1px solid #21262d}
     .bp-list-row:last-child{border-bottom:none}
     .bp-list-row input,.bp-list-row select{font-size:12px;padding:8px 9px;border-radius:10px}
+    .bp-list-date{display:flex;align-items:center;gap:5px;padding:4px}
+    .bp-list-date input{min-width:0;padding:6px 5px}
+    .bp-list-waiting{flex:0 0 auto;padding:7px 6px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#8b949e;font-size:10px;font-weight:800;cursor:pointer}
+    .bp-list-waiting.active{background:#1f6feb;border-color:#58a6ff;color:#fff}
     .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer;margin:4px}
     .bp-list-empty{padding:14px;color:#8b949e;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .bp-list-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
+    .bp-list-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
     .bp-list-filters input,.bp-list-filters select{font-size:12px;padding:9px 10px;border-radius:10px}
     .bp-list-filters button{padding:8px 13px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
@@ -331,6 +335,11 @@
     .bp-update-btn:not(:disabled):hover{color:#e6edf3;border-color:#484f58}
     .bp-update-btn:disabled{color:#484f58;cursor:not-allowed}
     .bp-update-ts{font-size:11px;color:#484f58}
+    .bp-code-label{display:flex;align-items:center;gap:8px;min-width:0}
+    .bp-lang-switch{display:inline-flex;border:1px solid #30363d;border-radius:8px;overflow:hidden}
+    .bp-lang-btn{padding:4px 8px;border:0;border-right:1px solid #30363d;background:#21262d;color:#8b949e;font-size:11px;font-weight:800;cursor:pointer}
+    .bp-lang-btn:last-child{border-right:0}
+    .bp-lang-btn.active{background:#1f6feb;color:#fff}
     .sn-seal-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:end}
     body.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
     body.company-mgm .sn-seal-row{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -572,7 +581,6 @@
     <div class="bp-list-filters">
       <input id="bpFilterCasino" type="text" placeholder="場地">
       <input id="bpFilterParts" type="text" placeholder="零件編號">
-      <select id="bpFilterStatus"><option value="">全部狀態</option><option>待訂購</option><option>已訂購</option><option>已到貨</option><option>已更換</option></select>
       <select id="bpFilterSort" onchange="loadBrokenPartsListEditor(1)"><option value="newest">最新優先</option><option value="oldest">最舊優先</option></select>
       <button onclick="loadBrokenPartsListEditor(1)" type="button">篩選</button>
     </div>
@@ -752,7 +760,13 @@
   <div id="bpFields" style="display:none">
     <div style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <label style="margin-bottom:0">零件代碼</label>
+        <div class="bp-code-label">
+          <label style="margin-bottom:0">零件代碼</label>
+          <div class="bp-lang-switch" aria-label="零件名稱語言">
+            <button class="bp-lang-btn active" id="bpLangJp" onclick="setPartsLanguage('jp')" type="button" aria-pressed="true">日文</button>
+            <button class="bp-lang-btn" id="bpLangEn" onclick="setPartsLanguage('en')" type="button" aria-pressed="false">英文</button>
+          </div>
+        </div>
         <div style="display:flex;align-items:center;gap:6px">
           <span class="bp-update-ts" id="bpUpdateTs"></span>
           <button class="bp-update-btn" id="bpUpdateBtn" onclick="fetchPartsCodes()" type="button" title="下載最新零件清單">↻</button>
@@ -773,10 +787,6 @@
         <button class="bp-day-btn" id="bpRepairDayBtn" onclick="toggleBpRepairDay()" type="button">等待</button>
         <input type="date" id="bpRepairDayDate" style="display:none;margin-top:6px">
       </div>
-    </div>
-    <div style="margin-bottom:10px">
-      <label>零件狀態</label>
-      <select id="bpStatus"><option>待訂購</option><option>已訂購</option><option>已到貨</option><option>已更換</option></select>
     </div>
     <button class="opt-toggle" id="bpRemarkBtn" onclick="toggleBpRemark()" type="button" style="margin-top:0">▼ 備註</button>
     <div id="bpRemarkRow" style="display:none;margin-top:10px">
@@ -943,8 +953,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-6';
-const _APP_VERSION='v0.961';
+const _APP_BUMP='2026.07.13-7';
+const _APP_VERSION='v0.962';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1508,13 +1518,18 @@ let _templateMappings=[];
 const _comboRegistry={};
 let _comboSelecting=false;
 function _comboOption(o){return typeof o==='string'?{value:o,label:o}:o;}
-function _setupSearchCombo(inputId,menuId,getOptions){
+function _setupSearchCombo(inputId,menuId,getOptions,config={}){
   const input=document.getElementById(inputId),menu=document.getElementById(menuId);
   if(!input||!menu)return;
   const box=input.closest('.combo');
   const render=()=>{
     if(_comboSelecting)return;
     const q=(input.value||'').trim().toLowerCase();
+    if(q.length<(config.minChars||0)){
+      menu.innerHTML='';
+      if(box)box.classList.remove('open');
+      return;
+    }
     const opts=getOptions().map(_comboOption)
       .filter(o=>!q||o.value.toLowerCase().includes(q)||String(o.label||'').toLowerCase().includes(q))
       .slice(0,40);
@@ -1671,7 +1686,7 @@ function _updateRecentReasons(reason){
 _rebuildReasonSelect();
 _setupSearchCombo('reason','reasonMenu',_reasonOptions);
 _setupSearchCombo('actionDrop','actionMenu',()=>ALL_ACTIONS);
-_setupSearchCombo('itemCode','itemCodeMenu',()=>_partsCodes.map(p=>({value:p.code,label:p.label})));
+_setupSearchCombo('itemCode','itemCodeMenu',()=>_partsCodes.map(p=>({value:p.code,label:`${p.code} ${_partsLanguage==='en'?(p.colC||p.desc||''):(p.desc||p.colC||'')}`})),{minChars:1});
 document.getElementById('actionDrop').value='Preventive Maintenance';
 const _t=new Date();
 document.getElementById('date').value=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
@@ -1749,6 +1764,7 @@ window.addEventListener('online',()=>setTimeout(_attemptRetry,1000));
 
 // ── Broken Parts ───────────────────────────────────────────
 let _partsCodes=[];
+let _partsLanguage=localStorage.getItem('_ml_parts_language')==='en'?'en':'jp';
 let _bpRepairDayMode='waiting';
 let _bpRemarkVisible=false;
 let _bpListRecords=[];
@@ -1760,6 +1776,21 @@ const _PARTS_KEY='_ml_parts';
 function _rebuildItemCodeSelect(){
   _refreshSearchCombo('itemCode');
   renderPartsListPage();
+}
+function updatePartsLanguageButtons(){
+  [['jp','bpLangJp'],['en','bpLangEn']].forEach(([language,id])=>{
+    const btn=document.getElementById(id);if(!btn)return;
+    const active=_partsLanguage===language;
+    btn.classList.toggle('active',active);
+    btn.setAttribute('aria-pressed',String(active));
+  });
+}
+function setPartsLanguage(language){
+  _partsLanguage=language==='en'?'en':'jp';
+  localStorage.setItem('_ml_parts_language',_partsLanguage);
+  updatePartsLanguageButtons();
+  const input=document.getElementById('itemCode');
+  if(input?.value.trim())_comboRegistry.itemCode?.render();
 }
 function partCodeSort(a,b){return String(a.code||'').localeCompare(String(b.code||''),undefined,{numeric:true,sensitivity:'base'});}
 function renderPartsListPage(){
@@ -1829,6 +1860,7 @@ async function fetchPartsCodes(){
   if(btn){btn.textContent='↻';btn.disabled=false;}
 }
 _loadPartsFromCache();
+updatePartsLanguageButtons();
 function onBrokenPartsChange(){
   const checked=document.getElementById('brokenPartsCheck').checked;
   document.getElementById('bpFields').style.display=checked?'block':'none';
@@ -1853,7 +1885,7 @@ function _getBpData(){
   const code=document.getElementById('itemCode').value;
   const part=_partsCodes.find(p=>p.code===code)||{};
   const repairDay=_bpRepairDayMode==='waiting'?'Waiting':fmtDate(document.getElementById('bpRepairDayDate').value);
-  return{brokenParts:code,bpDesc:part.desc||'',bpColC:part.colC||'',bpQty:document.getElementById('bpQty').value,bpRepairDay:repairDay,bpRemark:_bpRemarkVisible?document.getElementById('bpRemark').value.trim():'',bpStatus:document.getElementById('bpStatus').value};
+  return{brokenParts:code,bpDesc:part.desc||'',bpColC:part.colC||'',bpQty:document.getElementById('bpQty').value,bpRepairDay:repairDay,bpRemark:_bpRemarkVisible?document.getElementById('bpRemark').value.trim():''};
 }
 function _resetBpFields(){
   document.getElementById('brokenPartsCheck').checked=false;
@@ -1868,13 +1900,12 @@ function _resetBpFields(){
   document.getElementById('bpRemarkRow').style.display='none';
   document.getElementById('bpRemarkBtn').textContent='▼ 備註';
   document.getElementById('bpRemark').value='';
-  document.getElementById('bpStatus').value='待訂購';
 }
 function closeBrokenPartsListEditor(){document.getElementById('bpListModal').classList.remove('show');}
 function bpListFilterSerial(){return document.getElementById('serialNo').value.trim();}
 function bpListBlankRecord(){
   const sn=bpListFilterSerial();
-  return {rowNumber:'',casino:document.getElementById('casino').value,model:document.getElementById('model').value,serialNo:sn,brokenParts:'',bpDesc:'',bpColC:'',bpQty:'1',bpRepairDay:'Waiting',date:fmtDate(document.getElementById('date').value),bpRemark:'',bpStatus:'待訂購'};
+  return {rowNumber:'',casino:document.getElementById('casino').value,model:document.getElementById('model').value,serialNo:sn,brokenParts:'',bpDesc:'',bpColC:'',bpQty:'1',bpRepairDay:'Waiting',date:fmtDate(document.getElementById('date').value),bpRemark:''};
 }
 async function openBrokenPartsListEditor(){
   const serialNo=bpListFilterSerial();
@@ -1882,7 +1913,6 @@ async function openBrokenPartsListEditor(){
   modal.classList.add('show');
   document.getElementById('bpFilterCasino').value='';
   document.getElementById('bpFilterParts').value='';
-  document.getElementById('bpFilterStatus').value='';
   document.getElementById('bpFilterSort').value='newest';
   await loadBrokenPartsListEditor(1);
 }
@@ -1891,7 +1921,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage){
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
   _bpListDeleted=[];
   try{
-    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:'10'});
+    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:'10'});
     const r=await fetch(getScriptUrl()+'?'+qs.toString());
     const data=await r.json();
     if(!data.success)throw new Error(data.message||'載入失敗');
@@ -1919,10 +1949,33 @@ function updateBpListPager(){
 function bpListField(label,field,value){
   return `<input data-bp-field="${esc(field)}" value="${esc(value??'')}" placeholder="${esc(label)}">`;
 }
-function bpListStatus(value){return `<select data-bp-field="bpStatus">${['','待訂購','已訂購','已到貨','已更換'].map(v=>`<option value="${esc(v)}"${v===(value||'')?' selected':''}>${esc(v||'未設定')}</option>`).join('')}</select>`;}
+function bpListDateValue(value){
+  const match=String(value||'').trim().match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
+  return match?`${match[1]}-${match[2].padStart(2,'0')}-${match[3].padStart(2,'0')}`:'';
+}
+function bpListDateField(field,value,allowWaiting=false){
+  const waiting=allowWaiting&&/^waiting$/i.test(String(value||'').trim());
+  return `<div class="bp-list-date" data-waiting="${waiting}">
+    <input type="date" data-bp-field="${esc(field)}" value="${waiting?'':esc(bpListDateValue(value))}" onclick="openDatePicker(this)" onchange="setBpListEditorDate(this)">
+    ${allowWaiting?`<button class="bp-list-waiting${waiting?' active':''}" onclick="toggleBpListEditorWaiting(this)" type="button">Waiting</button>`:''}
+  </div>`;
+}
+function setBpListEditorDate(input){
+  const wrap=input.closest('.bp-list-date');if(!wrap)return;
+  wrap.dataset.waiting='false';
+  wrap.querySelector('.bp-list-waiting')?.classList.remove('active');
+}
+function toggleBpListEditorWaiting(btn){
+  const wrap=btn.closest('.bp-list-date');
+  const waiting=wrap.dataset.waiting!=='true';
+  wrap.dataset.waiting=String(waiting);
+  btn.classList.toggle('active',waiting);
+  if(waiting)wrap.querySelector('input').value='';
+  else wrap.querySelector('input').showPicker?.();
+}
 function renderBrokenPartsListRows(){
   const rows=_bpListRecords.length?_bpListRecords:[bpListBlankRecord()];
-  const head='<div class="bp-list-head"><div>CASINO</div><div>Model</div><div>Serial No.</div><div>Parts No.</div><div>Required Parts(JP)</div><div>Required Parts(EN)</div><div>Qty</div><div>Repair Day</div><div>Found Day</div><div>Remark</div><div>Status</div><div></div></div>';
+  const head='<div class="bp-list-head"><div>CASINO</div><div>Model</div><div>Serial No.</div><div>Parts No.</div><div>Required Parts(JP)</div><div>Required Parts(EN)</div><div>Qty</div><div>Repair Day</div><div>Found Day</div><div>Remark</div><div></div></div>';
   const body=rows.length?rows.map((r,i)=>`
     <div class="bp-list-row" data-row-number="${esc(r.rowNumber||'')}">
       ${bpListField('CASINO','casino',r.casino)}
@@ -1932,10 +1985,9 @@ function renderBrokenPartsListRows(){
       ${bpListField('Required Parts(JP)','bpDesc',r.bpDesc)}
       ${bpListField('Required Parts(EN)','bpColC',r.bpColC)}
       ${bpListField('Qty','bpQty',r.bpQty)}
-      ${bpListField('Repair Day','bpRepairDay',r.bpRepairDay)}
-      ${bpListField('Found Day','date',r.date)}
+      ${bpListDateField('bpRepairDay',r.bpRepairDay,true)}
+      ${bpListDateField('date',r.date)}
       ${bpListField('Remark','bpRemark',r.bpRemark)}
-      ${bpListStatus(r.bpStatus)}
       <button class="bp-list-del" onclick="deleteBrokenPartsListRow(${i})" type="button">×</button>
     </div>`).join(''):'<div class="bp-list-empty">沒有項目</div>';
   document.getElementById('bpListRows').innerHTML=`<div class="bp-list-table">${head}${body}</div>`;
@@ -1943,7 +1995,12 @@ function renderBrokenPartsListRows(){
 function collectBrokenPartsListRows(){
   return Array.from(document.querySelectorAll('#bpListRows .bp-list-row')).map(row=>{
     const rec={rowNumber:row.dataset.rowNumber||''};
-    row.querySelectorAll('[data-bp-field]').forEach(input=>{rec[input.dataset.bpField]=input.value.trim();});
+    row.querySelectorAll('[data-bp-field]').forEach(input=>{
+      const field=input.dataset.bpField;
+      if(field==='bpRepairDay')rec[field]=input.closest('.bp-list-date')?.dataset.waiting==='true'?'Waiting':input.value.replace(/-/g,'/');
+      else if(field==='date')rec[field]=input.value.replace(/-/g,'/');
+      else rec[field]=input.value.trim();
+    });
     return rec;
   }).filter(r=>Object.keys(r).some(k=>k!=='rowNumber'&&r[k]));
 }
@@ -2289,7 +2346,7 @@ function renderQueue(){
         ${activeCompany==='MGM'&&item.location?`<div class="q-extra">場所：${item.location==='Floor'?'場上':'場下'}</div>`:''}
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
         ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
-        ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}${item.bpStatus?' · '+esc(item.bpStatus):''}</div>`:''}
+        ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
       </div>
       <button class="q-edit-icon" onclick="startEditQueue(${i})" title="編輯" type="button">✏️</button>
       <button class="q-del" onclick="removeFromQueue(${i})" type="button">✕</button>
@@ -2568,7 +2625,7 @@ function renderDashboardInsights(stats,history){
     <div class="dash-insight"><div class="dash-insight-label">場地分佈</div><div class="dash-insight-value">${list(stats.topCasinos)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">有重複維修 S/N</div><div class="dash-insight-value">${list(stats.repeatSerials)}</div></div>`;
   if(history){
-    const parts=(history.parts||[]).map(p=>`${esc(p.brokenParts||'未填編號')} · ${esc(p.bpStatus||'未設定')} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
+    const parts=(history.parts||[]).map(p=>`${esc(p.brokenParts||'未填編號')} · ${esc(p.bpRepairDay||'未設定')} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
     html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件履歷：<br>${parts}</div></div>`;
   }
   el.innerHTML=html;el.classList.add('show');
@@ -2759,7 +2816,7 @@ async function doSubmit(){
   localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);localStorage.setItem('poNumber',poNumber);
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
-  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||'',bpStatus:item.bpStatus||''}));
+  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
   const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
