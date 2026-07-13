@@ -845,8 +845,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.11-2';
-const _APP_VERSION='v0.955';
+const _APP_BUMP='2026.07.13-1';
+const _APP_VERSION='v0.956';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1981,7 +1981,7 @@ document.getElementById('dashCasino').addEventListener('change',updateDashboardS
   input.addEventListener('input',syncDashDateButtons);
 });
 document.getElementById('dashSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loadDashboard();}});
-function fmtDate(s){const[y,m,d]=s.split('-');return`${y}/${+m}/${+d}`;}
+function fmtDate(s){const[y,m,d]=s.split('-');return`${y}/${m.padStart(2,'0')}/${d.padStart(2,'0')}`;}
 function dashDateToInput(s){
   const parts=String(s||'').replace(/\//g,'-').split('-');
   if(parts.length<3)return String(s||'').replace(/\//g,'-');
