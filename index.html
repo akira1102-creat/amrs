@@ -321,11 +321,20 @@
     .bp-update-btn:disabled{color:#484f58;cursor:not-allowed}
     .bp-update-ts{font-size:11px;color:#484f58}
     .sn-seal-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:end}
-    body.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    body.company-geg .sn-seal-row,body.company-mgm .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
     .sn-entry-line{display:flex;gap:10px;align-items:stretch}
-    #voidSealInline{display:none}
+    #voidSealInline,#aaTagInline,#aaTagLoadRow{display:none}
     body.company-geg #voidSealInline{display:block}
+    body.company-mgm #aaTagInline{display:block}
+    body.company-mgm #aaTagLoadRow{display:flex}
     body.company-geg #snPadBtn{display:none !important}
+    body.company-mgm #snPadBtn{display:none !important}
+    .aa-tag-input{font-size:27px !important;letter-spacing:1px}
+    #aaTagLoadRow{align-items:center;gap:10px;margin-top:10px}
+    #aaTagLoadBtn{width:auto;padding:7px 11px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    #aaTagLoadBtn:disabled{color:#484f58;cursor:not-allowed}
+    #aaTagLoadStatus{font-size:12px;color:#8b949e}
+    #aaTagLoadStatus.loaded{color:#3fb950;font-weight:700}
     .mob .bp-label{font-size:13px}
     #dashboardCard{max-width:1100px}
     .dash-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
@@ -411,7 +420,8 @@
     .mob .dash-insights{grid-template-columns:repeat(2,minmax(0,1fr))}
     .mob .dash-selected-count{width:100%;margin-left:0}
     .mob .bp-list-filters,.mob .bulk-edit-grid{grid-template-columns:1fr}
-    .mob body.company-geg .sn-seal-row,body.mob.company-geg .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+    .mob .aa-tag-input{font-size:21px !important;letter-spacing:0}
+    .mob body.company-geg .sn-seal-row,body.mob.company-geg .sn-seal-row,.mob body.company-mgm .sn-seal-row,body.mob.company-mgm .sn-seal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
     #appVersion{text-align:center;font-size:11px;color:#30363d;padding:8px 0 4px;max-width:640px;margin:0 auto;letter-spacing:.5px}
     #mainLayout{max-width:640px;margin:0 auto;}
     #mainRight{}
@@ -588,7 +598,7 @@
     </div>
     <div>
       <label>日期</label>
-      <input type="date" id="date">
+      <input type="date" id="date" onclick="openDatePicker(this)">
     </div>
   </div>
   <div style="margin-top:14px">
@@ -616,6 +626,15 @@
       <input type="text" id="voidSeal" class="sn-input" placeholder="00000" inputmode="none" autocomplete="off"
              onclick="showSnPad('voidSeal')" onfocus="showSnPad('voidSeal')" readonly>
     </div>
+    <div id="aaTagInline">
+      <label>AA Tag</label>
+      <input type="text" id="aaTag" class="sn-input aa-tag-input" placeholder="TAE0000" inputmode="none" autocomplete="off"
+             onclick="showSnPad('aaTag')" onfocus="showSnPad('aaTag')" readonly>
+    </div>
+    </div>
+    <div id="aaTagLoadRow">
+      <button id="aaTagLoadBtn" onclick="fetchAaTags()" type="button">↻ 載入 AA Tag</button>
+      <span id="aaTagLoadStatus">尚未載入 AA Tag 號碼</span>
     </div>
   </form>
   <div id="batchArea" style="display:none">
@@ -845,8 +864,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-1';
-const _APP_VERSION='v0.956';
+const _APP_BUMP='2026.07.13-2';
+const _APP_VERSION='v0.957';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -948,6 +967,8 @@ function normalizeDeployInput(id){return id.startsWith('https://')?id:'https://s
 function companyParam(){return 'company='+encodeURIComponent(activeCompany);}
 function syncCompanySpecificFields(){
   document.body.classList.toggle('company-geg',activeCompany==='GEG');
+  document.body.classList.toggle('company-mgm',activeCompany==='MGM');
+  updateAaTagLoadStatus();
 }
 function resetSetupVerification(){
   setupVerifiedId='';
@@ -1216,11 +1237,72 @@ function _updateSoundBtn(){
 _updateSoundBtn();
 // ───────────────────────────────────────────────────────────
 
+// ── MGM AA Tag lookup ──────────────────────────────────────
+const _AA_TAG_KEY='_ml_mgm_aa_tags_v1';
+let _aaTags=[],_aaBySerial={},_serialByAaTag={};
+function canonicalAaTag(value){
+  const digits=String(value||'').toUpperCase().replace(/^TAE/,'').replace(/\D/g,'').slice(0,4);
+  return digits?`TAE${digits.padStart(4,'0')}`:'';
+}
+function setAaTags(rows){
+  _aaTags=(rows||[]).map(row=>({serialNo:String(row.serialNo||'').trim(),aaTag:canonicalAaTag(row.aaTag)})).filter(row=>/^\d{1,4}$/.test(row.serialNo)&&row.aaTag);
+  _aaBySerial={};_serialByAaTag={};
+  _aaTags.forEach(row=>{_aaBySerial[row.serialNo]=row.aaTag;_serialByAaTag[row.aaTag]=row.serialNo;});
+  updateAaTagLoadStatus();
+}
+function loadAaTagsFromCache(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(_AA_TAG_KEY)||'null');
+    if(Array.isArray(cached?.data))setAaTags(cached.data);
+  }catch(e){localStorage.removeItem(_AA_TAG_KEY);}
+}
+function updateAaTagLoadStatus(){
+  const status=document.getElementById('aaTagLoadStatus');if(!status)return;
+  const loaded=_aaTags.length>0;
+  status.textContent=loaded?`已載入 ${_aaTags.length} 個 AA Tag 號碼`:'尚未載入 AA Tag 號碼';
+  status.classList.toggle('loaded',loaded);
+}
+async function fetchAaTags(){
+  const btn=document.getElementById('aaTagLoadBtn');
+  btn.disabled=true;btn.textContent='載入中...';
+  try{
+    const r=await fetch(getScriptUrl()+'?action=aaTags&company=MGM&refresh=1');
+    const data=await r.json();
+    if(!data.success||!Array.isArray(data.tags))throw new Error(data.message||'載入失敗');
+    setAaTags(data.tags);
+    localStorage.setItem(_AA_TAG_KEY,JSON.stringify({data:_aaTags,ts:Date.now()}));
+    showToast(`✓ 已載入 ${_aaTags.length} 個 AA Tag 號碼`);
+  }catch(e){showToast('AA Tag 號碼載入失敗','err');}
+  finally{btn.disabled=false;btn.textContent='↻ 載入 AA Tag';}
+}
+function syncAaTagFromSerial(){
+  if(activeCompany!=='MGM')return;
+  const sn=document.getElementById('serialNo').value.trim();
+  document.getElementById('aaTag').value=_aaBySerial[sn]||'';
+}
+function normalizeAaTagInput(){
+  const input=document.getElementById('aaTag');
+  input.value=canonicalAaTag(input.value);
+  return input.value;
+}
+function syncSerialFromAaTag(normalize=false){
+  if(activeCompany!=='MGM')return;
+  const input=document.getElementById('aaTag');
+  const tag=canonicalAaTag(input.value);
+  if(normalize)input.value=tag;
+  const sn=_serialByAaTag[tag];
+  if(sn)document.getElementById('serialNo').value=sn;
+  else if(tag)document.getElementById('serialNo').value='';
+  updateSnPadDisplay();
+}
+loadAaTagsFromCache();
+
 // ── SN Numpad ──────────────────────────────────────────────
 let _snPadHistoryPushed=false;
 let _snPadTarget='serialNo';
 function _snPadInput(){return document.getElementById(_snPadTarget)||document.getElementById('serialNo');}
 function _snPadMaxLen(){return _snPadTarget==='voidSeal'?5:4;}
+function _snPadDigits(){return _snPadTarget==='aaTag'?String(_snPadInput().value||'').replace(/\D/g,''):_snPadInput().value||'';}
 function showSnPad(target='serialNo'){
   _snPadTarget=target;
   updateSnPadDisplay();
@@ -1250,17 +1332,22 @@ window.addEventListener('popstate',function(e){
 });
 function snPadPress(n){
   const inp=_snPadInput();
-  if((inp.value||'').length>=_snPadMaxLen())return;
+  const current=_snPadDigits();
+  if(current.length>=_snPadMaxLen())return;
   if(navigator.vibrate)navigator.vibrate(15);
   playTapSound();
-  inp.value=(inp.value||'')+n;
+  inp.value=current+n;
+  if(_snPadTarget==='serialNo')syncAaTagFromSerial();
+  if(_snPadTarget==='aaTag')syncSerialFromAaTag();
   updateSnPadDisplay();
 }
 function snPadBack(){
   if(navigator.vibrate)navigator.vibrate(15);
   playBackSound();
   const inp=_snPadInput();
-  inp.value=(inp.value||'').slice(0,-1);
+  inp.value=_snPadDigits().slice(0,-1);
+  if(_snPadTarget==='serialNo')syncAaTagFromSerial();
+  if(_snPadTarget==='aaTag')syncSerialFromAaTag();
   updateSnPadDisplay();
 }
 function normalizeVoidSeal(){
@@ -1291,6 +1378,12 @@ function handleSnEnter(){
     updateSnPadDisplay();
     return;
   }
+  if(activeCompany==='MGM'){
+    if(_snPadTarget==='aaTag'){
+      normalizeAaTagInput();syncSerialFromAaTag(true);
+      if(!document.getElementById('serialNo').value.trim()){showToast('找不到對應機身號碼','err');return;}
+    }else syncAaTagFromSerial();
+  }
   addToQueue();
 }
 function snPadDone(){playDoneSound();handleSnEnter();}
@@ -1302,7 +1395,8 @@ document.addEventListener('click',function(e){
   const pad=document.getElementById('snPad');
   const sn=document.getElementById('serialNo');
   const seal=document.getElementById('voidSeal');
-  if(pad.classList.contains('show')&&!pad.contains(e.target)&&e.target!==sn&&e.target!==seal){hideSnPad();}
+  const aaTag=document.getElementById('aaTag');
+  if(pad.classList.contains('show')&&!pad.contains(e.target)&&e.target!==sn&&e.target!==seal&&e.target!==aaTag){hideSnPad();}
 });
 // ───────────────────────────────────────────────────────────
 
@@ -1444,6 +1538,7 @@ _setupSearchCombo('itemCode','itemCodeMenu',()=>_partsCodes.map(p=>({value:p.cod
 document.getElementById('actionDrop').value='Preventive Maintenance';
 const _t=new Date();
 document.getElementById('date').value=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
+function openDatePicker(input){try{input.showPicker?.();}catch(e){input.focus();}}
 ['casino','poNumber'].forEach(k=>{const v=localStorage.getItem(k);if(v)document.getElementById(k).value=v;});
 syncCompanySpecificFields();
 syncCasinoOptions();
@@ -1820,6 +1915,7 @@ function confirmDupAdd(){
 function doAddToQueue(item){
   queue.push(item);saveQueue();renderQueue();
   document.getElementById('serialNo').value='';
+  if(activeCompany==='MGM')document.getElementById('aaTag').value='';
   updateSnPadDisplay();
   if(activeCompany==='GEG'){document.getElementById('voidSeal').value='';document.getElementById('newVoidSeal').value='';}
   if(optionalVisible){document.getElementById('errorDescription').value='';document.getElementById('boxId').value='';}
@@ -2370,7 +2466,7 @@ function submitAll(){
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
-  if(!/^\d{4,10}$/.test(poNumber)){showToast('PO／月份號碼必須為 4–10 位數字','err');return;}
+  if(poNumber&&!/^\d{4,10}$/.test(poNumber)){showToast('PO／月份號碼必須為 4–10 位數字，或留空','err');return;}
   if(!queue.length){showToast('待提交清單是空的','err');return;}
   const errors=[];const warnings=[];
   queue.forEach((item,index)=>{
@@ -2389,7 +2485,7 @@ function submitAll(){
   document.getElementById('confirmInfo').innerHTML=`
     <div><span>場地</span><span>${esc(casino)}</span></div>
     <div><span>日期</span><span>${fmtDate(date)}</span></div>
-    <div><span>PO 號碼</span><span>${esc(poNumber)}</span></div>
+    ${poNumber?`<div><span>PO 號碼</span><span>${esc(poNumber)}</span></div>`:''}
     <div><span>機型</span><span>${esc(models)}</span></div>
     ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(esc).join('<br>')}</div>`:''}`;
   document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length?'（有提示，請確認）':''}`;
@@ -2456,6 +2552,7 @@ function showToast(msg,type){const el=document.getElementById('toast');el.textCo
 if(!_isMob){
   const snInp=document.getElementById('serialNo');
   const sealInp=document.getElementById('voidSeal');
+  const aaTagInp=document.getElementById('aaTag');
   snInp.removeAttribute('readonly');
   snInp.removeAttribute('onclick');
   snInp.removeAttribute('onfocus');
@@ -2474,6 +2571,16 @@ if(!_isMob){
   sealInp.addEventListener('focus',()=>{_snPadTarget='voidSeal';updateSnPadDisplay();});
   sealInp.addEventListener('input',()=>{sealInp.value=sealInp.value.replace(/\D/g,'').slice(0,5);updateSnPadDisplay();});
   sealInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='voidSeal';handleSnEnter();}});
+  aaTagInp.removeAttribute('readonly');
+  aaTagInp.removeAttribute('onclick');
+  aaTagInp.removeAttribute('onfocus');
+  aaTagInp.setAttribute('inputmode','numeric');
+  aaTagInp.setAttribute('maxlength','7');
+  aaTagInp.addEventListener('focus',()=>{_snPadTarget='aaTag';updateSnPadDisplay();});
+  aaTagInp.addEventListener('input',()=>{aaTagInp.value=aaTagInp.value.replace(/\D/g,'').slice(0,4);syncSerialFromAaTag();updateSnPadDisplay();});
+  aaTagInp.addEventListener('blur',()=>{normalizeAaTagInput();syncSerialFromAaTag(true);});
+  aaTagInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='aaTag';handleSnEnter();}});
+  snInp.addEventListener('input',syncAaTagFromSerial);
   ['actionCustom','errorDescription','boxId'].forEach(id=>{
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addToQueue();}});
   });

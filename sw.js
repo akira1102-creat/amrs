@@ -1,4 +1,4 @@
-const CACHE = 'akira-ml-v66';
+const CACHE = 'akira-ml-v67';
 const ASSETS = ['./', './index.html', './manifest.json', './sw.js'];
 
 self.addEventListener('install', e => {
