@@ -174,14 +174,14 @@
     #bpListModal.show{display:flex}
     #bpListBox{width:min(1180px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
     .bp-list-table{overflow:auto;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .bp-list-head,.bp-list-row{display:grid;grid-template-columns:120px 82px 92px 100px 180px 180px 60px 150px 130px 150px 40px;gap:0;min-width:1284px}
+    .bp-list-head,.bp-list-row{display:grid;grid-template-columns:120px 82px 92px 100px 180px 180px 60px 205px 145px 150px 40px;gap:0;min-width:1354px}
     .bp-list-head{position:sticky;top:0;z-index:1;background:#161b22;border-bottom:1px solid #30363d}
     .bp-list-head div{padding:8px 9px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
     .bp-list-row{border-bottom:1px solid #21262d}
     .bp-list-row:last-child{border-bottom:none}
     .bp-list-row input,.bp-list-row select{font-size:12px;padding:8px 9px;border-radius:10px}
     .bp-list-date{display:flex;align-items:center;gap:5px;padding:4px}
-    .bp-list-date input{min-width:0;padding:6px 5px}
+    .bp-list-date input{flex:1 1 126px;min-width:126px;padding:6px 5px}
     .bp-list-waiting{flex:0 0 auto;padding:7px 6px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#8b949e;font-size:10px;font-weight:800;cursor:pointer}
     .bp-list-waiting.active{background:#1f6feb;border-color:#58a6ff;color:#fff}
     .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer;margin:4px}
@@ -189,6 +189,7 @@
     .bp-list-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
     .bp-list-filters input,.bp-list-filters select{font-size:12px;padding:9px 10px;border-radius:10px}
     .bp-list-filters button{padding:8px 13px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
+    .bp-list-head-actions{display:flex;align-items:center;gap:8px}
     #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
     #menuBtn{width:38px;height:34px;background:#161b22;border:1px solid #30363d;border-radius:10px;color:#e6edf3;font-size:20px;cursor:pointer}
     #appTitle{flex:1;text-align:center;font-size:11px;font-weight:600;color:#484f58;letter-spacing:1.5px;text-transform:uppercase;padding:4px 0}
@@ -457,6 +458,7 @@
     .dash-card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
     .dash-card-btn{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .dash-card-btn.primary{background:#238636;border-color:#2ea043;color:#fff}
+    .dash-card-btn.danger{margin-right:auto;background:#3d1214;border-color:#da3633;color:#ff7b72}
     .dash-card-btn:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
     .dash-card-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:4px}
     .dash-card-form label{display:block;font-size:12px;color:#8b949e;font-weight:700;margin-bottom:5px}
@@ -511,6 +513,10 @@
     .mob .parts-list-columns{grid-template-columns:1fr;gap:24px}
     .mob .parts-list-group+.parts-list-group{border-left:none;padding-left:0}
     .mob .bp-list-filters,.mob .bulk-edit-grid{grid-template-columns:1fr}
+    .mob .bp-list-head-actions{gap:5px}
+    .mob .bp-list-head-actions .dash-tool-btn{padding:7px 9px;font-size:11px}
+    .mob .bp-list-row>.bp-list-date{grid-column:1/-1}
+    .mob .bp-list-date input{min-width:0}
     .mob .aa-tag-input{font-size:21px !important;letter-spacing:0}
     body.mob.company-mgm .sn-input{font-size:27px !important;letter-spacing:1px}
     body.mob.company-mgm .aa-tag-input{font-size:18px !important;letter-spacing:0}
@@ -621,7 +627,11 @@
   <div id="bpListBox">
     <div class="template-head">
       <div class="template-title">損壞零件列表</div>
-      <button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeBrokenPartsListEditor()" type="button">關閉</button>
+      <div class="bp-list-head-actions">
+        <button class="dash-tool-btn" onclick="exportBrokenPartsList('xls')" type="button">Excel</button>
+        <button class="dash-tool-btn" onclick="exportBrokenPartsList('pdf')" type="button">PDF</button>
+        <button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeBrokenPartsListEditor()" type="button">關閉</button>
+      </div>
     </div>
     <div class="template-note" id="bpListNote">資料來自目前公司 Sheet 的 Broken Parts List 工作表。</div>
     <div class="bp-list-filters">
@@ -1016,8 +1026,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-12';
-const _APP_VERSION='v0.967';
+const _APP_BUMP='2026.07.13-14';
+const _APP_VERSION='v0.969';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2005,6 +2015,35 @@ function updateBpListPager(){
   document.getElementById('bpListPrevBtn').disabled=_bpListPage<=1;
   document.getElementById('bpListNextBtn').disabled=_bpListPage>=_bpListTotalPages;
 }
+function brokenPartsQueryForPage(page,pageSize=50){
+  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:bpListFilterSerial(),casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(pageSize)});
+}
+async function fetchAllBrokenPartsRecords(){
+  const first=await (await fetch(getScriptUrl()+'?'+brokenPartsQueryForPage(1))).json();
+  if(!first.success)throw new Error(first.message||'匯出失敗');
+  const records=[...(first.records||[])];
+  for(let page=2;page<=first.totalPages;page++){
+    const data=await (await fetch(getScriptUrl()+'?'+brokenPartsQueryForPage(page))).json();
+    if(!data.success)throw new Error(data.message||'匯出失敗');
+    records.push(...(data.records||[]));
+  }
+  return records;
+}
+async function exportBrokenPartsList(type){
+  let printWindow=null;if(type==='pdf')printWindow=window.open('','_blank');
+  try{
+    showToast('正在準備匯出...');
+    const records=await fetchAllBrokenPartsRecords();
+    if(!records.length)throw new Error('沒有資料');
+    const allColumns=[['casino','CASINO'],['model','Model'],['serialNo','Serial No.'],['brokenParts','Parts No.'],['bpDesc','Required Parts(JP)'],['bpColC','Required Parts(EN)'],['bpQty','Qty'],['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark']];
+    const columns=allColumns.filter(([key])=>records.some(record=>cleanDashValue(record[key])!==''));
+    const table=`<table border="1"><thead><tr>${columns.map(([,label])=>`<th>${esc(label)}</th>`).join('')}</tr></thead><tbody>${records.map(record=>`<tr>${columns.map(([key])=>`<td>${esc(record[key]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const stamp=new Date().toISOString().slice(0,10);const base=`AMRS_${activeCompany}_Broken_Parts_${stamp}`;
+    if(type==='xls')downloadBlob(new Blob([`<html><meta charset="utf-8"><body>${table}</body></html>`],{type:'application/vnd.ms-excel'}),base+'.xls');
+    else if(printWindow){printWindow.document.write(`<html><head><title>${base}</title><style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;font-size:9px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left;word-break:break-word}th{background:#eee}</style></head><body><h2>AMRS ${esc(activeCompany)} Broken Parts List</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
+    showToast(`✓ 已準備 ${records.length} 筆記錄`);
+  }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
+}
 function bpListField(label,field,value){
   return `<input data-bp-field="${esc(field)}" value="${esc(value??'')}" placeholder="${esc(label)}">`;
 }
@@ -2736,6 +2775,7 @@ function renderDashboardEditCard(record,index){
       ${dashEditField('Box ID','boxId',record.boxId)}
     </div>
     <div class="dash-card-actions">
+      <button class="dash-card-btn danger" onclick="deleteDashboardCard(${index},this)" type="button">刪除</button>
       <button class="dash-card-btn" onclick="cancelDashboardCardEdit()" type="button">取消</button>
       <button class="dash-card-btn primary" onclick="saveDashboardCard(${index},this)" type="button">儲存</button>
     </div>
@@ -2886,6 +2926,21 @@ function startDashboardCardEdit(index){
 function cancelDashboardCardEdit(){
   dashboardEditingIdx=-1;
   renderDashboardPage();
+}
+async function deleteDashboardCard(index,btn){
+  const original=dashboardRecords[index];if(!original)return;
+  if(!window.confirm(`確定刪除 S/N ${original.serialNo||''} 這筆記錄？此操作不能復原。`))return;
+  btn.disabled=true;btn.textContent='刪除中...';
+  try{
+    const record={...original,company:original.company||currentDashboardCompany||activeCompany};
+    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'deleteRecord',record})});
+    const data=await r.json();
+    if(!data.success)throw new Error(data.message||'刪除失敗');
+    dashboardSelectedRecords.delete(String(original.rowNumber));dashboardEditingIdx=-1;
+    dashboardRecords.splice(index,1);dashboardTotalMatches=Math.max(0,dashboardTotalMatches-1);renderDashboardPage();
+    showToast('✓ 記錄已刪除');
+    if(parseDashVenueFilter().company)await loadDashboard(dashboardPage);
+  }catch(e){btn.disabled=false;btn.textContent='刪除';showToast(e.message||'刪除失敗','err');}
 }
 async function saveDashboardCard(index,btn){
   const card=document.getElementById(`dashCardEdit${index}`);
