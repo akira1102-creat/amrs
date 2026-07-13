@@ -46,7 +46,7 @@
     .mob #pinError{font-size:20px;height:24px}
     #setupScreen{position:fixed;inset:0;background:#0d1117;display:none;align-items:center;justify-content:center;z-index:9998}
     #setupScreen.show{display:flex}
-    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
+    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #partsListPage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
     #setupBox{display:flex;flex-direction:column;gap:20px;padding:40px 32px;background:#161b22;border-radius:24px;border:1px solid #30363d;width:340px}
     #setupTitle{font-size:18px;font-weight:700;color:#e6edf3}
     #setupSub{font-size:13px;color:#8b949e;line-height:1.6}
@@ -411,6 +411,22 @@
     .dash-page-info{font-size:12px;color:#8b949e;font-weight:700;min-width:76px;text-align:center}
     .dash-page-btn{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .dash-page-btn:disabled{color:#484f58;cursor:not-allowed}
+    #partsListCard{max-width:1100px}
+    .parts-list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .parts-list-summary{font-size:12px;color:#8b949e}
+    .parts-list-refresh{flex:0 0 auto;padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .parts-list-refresh:disabled{color:#484f58;cursor:not-allowed}
+    .parts-list-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+    .parts-list-group{min-width:0}
+    .parts-list-group+.parts-list-group{border-left:1px solid #30363d;padding-left:18px}
+    .parts-list-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px 9px;border-bottom:1px solid #30363d;color:#e6edf3;font-size:14px;font-weight:800}
+    .parts-list-count{color:#58a6ff;font-size:11px}
+    .parts-list-row{padding:10px 2px;border-bottom:1px solid #21262d}
+    .parts-list-code{color:#58a6ff;font-size:13px;font-weight:800;word-break:break-word}
+    .parts-list-jp,.parts-list-en{font-size:12px;line-height:1.45;word-break:break-word}
+    .parts-list-jp{color:#e6edf3;margin-top:4px}
+    .parts-list-en{color:#8b949e;margin-top:2px}
+    .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
     #bulkEditModal,#auditModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
     #bulkEditModal.show,#auditModal.show{display:flex}
     .work-modal-box{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
@@ -435,6 +451,10 @@
     .mob .dash-card-form{grid-template-columns:1fr}
     .mob .dash-insights{grid-template-columns:repeat(2,minmax(0,1fr))}
     .mob .dash-selected-count{width:100%;margin-left:0}
+    .mob #partsListCard.card{padding:16px 15px}
+    .mob .parts-list-toolbar{align-items:flex-start}
+    .mob .parts-list-columns{grid-template-columns:1fr;gap:24px}
+    .mob .parts-list-group+.parts-list-group{border-left:none;padding-left:0}
     .mob .bp-list-filters,.mob .bulk-edit-grid{grid-template-columns:1fr}
     .mob .aa-tag-input{font-size:21px !important;letter-spacing:0}
     body.mob.company-mgm .sn-input{font-size:27px !important;letter-spacing:1px}
@@ -602,6 +622,7 @@
   <div class="menu-sub" id="companyMenu"></div>
   <div class="menu-section">資料查詢</div>
   <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
+  <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
 </nav>
 
 <div id="appTop">
@@ -878,6 +899,17 @@
 </div>
 </div><!-- /dashboardPage -->
 
+<div id="partsListPage" class="app-page">
+  <div class="card" id="partsListCard">
+    <div class="card-title">零件列表</div>
+    <div class="parts-list-toolbar">
+      <div class="parts-list-summary" id="partsListSummary">載入零件資料中...</div>
+      <button class="parts-list-refresh" id="partsListRefreshBtn" onclick="refreshPartsListPage()" type="button">重新整理</button>
+    </div>
+    <div class="parts-list-columns" id="partsListColumns"></div>
+  </div>
+</div><!-- /partsListPage -->
+
 <div style="height:16px"></div>
 <div id="appVersion"></div>
 <div style="height:8px"></div>
@@ -911,8 +943,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-5';
-const _APP_VERSION='v0.960';
+const _APP_BUMP='2026.07.13-6';
+const _APP_VERSION='v0.961';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1093,19 +1125,22 @@ function openGasSettings(opts={}){
 function openMenu(){renderCompanyMenu();document.getElementById('menuOverlay').classList.add('show');document.getElementById('sideMenu').classList.add('show');}
 function closeMenu(){document.getElementById('menuOverlay').classList.remove('show');document.getElementById('sideMenu').classList.remove('show');}
 function showPage(page){
-  if(page==='dashboard'){
+  if(page==='dashboard'||page==='partsList'){
     if(!hasAnyDeployId()){showToast('請先設定並測試其中一個網站代號','err');openGasSettings();return;}
     if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);}
-    syncCasinoOptions();
+    if(page==='dashboard')syncCasinoOptions();
   }
   activePage=page;
-  document.body.classList.toggle('dashboard-view',page==='dashboard');
+  document.body.classList.toggle('dashboard-view',page!=='input');
   document.getElementById('inputPage').classList.toggle('active',page==='input');
   document.getElementById('dashboardPage').classList.toggle('active',page==='dashboard');
+  document.getElementById('partsListPage').classList.toggle('active',page==='partsList');
   document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
+  document.getElementById('partsListMenuBtn').classList.toggle('active',page==='partsList');
   renderCompanyMenu();
   closeMenu();
   if(page==='dashboard')initDashboardFilters();
+  if(page==='partsList')loadPartsListPage();
 }
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
@@ -1724,6 +1759,42 @@ const _PARTS_KEY='_ml_parts';
 (function(){const t=new Date();document.getElementById('bpRepairDayDate').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;})();
 function _rebuildItemCodeSelect(){
   _refreshSearchCombo('itemCode');
+  renderPartsListPage();
+}
+function partCodeSort(a,b){return String(a.code||'').localeCompare(String(b.code||''),undefined,{numeric:true,sensitivity:'base'});}
+function renderPartsListPage(){
+  const root=document.getElementById('partsListColumns');
+  const summary=document.getElementById('partsListSummary');
+  if(!root||!summary)return;
+  const groups=[
+    {title:'AE- 零件',items:_partsCodes.filter(p=>/^AE-/i.test(String(p.code||'')))},
+    {title:'TAE- 零件',items:_partsCodes.filter(p=>/^TAE-/i.test(String(p.code||'')))},
+    {title:'其他',items:_partsCodes.filter(p=>!/^AE-/i.test(String(p.code||''))&&!/^TAE-/i.test(String(p.code||'')))}
+  ];
+  groups.forEach(group=>group.items.sort(partCodeSort));
+  summary.textContent=_partsCodes.length?`共 ${_partsCodes.length} 項零件`:'沒有零件資料';
+  root.innerHTML=groups.map(group=>`<section class="parts-list-group">
+    <div class="parts-list-heading"><span>${group.title}</span><span class="parts-list-count">${group.items.length} 項</span></div>
+    ${group.items.length?group.items.map(part=>`<div class="parts-list-row">
+      <div class="parts-list-code">${esc(part.code||'')}</div>
+      <div class="parts-list-jp">${esc(part.desc||'—')}</div>
+      <div class="parts-list-en">${esc(part.colC||'—')}</div>
+    </div>`).join(''):'<div class="parts-list-empty">沒有項目</div>'}
+  </section>`).join('');
+}
+async function loadPartsListPage(){
+  if(_partsCodes.length){renderPartsListPage();return;}
+  const root=document.getElementById('partsListColumns');
+  if(root)root.innerHTML='<div class="parts-list-empty">載入中...</div>';
+  await fetchPartsCodes();
+  renderPartsListPage();
+}
+async function refreshPartsListPage(){
+  const btn=document.getElementById('partsListRefreshBtn');
+  if(btn){btn.disabled=true;btn.textContent='載入中...';}
+  await fetchPartsCodes();
+  renderPartsListPage();
+  if(btn){btn.disabled=false;btn.textContent='重新整理';}
 }
 function _updatePartsTs(ts){
   const el=document.getElementById('bpUpdateTs');if(!el)return;
