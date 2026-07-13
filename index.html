@@ -99,6 +99,8 @@
     .opt-toggle:hover{color:#e6edf3;border-color:#484f58}
     #optionalFields{display:none;flex-direction:column;gap:14px;margin-top:14px}
     #optionalFields.vis{display:flex}
+    .wynn-only{display:none}
+    body.company-wynn .wynn-only{display:block}
     .q-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0d1117;border-radius:14px;margin-bottom:10px;border:1px solid #21262d}
     .q-sn{font-size:22px;font-weight:800;color:#58a6ff;min-width:55px}
     .q-info{flex:1}
@@ -793,7 +795,7 @@
       <input type="text" id="bpRemark" placeholder="選填">
     </div>
   </div>
-  <button class="opt-toggle" id="optToggleBtn" onclick="toggleOptional()" type="button">▼ 錯誤描述 / Box ID</button>
+  <button class="opt-toggle" id="optToggleBtn" onclick="toggleOptional()" type="button">▼ Check Request (錯誤描述 / Box ID)</button>
   <div id="optionalFields">
     <div>
       <label>錯誤描述</label>
@@ -802,6 +804,10 @@
     <div>
       <label>Box ID</label>
       <input type="text" id="boxId" placeholder="選填">
+    </div>
+    <div class="wynn-only">
+      <label>調查人員</label>
+      <input type="text" id="inspector" placeholder="選填">
     </div>
   </div>
   <button class="opt-toggle" id="batchToggleBtn" onclick="toggleBatch()" type="button" style="margin-top:10px">⊞ 批量模式</button>
@@ -953,8 +959,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-7';
-const _APP_VERSION='v0.962';
+const _APP_BUMP='2026.07.13-8';
+const _APP_VERSION='v0.963';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -977,7 +983,7 @@ const COMPANY_CASINOS={
   SJM:['Lisboa','Grand Lisboa','Grand Lisboa Palace','Oceanus','Jai Alai','L’Arc'],
   SCL:['Venetian','Parisian','Londoner','Plaza','Sands'],
   GEG:['Galaxy','StarWorld'],
-  Wynn:['Wynn Macau','Wynn Palace']
+  Wynn:['Wynn','Wynn Palace']
 };
 let activePage='input';
 let activeCompany=localStorage.getItem('_ml_company')||'SCL';
@@ -1057,6 +1063,7 @@ function companyParam(){return 'company='+encodeURIComponent(activeCompany);}
 function syncCompanySpecificFields(){
   document.body.classList.toggle('company-geg',activeCompany==='GEG');
   document.body.classList.toggle('company-mgm',activeCompany==='MGM');
+  document.body.classList.toggle('company-wynn',activeCompany==='Wynn');
   updateAaTagLoadStatus();
   updateMgmLocationButtons();
   updateBatchModeLayout();
@@ -2111,10 +2118,11 @@ async function addBatchToQueue(){
   const bpData=_getBpData()||{};
   const sealData=activeCompany==='GEG'?{}:getGegSealData();
   const locationData=getMgmLocationData();
+  const inspectorData=getWynnInspectorData();
   const items=lines.map((sn,index)=>{
     const paired=pairRows[index]||{};
     const rowSeal=activeCompany==='GEG'?normalizeBatchVoidSeal({value:paired.detail||''}):'';
-    return {sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...bpData,...(activeCompany==='MGM'?{aaTag:canonicalAaTag(paired.detail||'')}:{}) ,...(activeCompany==='GEG'?{voidSeal:rowSeal,newVoidSeal:document.getElementById('newVoidSeal').value.trim()}:{})};
+    return {sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData,...(activeCompany==='MGM'?{aaTag:canonicalAaTag(paired.detail||'')}:{}) ,...(activeCompany==='GEG'?{voidSeal:rowSeal,newVoidSeal:document.getElementById('newVoidSeal').value.trim()}:{})};
   });
   const counts={};lines.forEach(sn=>{counts[sn]=(counts[sn]||0)+1;});
   const duplicateNotes=[];
@@ -2166,7 +2174,8 @@ function _syncBpFromAction(){
 function switchToDrop(){document.getElementById('actionDropRow').style.display='flex';document.getElementById('actionCustomRow').style.display='none';}
 function switchToCustom(){document.getElementById('actionDropRow').style.display='none';document.getElementById('actionCustomRow').style.display='flex';document.getElementById('actionCustom').focus();}
 function getAction(){return document.getElementById('actionDropRow').style.display!=='none'?document.getElementById('actionDrop').value:document.getElementById('actionCustom').value.trim();}
-function toggleOptional(){optionalVisible=!optionalVisible;document.getElementById('optionalFields').classList.toggle('vis',optionalVisible);document.getElementById('optToggleBtn').textContent=optionalVisible?'▲ 錯誤描述 / Box ID':'▼ 錯誤描述 / Box ID';}
+function toggleOptional(){optionalVisible=!optionalVisible;document.getElementById('optionalFields').classList.toggle('vis',optionalVisible);document.getElementById('optToggleBtn').textContent=(optionalVisible?'▲ ':'▼ ')+'Check Request (錯誤描述 / Box ID)';}
+function getWynnInspectorData(){return activeCompany==='Wynn'?{inspector:optionalVisible?document.getElementById('inspector').value.trim():''}:{};}
 function getGegSealData(){
   if(activeCompany!=='GEG')return {};
   return {
@@ -2188,10 +2197,11 @@ async function addToQueue(){
   const bpData=_getBpData()||{};
   const sealData=getGegSealData();
   const locationData=getMgmLocationData();
+  const inspectorData=getWynnInspectorData();
   const isDupToday=todayRecords.some(r=>String(r.serialNo)===sn);
   const isDupQueue=queue.some(q=>q.sn===sn);
   if(isDupToday||isDupQueue){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...bpData};
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData};
     const where=isDupToday?'今日已提交記錄':'目前待提交清單';
     document.getElementById('dupTitle').textContent='⚠ 機身號碼重複';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 已存在於${where}。仍然加入？`;
@@ -2200,13 +2210,13 @@ async function addToQueue(){
   }
   const faultDuplicates=await fetchDuplicateFaults([sn],reason);
   if(faultDuplicates[sn]?.length){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...bpData};
+    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData};
     document.getElementById('dupTitle').textContent='⚠ 重複故障警告';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 在最近 30 日已有 ${faultDuplicates[sn].length} 次「${reason}」記錄。仍然加入？`;
     document.getElementById('dupModal').classList.add('show');
     return;
   }
-  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...bpData});
+  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData});
 }
 function cancelDupAdd(){pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');}
 function confirmDupAdd(){
@@ -2220,14 +2230,14 @@ function doAddToQueue(item){
   if(activeCompany==='MGM')document.getElementById('aaTag').value='';
   updateSnPadDisplay();
   if(activeCompany==='GEG'){document.getElementById('voidSeal').value='';document.getElementById('newVoidSeal').value='';}
-  if(optionalVisible){document.getElementById('errorDescription').value='';document.getElementById('boxId').value='';}
+  if(optionalVisible){document.getElementById('errorDescription').value='';document.getElementById('boxId').value='';document.getElementById('inspector').value='';}
   _resetBpFields();
   _updateRecentReasons(item.reason);
   document.getElementById('reason').value='PM';
   switchToDrop();document.getElementById('actionDrop').value='Preventive Maintenance';
   if(_isMob)showSnPad();else document.getElementById('serialNo').focus();
 }
-function startEditQueue(i){editingIdx=i;const item=queue[i];editTemp={sn:item.sn,model:item.model||'SAE',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',reason:item.reason,action:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',actionMode:ALL_ACTIONS.includes(item.action)?'drop':'custom'};renderQueue();}
+function startEditQueue(i){editingIdx=i;const item=queue[i];editTemp={sn:item.sn,model:item.model||'SAE',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,action:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',actionMode:ALL_ACTIONS.includes(item.action)?'drop':'custom'};renderQueue();}
 function cancelEditQueue(){editingIdx=-1;editTemp=null;renderQueue();}
 function captureEditTemp(){
   if(editingIdx<0||!editTemp)return;
@@ -2237,6 +2247,7 @@ function captureEditTemp(){
   if(g('eq-void-seal'))editTemp.voidSeal=g('eq-void-seal').value;
   if(g('eq-new-void-seal'))editTemp.newVoidSeal=g('eq-new-void-seal').value;
   if(g('eq-location'))editTemp.location=g('eq-location').value;
+  if(g('eq-inspector'))editTemp.inspector=g('eq-inspector').value;
   if(g('eq-reason'))editTemp.reason=g('eq-reason').value;
   if(editTemp.actionMode==='drop'&&g('eq-action-drop'))editTemp.action=g('eq-action-drop').value;
   if(editTemp.actionMode==='custom'&&g('eq-action-custom'))editTemp.action=g('eq-action-custom').value;
@@ -2252,7 +2263,7 @@ function saveEditQueue(i){
   if(!sn){showToast('請輸入機身號碼','err');return;}
   const action=editTemp.actionMode==='drop'?editTemp.action:(editTemp.action||'').trim();
   if(!action){showToast('請選擇處理方法','err');return;}
-  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
+  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim()};
   editingIdx=-1;editTemp=null;saveQueue();renderQueue();
 }
 function toggleQueueSelect(i,checked){
@@ -2320,12 +2331,14 @@ function renderQueue(){
         <div class="ef-row"><label>Void Seal</label><input id="eq-void-seal" type="text" value="${esc(editTemp.voidSeal)}" placeholder="選填"></div>
         <div class="ef-row"><label>New Void Seal</label><input id="eq-new-void-seal" type="text" value="${esc(editTemp.newVoidSeal)}" placeholder="如有更換才填"></div>`:'';
       const locationEditHtml=activeCompany==='MGM'?`<div class="ef-row"><label>場所</label><select id="eq-location"><option value="Floor"${editTemp.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${editTemp.location==='Workshop'?' selected':''}>場下</option></select></div>`:'';
+      const inspectorEditHtml=activeCompany==='Wynn'?`<div class="ef-row"><label>調查人員</label><input id="eq-inspector" type="text" value="${esc(editTemp.inspector)}" placeholder="選填"></div>`:'';
       return `<div class="q-item q-editing"><div class="q-edit-form">
         <div class="q-edit-top"><label class="q-select-label"><input class="q-select" type="checkbox" onchange="toggleQueueSelect(${i},this.checked)"${checked}> 選取</label></div>
         <div class="ef-row"><label>機身號碼</label><input id="eq-sn" class="sn-input" type="text" value="${esc(editTemp.sn)}" inputmode="numeric"></div>
         <div class="ef-row"><label>機型</label><select id="eq-model">${mOpts}</select></div>
         ${sealEditHtml}
         ${locationEditHtml}
+        ${inspectorEditHtml}
         <div class="ef-row"><label>原因</label><div class="combo" data-combo="eq-reason"><input id="eq-reason" type="text" value="${esc(editTemp.reason)}" oninput="onEditReasonInput()" onchange="onEditReasonChange()" placeholder="搜尋原因..." autocomplete="off"><div class="combo-menu" id="eq-reason-menu"></div></div></div>
         <div class="ef-row"><label>處理方法</label>${aHtml}</div>
         <div class="ef-row"><label>錯誤描述</label><input id="eq-error" type="text" value="${esc(editTemp.errorDescription)}" placeholder="選填"></div>
@@ -2344,6 +2357,7 @@ function renderQueue(){
         <div class="q-action">${esc(item.action)}</div>
         ${activeCompany==='GEG'&&(item.voidSeal||item.newVoidSeal)?`<div class="q-extra">Void：${esc(item.voidSeal||'-')}${item.newVoidSeal?' → '+esc(item.newVoidSeal):''}</div>`:''}
         ${activeCompany==='MGM'&&item.location?`<div class="q-extra">場所：${item.location==='Floor'?'場上':'場下'}</div>`:''}
+        ${activeCompany==='Wynn'&&item.inspector?`<div class="q-extra">Inspector：${esc(item.inspector)}</div>`:''}
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
         ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
         ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
@@ -2532,6 +2546,7 @@ function dashFieldRows(record, rowCompany){
     ['Serial No.',record.serialNo],
     ...(rowCompany==='GEG'?[['Void Seal',record.voidSeal],['New Void Seal',record.newVoidSeal]]:[]),
     ...(rowCompany==='MGM'?[['場所',record.location]]:[]),
+    ...(rowCompany==='Wynn'?[['Inspector',record.inspector]]:[]),
     ['Reason',record.reason],
     ['Action Taken',record.actionTaken],
     ['Error Description',record.errorDescription],
@@ -2571,6 +2586,7 @@ function renderDashboardEditCard(record,index){
       ${dashEditField('Serial No.','serialNo',record.serialNo)}
       ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
       ${rowCompany==='MGM'?`<div><label>場所</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
+      ${rowCompany==='Wynn'?dashEditField('Inspector','inspector',record.inspector):''}
       ${dashEditField('Reason','reason',record.reason)}
       ${dashEditField('Action Taken','actionTaken',record.actionTaken)}
       ${dashEditField('Error Description','errorDescription',record.errorDescription)}
@@ -2688,6 +2704,7 @@ function exportColumns(){
   const cols=[['company','Company'],['casino','CASINO'],['date','DATE'],['poNumber','PO Number'],['model','Model'],['serialNo','Serial No.']];
   if(currentDashboardCompany==='GEG')cols.push(['voidSeal','Void Seal'],['newVoidSeal','New Void Seal']);
   if(currentDashboardCompany==='MGM')cols.push(['location','場所']);
+  if(currentDashboardCompany==='Wynn')cols.push(['inspector','Inspector']);
   return cols.concat([['reason','Reason'],['actionTaken','Action Taken'],['errorDescription','Error Description'],['boxId','Box ID']]);
 }
 function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
@@ -2816,7 +2833,7 @@ async function doSubmit(){
   localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);localStorage.setItem('poNumber',poNumber);
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
-  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
+  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
   const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
