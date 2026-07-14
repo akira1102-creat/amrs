@@ -138,8 +138,8 @@
     .toast.err{background:#da3633}
     .toast.warn{background:#9a6700}
     .toast.show{transform:translateX(-50%) translateY(0)}
-    #exportProgress{display:none;position:fixed;left:50%;bottom:28px;z-index:9100;transform:translateX(-50%);align-items:center;gap:10px;padding:12px 20px;border:1px solid #388bfd;border-radius:50px;background:#161b22;color:#e6edf3;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap}
-    #exportProgress.show{display:flex}
+    #exportProgress,#submitProgress{display:none;position:fixed;left:50%;bottom:28px;z-index:9100;transform:translateX(-50%);align-items:center;gap:10px;padding:12px 20px;border:1px solid #388bfd;border-radius:50px;background:#161b22;color:#e6edf3;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap}
+    #exportProgress.show,#submitProgress.show{display:flex}
     .export-spinner{width:18px;height:18px;border:3px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:export-spin .75s linear infinite}
     @keyframes export-spin{to{transform:rotate(360deg)}}
     #dupModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8888;align-items:center;justify-content:center}
@@ -1059,6 +1059,7 @@
 <div style="height:8px"></div>
 <div class="toast" id="toast"></div>
 <div id="exportProgress" role="status" aria-live="polite"><span class="export-spinner" aria-hidden="true"></span><span>匯出資料中，請稍等...</span></div>
+<div id="submitProgress" role="status" aria-live="polite"><span class="export-spinner" aria-hidden="true"></span><span id="submitProgressText">提交資料中，請稍等...</span></div>
 
 <!-- SN Numpad (7-8-9 / 4-5-6 / 1-2-3 / ⌫-0-✓) -->
 <div id="snPad">
@@ -1097,8 +1098,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-9';
-const _APP_VERSION='v0.980';
+const _APP_BUMP='2026.07.14-10';
+const _APP_VERSION='v0.981';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2139,9 +2140,9 @@ async function exportBrokenPartsList(type){
     const allColumns=[['casino','CASINO'],['model','Model'],['serialNo','Serial No.'],['brokenParts','Parts No.'],['bpDesc','Required Parts(JP)'],['bpColC','Required Parts(EN)'],['bpQty','Qty'],['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark']];
     const columns=allColumns.filter(([key])=>records.some(record=>cleanDashValue(record[key])!==''));
     const table=`<table border="1"><thead><tr>${columns.map(([,label])=>`<th>${esc(label)}</th>`).join('')}</tr></thead><tbody>${records.map(record=>`<tr>${columns.map(([key])=>`<td>${esc(record[key]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    const stamp=new Date().toISOString().slice(0,10);const base=`AMRS_${activeCompany}_Broken_Parts_${stamp}`;
-    if(type==='xls')downloadBlob(new Blob([`<html><meta charset="utf-8"><body>${table}</body></html>`],{type:'application/vnd.ms-excel'}),base+'.xls');
-    else if(printWindow){printWindow.document.write(`<html><head><title>${base}</title><style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;font-size:9px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left;word-break:break-word}th{background:#eee}</style></head><body><h2>AMRS ${esc(activeCompany)} Broken Parts List</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
+    const title='AE Maintenance Record';
+    if(type==='xls')downloadBlob(new Blob([`<html><head><meta charset="utf-8"><title>${title}</title></head><body><h2>${title}</h2>${table}</body></html>`],{type:'application/vnd.ms-excel'}),title+'.xls');
+    else if(printWindow){printWindow.document.write(`<html><head><title>${title}</title><style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;font-size:9px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left;word-break:break-word}th{background:#eee}</style></head><body><h2>${title}</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
     showToast(`✓ 已準備 ${records.length} 筆記錄`);
   }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
 }
@@ -3192,10 +3193,10 @@ async function exportDashboard(type,selectedKeys){
     if(!records.length)throw new Error('沒有資料');
     if(type==='pdf')cols=cols.filter(([key])=>records.some(record=>cleanDashValue(record[key])!==''));
     if(!cols.length)throw new Error('所選欄位沒有資料');
-    const stamp=new Date().toISOString().slice(0,10);const base=`AMRS_${currentDashboardCompany}_${stamp}`;
+    const title='AE Maintenance Record';
     const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${records.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    if(type==='xls')downloadBlob(new Blob([`<html><meta charset="utf-8"><body>${table}</body></html>`],{type:'application/vnd.ms-excel'}),base+'.xls');
-    else if(printWindow){printWindow.document.write(`<html><head><title>${base}</title><style>body{font-family:Arial;font-size:10px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left}</style></head><body><h2>AMRS ${esc(currentDashboardCompany)} 維修記錄</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
+    if(type==='xls')downloadBlob(new Blob([`<html><head><meta charset="utf-8"><title>${title}</title></head><body><h2>${title}</h2>${table}</body></html>`],{type:'application/vnd.ms-excel'}),title+'.xls');
+    else if(printWindow){printWindow.document.write(`<html><head><title>${title}</title><style>body{font-family:Arial;font-size:10px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left}</style></head><body><h2>${title}</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
     showToast(`✓ 已準備 ${records.length} 筆記錄`);
   }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
   finally{await new Promise(resolve=>setTimeout(resolve,150));hideExportProgress();}
@@ -3318,6 +3319,11 @@ function confirmSubmit(){
   btn.textContent='提交中...';
   doSubmit();
 }
+function showSubmitProgress(completed,total){
+  document.getElementById('submitProgressText').textContent=`提交資料中，請稍等... ${completed}/${total}`;
+  document.getElementById('submitProgress').classList.add('show');
+}
+function hideSubmitProgress(){document.getElementById('submitProgress').classList.remove('show');}
 async function doSubmit(){
   if(isSubmitting)return;
   isSubmitting=true;
@@ -3339,10 +3345,11 @@ async function doSubmit(){
     chunks.push({records:records.slice(i,i+CHUNK_SIZE),repairs});
   }
   let savedCount=0,completedChunks=0;
+  showSubmitProgress(0,chunks.length);
   try{
     for(let ci=0;ci<chunks.length;ci++){
       const chunk=chunks[ci];
-      btn.textContent=chunks.length>1?`儲存中... (${ci+1}/${chunks.length})`:'儲存中...';
+      btn.textContent=chunks.length>1?`儲存中... (${completedChunks}/${chunks.length})`:'儲存中...';
       const payload=chunk.repairs.length?{action:'submitRecords',records:chunk.records,brokenPartsRepairs:chunk.repairs}:chunk.records;
       const body=JSON.stringify(payload);
       const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body});
@@ -3350,12 +3357,12 @@ async function doSubmit(){
       if(data.success){
         savedCount+=chunk.records.length;
         completedChunks=ci+1;
+        showSubmitProgress(completedChunks,chunks.length);
+        btn.textContent=chunks.length>1?`儲存中... (${completedChunks}/${chunks.length})`:'儲存中...';
         _appendLocalLog(chunk.records);
       }else{
         showToast('錯誤：'+(data.message||'伺服器錯誤'),'err');
         btn.disabled=false;
-        btn.textContent='全部提交';
-        isSubmitting=false;
         return;
       }
     }
@@ -3367,9 +3374,11 @@ async function doSubmit(){
     if(chunks.length>completedChunks){_saveRetry();_updateRetryNotice();}
     showToast('離線：已暫存在本機，連線後會自動同步','warn');
     clearQueue();
+  }finally{
+    hideSubmitProgress();
+    btn.textContent='全部提交';
+    isSubmitting=false;
   }
-  btn.textContent='全部提交';
-  isSubmitting=false;
 }
 function showToast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type?' '+type:'')+' show';setTimeout(()=>el.className='toast'+(type?' '+type:''),2800);}
 if(!_isMob){
