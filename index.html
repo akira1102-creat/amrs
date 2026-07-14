@@ -334,6 +334,14 @@
     #batchSns{width:100%;font-size:18px;padding:10px 13px;border:1px solid #30363d;border-radius:14px;color:#58a6ff;background:#0d1117;resize:vertical;min-height:90px;font-family:monospace;letter-spacing:3px;font-weight:700}
     #batchSns:focus{outline:none;border-color:#388bfd}
     #batchPairArea{display:none}
+    #batchAaPasteArea{display:none;margin-bottom:10px;padding:10px;border:1px solid #30363d;border-radius:12px;background:#0d1117}
+    body.company-mgm #batchAaPasteArea{display:block}
+    .batch-aa-paste-row{display:flex;gap:8px;align-items:stretch}
+    #batchAaPaste{flex:1;min-width:0;width:auto;min-height:72px;resize:vertical;font-family:monospace;letter-spacing:1px}
+    .batch-aa-apply{flex:0 0 auto;padding:8px 12px;border:1px solid #388bfd;border-radius:10px;background:#1f6feb;color:#fff;font-size:12px;font-weight:800;cursor:pointer}
+    #batchAaPasteStatus{min-height:18px;margin-top:7px;color:#8b949e;font-size:11px;line-height:1.5}
+    #batchAaPasteStatus.ok{color:#3fb950;font-weight:700}
+    #batchAaPasteStatus.warn{color:#f0883e;font-weight:700}
     .batch-pair-head,.batch-pair-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
     .batch-pair-head{font-size:12px;font-weight:800;color:#8b949e;margin-bottom:6px;padding:0 4px}
     .batch-pair-row{margin-bottom:8px}
@@ -818,6 +826,14 @@
       <textarea id="batchSns" rows="4" placeholder="1234&#10;5678&#10;9012" autocomplete="off" spellcheck="false"></textarea>
     </div>
     <div id="batchPairArea">
+      <div id="batchAaPasteArea">
+        <label>貼上 AA Tag（可直接從 Excel 複製單欄）</label>
+        <div class="batch-aa-paste-row">
+          <textarea id="batchAaPaste" rows="3" placeholder="TAE0051&#10;TAE0123&#10;TAE0456" autocomplete="off" spellcheck="false"></textarea>
+          <button class="batch-aa-apply" onclick="applyBatchAaTags()" type="button">套用</button>
+        </div>
+        <div id="batchAaPasteStatus"></div>
+      </div>
       <div class="batch-pair-head"><span id="batchPairLeftHead">機身號碼</span><span id="batchPairRightHead">AA Tag</span></div>
       <div id="batchPairRows"></div>
       <button class="batch-row-add" onclick="addBatchPairRow(true)" type="button">＋ 新增一行</button>
@@ -1098,8 +1114,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-12';
-const _APP_VERSION='v0.983';
+const _APP_BUMP='2026.07.14-13';
+const _APP_VERSION='v0.984';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2248,7 +2264,7 @@ function updateBatchModeLayout(){
   }
   updateMgmLocationButtons();
 }
-function addBatchPairRow(focus=false){
+function addBatchPairRow(focus=false,values={}){
   const rows=document.getElementById('batchPairRows');if(!rows)return;
   const row=document.createElement('div');row.className='batch-pair-row';
   row.innerHTML=`<input class="batch-pair-sn" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off"><input class="batch-pair-detail" type="text" inputmode="numeric" maxlength="${activeCompany==='GEG'?5:7}" placeholder="${activeCompany==='GEG'?'00000':'TAE0000'}" autocomplete="off"${activeCompany==='MGM'?' readonly':''}>`;
@@ -2261,6 +2277,8 @@ function addBatchPairRow(focus=false){
     detail.addEventListener('blur',()=>normalizeBatchVoidSeal(detail));
     detail.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();normalizeBatchVoidSeal(detail);focusNextBatchPair(row);});
   }
+  sn.value=String(values.sn||'');
+  detail.value=String(values.detail||'');
   if(focus)sn.focus();
 }
 function focusNextBatchPair(row){
@@ -2276,6 +2294,27 @@ function updateBatchPairRow(snInput){
 function refreshBatchAaTags(){
   if(activeCompany!=='MGM')return;
   document.querySelectorAll('#batchPairRows .batch-pair-sn').forEach(updateBatchPairRow);
+  if(document.getElementById('batchAaPaste')?.value.trim())applyBatchAaTags(false);
+}
+function parseBatchAaTags(value){
+  return String(value||'').split(/[\s,;]+/).map(canonicalAaTag).filter(Boolean);
+}
+function applyBatchAaTags(showErrors=true){
+  if(activeCompany!=='MGM')return;
+  const input=document.getElementById('batchAaPaste');
+  const status=document.getElementById('batchAaPasteStatus');
+  const tags=parseBatchAaTags(input.value);
+  if(!tags.length){status.className='warn';status.textContent='請貼上最少一個有效 AA Tag。';return;}
+  if(!_aaTags.length){status.className='warn';status.textContent='請先載入 AA Tag 號碼。';if(showErrors)showToast('請先載入 AA Tag 號碼','err');return;}
+  const rows=document.getElementById('batchPairRows');rows.innerHTML='';
+  let matched=0;const missing=[];
+  tags.forEach(tag=>{
+    const sn=_serialByAaTag[tag]||'';
+    if(sn)matched++;else missing.push(tag);
+    addBatchPairRow(false,{sn,detail:tag});
+  });
+  status.className=missing.length?'warn':'ok';
+  status.textContent=missing.length?`已配對 ${matched}/${tags.length} 個；未找到：${missing.join('、')}`:`已配對全部 ${tags.length} 個 AA Tag。`;
 }
 function normalizeBatchVoidSeal(input){
   const digits=input.value.replace(/\D/g,'').slice(0,5);input.value=digits?digits.padStart(5,'0'):'';return input.value;
@@ -2283,6 +2322,9 @@ function normalizeBatchVoidSeal(input){
 function clearBatchInputs(){
   document.getElementById('batchSns').value='';
   document.getElementById('batchPairRows').innerHTML='';
+  document.getElementById('batchAaPaste').value='';
+  document.getElementById('batchAaPasteStatus').className='';
+  document.getElementById('batchAaPasteStatus').textContent='';
   if(isPairedBatchCompany())addBatchPairRow(false);
 }
 function toggleBatch(){
@@ -2295,9 +2337,14 @@ function toggleBatch(){
   if(_batchMode)hideSnPad();else clearBatchInputs();
   onReasonChange();
 }
+document.getElementById('batchAaPaste').addEventListener('paste',()=>setTimeout(()=>applyBatchAaTags(),0));
 async function addBatchToQueue(){
   if(_queueAddBusy)return;
   const pairRows=isPairedBatchCompany()?Array.from(document.querySelectorAll('#batchPairRows .batch-pair-row')).map(row=>({sn:row.querySelector('.batch-pair-sn').value.trim(),detail:row.querySelector('.batch-pair-detail').value.trim()})).filter(row=>row.sn||row.detail):[];
+  if(activeCompany==='MGM'){
+    const missing=pairRows.filter(row=>row.detail&&!row.sn).map(row=>canonicalAaTag(row.detail));
+    if(missing.length){showToast(`找不到機身號碼：${missing.slice(0,3).join('、')}${missing.length>3?'…':''}`,'err');return;}
+  }
   const rawLines=isPairedBatchCompany()?pairRows.map(row=>row.sn):document.getElementById('batchSns').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
   const invalid=rawLines.filter(s=>!/^\d{1,4}$/.test(s));
   if(invalid.length){showToast(`格式錯誤：${invalid.slice(0,3).join('、')}`,'err');return;}
