@@ -95,6 +95,7 @@
     .icon-btn{flex-shrink:0;width:46px;font-size:16px;background:#21262d;border:1px solid #30363d;border-radius:14px;cursor:pointer;color:#e6edf3;display:flex;align-items:center;justify-content:center}
     .add-btn{width:100%;margin-top:16px;padding:14px;font-size:16px;background:#238636;color:#fff;border:none;border-radius:16px;font-weight:700;cursor:pointer}
     .add-btn:active{background:#2ea043}
+    .add-btn:disabled,.batch-add-btn:disabled{background:#21262d;color:#8b949e;cursor:wait}
     .opt-toggle{width:100%;margin-top:14px;padding:7px 14px;font-size:12px;background:none;border:1px solid #30363d;border-radius:10px;color:#8b949e;cursor:pointer;text-align:left}
     .opt-toggle:hover{color:#e6edf3;border-color:#484f58}
     #optionalFields{display:none;flex-direction:column;gap:14px;margin-top:14px}
@@ -779,7 +780,7 @@
         <button id="batchMgmWorkshopBtn" onclick="setMgmLocation('Workshop')" type="button" aria-pressed="false">場下</button>
       </div>
     </div>
-    <button class="batch-add-btn" onclick="addBatchToQueue()" type="button">＋ 全部加入待提交</button>
+    <button class="batch-add-btn" id="batchAddQueueBtn" onclick="addBatchToQueue()" type="button">＋ 全部加入待提交</button>
   </div>
   <div style="margin-bottom:14px">
     <label>機型</label>
@@ -1037,8 +1038,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.13-16';
-const _APP_VERSION='v0.971';
+const _APP_BUMP='2026.07.14-1';
+const _APP_VERSION='v0.972';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1786,6 +1787,14 @@ const _savedModel=localStorage.getItem('model');if(_savedModel)document.getEleme
 document.getElementById('model').addEventListener('change',function(){localStorage.setItem('model',this.value);});
 document.getElementById('poNumber').addEventListener('change',function(){localStorage.setItem('poNumber',this.value.trim());});
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='',_batchMode=false;
+let _queueAddBusy=false;
+function setQueueAddBusy(busy,batch=false){
+  _queueAddBusy=busy;
+  const singleBtn=document.getElementById('addQueueBtn');
+  const batchBtn=document.getElementById('batchAddQueueBtn');
+  if(singleBtn){singleBtn.disabled=busy;singleBtn.textContent=busy&&!batch?'檢查重複記錄中...':'＋ 加入待提交';}
+  if(batchBtn){batchBtn.disabled=busy;batchBtn.textContent=busy&&batch?'檢查重複記錄中...':'＋ 全部加入待提交';}
+}
 let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null;
 let dashboardSelectedRecords=new Map();
 const DASH_PAGE_SIZE=10;
@@ -2206,6 +2215,7 @@ function toggleBatch(){
   onReasonChange();
 }
 async function addBatchToQueue(){
+  if(_queueAddBusy)return;
   const pairRows=isPairedBatchCompany()?Array.from(document.querySelectorAll('#batchPairRows .batch-pair-row')).map(row=>({sn:row.querySelector('.batch-pair-sn').value.trim(),detail:row.querySelector('.batch-pair-detail').value.trim()})).filter(row=>row.sn||row.detail):[];
   const rawLines=isPairedBatchCompany()?pairRows.map(row=>row.sn):document.getElementById('batchSns').value.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
   const invalid=rawLines.filter(s=>!/^\d{1,4}$/.test(s));
@@ -2237,7 +2247,10 @@ async function addBatchToQueue(){
     if(queue.some(q=>q.sn===sn))locations.push('待提交清單已有');
     if(locations.length)duplicateNotes.push(`${sn}（${locations.join('、')}）`);
   });
-  const faultDuplicates=await fetchDuplicateFaults(lines,reason);
+  let faultDuplicates={};
+  setQueueAddBusy(true,true);
+  try{faultDuplicates=await fetchDuplicateFaults(lines,reason);}
+  finally{setQueueAddBusy(false,true);}
   Object.keys(faultDuplicates).forEach(sn=>duplicateNotes.push(`${sn}（30 日內有 ${faultDuplicates[sn].length} 次相同非 PM 故障）`));
   if(duplicateNotes.length){
     pendingBatchAdd=items;
@@ -2364,6 +2377,7 @@ function getGegSealData(){
   };
 }
 async function addToQueue(){
+  if(_queueAddBusy)return;
   const sn=document.getElementById('serialNo').value.trim();
   if(!sn){showToast('請輸入機身號碼','err');return;}
   if(!/^\d{1,4}$/.test(sn)){showToast('機身號碼必須為 1–4 位數字','err');return;}
@@ -2381,25 +2395,29 @@ async function addToQueue(){
   const aaTagData=getMgmAaTagData();
   const inspectorData=getWynnInspectorData();
   const poRepairData=_poRepairMode&&_poRepairSelected?{poRepair:{record:{..._poRepairSelected},lockedAction:action}}:{};
+  const item={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
   const isDupToday=todayRecords.some(r=>String(r.serialNo)===sn);
   const isDupQueue=queue.some(q=>q.sn===sn);
   if(isDupToday||isDupQueue){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
+    pendingAdd=item;
     const where=isDupToday?'今日已提交記錄':'目前待提交清單';
     document.getElementById('dupTitle').textContent='⚠ 機身號碼重複';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 已存在於${where}。仍然加入？`;
     document.getElementById('dupModal').classList.add('show');
     return;
   }
-  const faultDuplicates=await fetchDuplicateFaults([sn],reason);
+  let faultDuplicates={};
+  setQueueAddBusy(true,false);
+  try{faultDuplicates=await fetchDuplicateFaults([sn],reason);}
+  finally{setQueueAddBusy(false,false);}
   if(faultDuplicates[sn]?.length){
-    pendingAdd={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
+    pendingAdd=item;
     document.getElementById('dupTitle').textContent='⚠ 重複故障警告';
     document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 在最近 30 日已有 ${faultDuplicates[sn].length} 次「${reason}」記錄。仍然加入？`;
     document.getElementById('dupModal').classList.add('show');
     return;
   }
-  doAddToQueue({sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData});
+  doAddToQueue(item);
 }
 function cancelDupAdd(){pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');}
 function confirmDupAdd(){
