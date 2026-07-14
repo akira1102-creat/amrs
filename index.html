@@ -1062,8 +1062,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-3';
-const _APP_VERSION='v0.974';
+const _APP_BUMP='2026.07.14-4';
+const _APP_VERSION='v0.975';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1265,12 +1265,13 @@ function showPage(page){
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
   activeCompany=company;localStorage.setItem('_ml_company',company);
-  _queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;_duplicateCheckPendingCount=queue.length%10;
+  _queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;
   document.getElementById('activeCompanyLabel').textContent=company;
   syncCompanySpecificFields();
   syncCasinoOptions();
   loadTemplateMappings();
   showPage('input');renderCompanyMenu();
+  if(queue.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);
   if(!getDeployId(company))openGasSettings({returnState:prev});else loadTodayRecords();
 }
 function renderCompanyMenu(){
@@ -1831,7 +1832,7 @@ document.getElementById('model').addEventListener('change',function(){localStora
 document.getElementById('poNumber').addEventListener('change',function(){localStorage.setItem('poNumber',this.value.trim());});
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='',_batchMode=false;
 let _queueAddBusy=false;
-let _queueDuplicateResults=[],_duplicateCheckedKeys=new Set(),_duplicateCheckPromise=null,_duplicateCheckRerun=false,_duplicateCheckPendingCount=0,_duplicateCheckRunning=false,_duplicateCheckContextVersion=0,_submitCheckBusy=false;
+let _queueDuplicateResults=[],_duplicateCheckedKeys=new Set(),_duplicateCheckPromise=null,_duplicateCheckRerun=false,_duplicateCheckRunning=false,_duplicateCheckContextVersion=0,_submitCheckBusy=false;
 function setQueueAddBusy(busy,batch=false){
   _queueAddBusy=busy;
   const singleBtn=document.getElementById('addQueueBtn');
@@ -2287,7 +2288,7 @@ async function addBatchToQueue(){
 
 function doAddBatchToQueue(items){
   queue.push(...items);saveQueue();renderQueue();
-  scheduleQueueDuplicateCheck(items.length);
+  scheduleQueueDuplicateCheck(items);
   clearBatchInputs();
   _updateRecentReasons(items[0]?.reason||'');
   showToast(`✓ 已加入 ${items.length} 筆待提交`);
@@ -2305,11 +2306,15 @@ async function fetchDuplicateFaults(serialNos,reason,throwOnError=false){
 
 function isDuplicateCheckItem(item){return String(item?.reason||'').trim().toUpperCase()!=='PM';}
 function duplicateItemKey(item){return `${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}`;}
-function scheduleQueueDuplicateCheck(addedCount){
-  _duplicateCheckPendingCount+=Number(addedCount)||0;
-  if(_duplicateCheckPendingCount<10)return;
-  _duplicateCheckPendingCount%=10;
-  refreshQueueDuplicateChecks(false);
+function scheduleQueueDuplicateCheck(addedItems){
+  const items=Array.isArray(addedItems)?addedItems:[addedItems];
+  if(items.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);
+}
+function syncSubmitButtonState(){
+  const btn=document.getElementById('submitBtn');if(!btn||isSubmitting)return;
+  const checking=_duplicateCheckRunning||_submitCheckBusy;
+  btn.disabled=queue.length===0||checking;
+  btn.textContent=checking?'檢查重複記錄中...':'全部提交';
 }
 async function refreshQueueDuplicateChecks(force){
   if(_duplicateCheckPromise){
@@ -2330,7 +2335,7 @@ async function refreshQueueDuplicateChecks(force){
     groups.get(reason).add(String(item.sn||''));
   });
   const checkVersion=_duplicateCheckContextVersion;
-  _duplicateCheckRunning=true;renderQueueDuplicateNotice();
+  _duplicateCheckRunning=true;renderQueueDuplicateNotice();syncSubmitButtonState();
   _duplicateCheckPromise=(async()=>{
     const found=[],checkedKeys=new Set();
     for(const [reason,snSet] of groups){
@@ -2352,7 +2357,7 @@ async function refreshQueueDuplicateChecks(force){
     }
   })();
   try{await _duplicateCheckPromise;}
-  finally{_duplicateCheckPromise=null;_duplicateCheckRunning=false;renderQueueDuplicateNotice();}
+  finally{_duplicateCheckPromise=null;_duplicateCheckRunning=false;renderQueueDuplicateNotice();syncSubmitButtonState();}
 }
 function collectQueueDuplicateWarnings(){
   const faultItems=queue.filter(isDuplicateCheckItem);
@@ -2511,7 +2516,7 @@ function confirmDupAdd(){
 }
 function doAddToQueue(item){
   queue.push(item);saveQueue();renderQueue();
-  scheduleQueueDuplicateCheck(1);
+  scheduleQueueDuplicateCheck(item);
   document.getElementById('serialNo').value='';
   if(activeCompany==='MGM')document.getElementById('aaTag').value='';
   updateSnPadDisplay();
@@ -2554,6 +2559,7 @@ function saveEditQueue(i){
   const linkedRepair=queue[i].poRepair&&action===queue[i].poRepair.lockedAction?queue[i].poRepair:null;
   queue[i]={...queue[i],sn,model:editTemp.model||'SAE',aaTag:canonicalAaTag(editTemp.aaTag),voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim(),poRepair:linkedRepair};
   editingIdx=-1;editTemp=null;saveQueue();renderQueue();
+  scheduleQueueDuplicateCheck(queue[i]);
 }
 function toggleQueueSelect(i,checked){
   if(checked)selectedQueueIdxs.add(i);else selectedQueueIdxs.delete(i);
@@ -2598,9 +2604,9 @@ function renderQueue(){
   selectedQueueIdxs=new Set([...selectedQueueIdxs].filter(i=>i>=0&&i<queue.length));
   const selectedCount=selectedQueueIdxs.size;
   badge.textContent=queue.length;
-  btn.disabled=queue.length===0;
   card.style.display=queue.length?'block':'none';
   renderQueueDuplicateNotice();
+  syncSubmitButtonState();
   const selectAll=document.getElementById('queueSelectAll');
   const selectedLabel=document.getElementById('queueSelectedCount');
   if(selectAll){selectAll.checked=queue.length>0&&selectedCount===queue.length;selectAll.indeterminate=selectedCount>0&&selectedCount<queue.length;}
@@ -2681,7 +2687,7 @@ function renderTodayPanel(){}
 function toggleToday(){}
 document.getElementById('casino').addEventListener('change',function(){localStorage.setItem(_casinoKey(activeCompany),this.value);localStorage.setItem('casino',this.value);});
 document.getElementById('casino').addEventListener('change',()=>{if(queue.length>0)showToast('⚠ 待提交記錄會改用新場地','warn');loadTodayRecords();});
-document.getElementById('date').addEventListener('change',()=>{_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;renderQueueDuplicateNotice();if(queue.length>0)showToast('⚠ 待提交記錄會改用新日期','warn');});
+document.getElementById('date').addEventListener('change',()=>{_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;renderQueueDuplicateNotice();if(queue.length>0){showToast('⚠ 待提交記錄會改用新日期','warn');if(queue.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);}});
 document.getElementById('dashCasino').addEventListener('change',updateDashboardSearchState);
 ['dashFrom','dashTo'].forEach(id=>{
   const input=document.getElementById(id);
@@ -3113,10 +3119,9 @@ async function submitAll(){
     if(activeCompany==='GEG'&&item.voidSeal&&!/^\d{5}$/.test(item.voidSeal))errors.push(`S/N ${item.sn} Void Seal 必須為 5 位`);
   });
   if(errors.length){showToast(errors[0],'err');return;}
-  const submitBtn=document.getElementById('submitBtn');
-  _submitCheckBusy=true;submitBtn.disabled=true;submitBtn.textContent='檢查重複記錄中...';
+  _submitCheckBusy=true;syncSubmitButtonState();
   try{await refreshQueueDuplicateChecks(true);}
-  finally{_submitCheckBusy=false;submitBtn.disabled=queue.length===0;submitBtn.textContent='全部提交';}
+  finally{_submitCheckBusy=false;syncSubmitButtonState();}
   if(!queue.length){showToast('待提交清單是空的','err');return;}
   warnings.push(...collectQueueDuplicateWarnings());
   const seals=queue.map(item=>item.voidSeal).filter(Boolean);const repeatedSeals=[...new Set(seals.filter((seal,i)=>seals.indexOf(seal)!==i))];if(repeatedSeals.length)warnings.push(`Void Seal 重複：${repeatedSeals.join('、')}`);
@@ -3152,7 +3157,7 @@ async function doSubmit(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
-  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;_duplicateCheckPendingCount=0;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
+  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
   for(let i=0;i<records.length;i+=CHUNK_SIZE){
@@ -3242,7 +3247,7 @@ if(localStorage.getItem('_ml_auth')===_PH){
   }
 }
 initDashboardFilters();
-if(queue.length>0){_duplicateCheckPendingCount=queue.length%10;renderQueue();if(queue.length>=10)setTimeout(()=>refreshQueueDuplicateChecks(false),0);setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
+if(queue.length>0){renderQueue();if(queue.some(isDuplicateCheckItem))setTimeout(()=>refreshQueueDuplicateChecks(false),0);setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
 _renderStats();
 _updateRetryNotice();
 </script>
