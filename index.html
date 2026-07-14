@@ -771,7 +771,7 @@
   </div>
   <div style="margin-top:14px">
     <label>PO 號碼 / 月份號碼（如 2026 年 7 月請填寫 2607）</label>
-    <input type="text" id="poNumber" placeholder="e.g. 7242395 / 2607" inputmode="numeric">
+    <input type="text" id="poNumber" placeholder="e.g. 7242395 / 2607">
   </div>
 </div>
 
@@ -1097,8 +1097,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-8';
-const _APP_VERSION='v0.979';
+const _APP_BUMP='2026.07.14-9';
+const _APP_VERSION='v0.980';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2732,6 +2732,7 @@ document.getElementById('dashCasino').addEventListener('change',updateDashboardS
   input.addEventListener('input',syncDashDateButtons);
 });
 document.getElementById('dashSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loadDashboard();}});
+document.getElementById('dashSearch').addEventListener('input',function(){if(!isDashFuzzy())this.value=this.value.replace(/\D/g,'').slice(0,4);});
 function fmtDate(s){const[y,m,d]=s.split('-');return`${y}/${m.padStart(2,'0')}/${d.padStart(2,'0')}`;}
 function dashDateToInput(s){
   const parts=String(s||'').replace(/\//g,'-').split('-');
@@ -2763,7 +2764,10 @@ function toggleDashFuzzy(){setDashFuzzy(!isDashFuzzy());}
 function syncDashboardSearchMode(){
   const fuzzy=isDashFuzzy();
   const search=document.getElementById('dashSearch');
-  if(search)search.placeholder=fuzzy?'機身號碼、PO、原因、處理...':'請輸入準確S/N';
+  if(!search)return;
+  search.placeholder=fuzzy?'機身號碼、PO、原因、處理...':'請輸入準確S/N';
+  if(fuzzy){search.removeAttribute('maxlength');search.removeAttribute('inputmode');}
+  else{search.value=search.value.replace(/\D/g,'').slice(0,4);search.maxLength=4;search.inputMode='numeric';}
 }
 function clearDashboardResults(message='按「搜尋」載入資料。'){
   dashboardRecords=[];
@@ -2807,6 +2811,9 @@ async function loadDashboard(page=1){
     updateDashboardSearchState();
     return;
   }
+  const searchText=document.getElementById('dashSearch').value.trim();
+  const fuzzy=isDashFuzzy();
+  if(!fuzzy&&searchText&&!/^\d{1,4}$/.test(searchText)){showToast('請輸入最多 4 位數字的準確 S/N','err');return;}
   const rowsEl=document.getElementById('dashRows');
   const summary=document.getElementById('dashSummary');
   currentDashboardCompany=venueFilter.company;
@@ -2815,8 +2822,6 @@ async function loadDashboard(page=1){
   document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
   updateDashboardPager();
   summary.textContent='正在載入記錄...';
-  const searchText=document.getElementById('dashSearch').value.trim();
-  const fuzzy=isDashFuzzy();
   if(page===1){dashboardSelectedRecords.clear();updateDashboardSelectionTools();}
   dashboardRequest?.abort();
   dashboardRequest=new AbortController();
@@ -3278,7 +3283,6 @@ async function submitAll(){
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
-  if(poNumber&&!/^\d{4,10}$/.test(poNumber)){showToast('PO／月份號碼必須為 4–10 位數字，或留空','err');return;}
   if(!queue.length){showToast('待提交清單是空的','err');return;}
   const errors=[];const warnings=[];
   queue.forEach((item,index)=>{
