@@ -120,6 +120,9 @@
     .queue-bulk-btn:disabled{color:#484f58;cursor:not-allowed}
     .queue-bulk-btn:not(:disabled):active{background:#1f6feb;color:#fff}
     .queue-clear-btn{color:#8b949e}
+    #queueDuplicateNotice{display:none;margin-bottom:12px;padding:10px 12px;border:1px solid #9a6700;border-radius:10px;background:#2d1f00;color:#f0b45c;font-size:12px;font-weight:700;line-height:1.55;white-space:pre-line}
+    #queueDuplicateNotice.checking{display:block;border-color:#30363d;background:#0d1117;color:#8b949e}
+    #queueDuplicateNotice.warning{display:block}
     .q-editing{flex-direction:column;align-items:stretch !important}
     .q-edit-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
     .q-select-label{display:flex;align-items:center;gap:7px;margin:0;color:#8b949e;font-size:12px;cursor:pointer}
@@ -903,6 +906,7 @@
 <div id="mainRight">
 <div class="card" id="queueCard" style="display:none">
   <div class="card-title">待提交 <span class="badge" id="countBadge">0</span></div>
+  <div id="queueDuplicateNotice"></div>
   <div class="queue-tools" id="queueTools">
     <label class="queue-select-all"><input type="checkbox" id="queueSelectAll" onchange="toggleQueueSelectAll(this.checked)"> 全選</label>
     <span class="queue-selected" id="queueSelectedCount">已選 0 筆</span>
@@ -1058,8 +1062,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-2';
-const _APP_VERSION='v0.973';
+const _APP_BUMP='2026.07.14-3';
+const _APP_VERSION='v0.974';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1261,6 +1265,7 @@ function showPage(page){
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
   activeCompany=company;localStorage.setItem('_ml_company',company);
+  _queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;_duplicateCheckPendingCount=queue.length%10;
   document.getElementById('activeCompanyLabel').textContent=company;
   syncCompanySpecificFields();
   syncCasinoOptions();
@@ -1826,6 +1831,7 @@ document.getElementById('model').addEventListener('change',function(){localStora
 document.getElementById('poNumber').addEventListener('change',function(){localStorage.setItem('poNumber',this.value.trim());});
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='',_batchMode=false;
 let _queueAddBusy=false;
+let _queueDuplicateResults=[],_duplicateCheckedKeys=new Set(),_duplicateCheckPromise=null,_duplicateCheckRerun=false,_duplicateCheckPendingCount=0,_duplicateCheckRunning=false,_duplicateCheckContextVersion=0,_submitCheckBusy=false;
 function setQueueAddBusy(busy,batch=false){
   _queueAddBusy=busy;
   const singleBtn=document.getElementById('addQueueBtn');
@@ -2276,46 +2282,107 @@ async function addBatchToQueue(){
     const rowSeal=activeCompany==='GEG'?normalizeBatchVoidSeal({value:paired.detail||''}):'';
     return {sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData,...(activeCompany==='MGM'?{aaTag:canonicalAaTag(paired.detail||'')}:{}) ,...(activeCompany==='GEG'?{voidSeal:rowSeal,newVoidSeal:document.getElementById('newVoidSeal').value.trim()}:{})};
   });
-  const counts={};lines.forEach(sn=>{counts[sn]=(counts[sn]||0)+1;});
-  const duplicateNotes=[];
-  Object.keys(counts).forEach(sn=>{
-    const locations=[];
-    if(counts[sn]>1)locations.push(`批量內出現 ${counts[sn]} 次`);
-    if(todayRecords.some(r=>String(r.serialNo)===sn))locations.push('今日已提交');
-    if(queue.some(q=>q.sn===sn))locations.push('待提交清單已有');
-    if(locations.length)duplicateNotes.push(`${sn}（${locations.join('、')}）`);
-  });
-  let faultDuplicates={};
-  setQueueAddBusy(true,true);
-  try{faultDuplicates=await fetchDuplicateFaults(lines,reason);}
-  finally{setQueueAddBusy(false,true);}
-  Object.keys(faultDuplicates).forEach(sn=>duplicateNotes.push(`${sn}（30 日內有 ${faultDuplicates[sn].length} 次相同非 PM 故障）`));
-  if(duplicateNotes.length){
-    pendingBatchAdd=items;
-    document.getElementById('dupTitle').textContent='⚠ 發現重複記錄';
-    document.getElementById('dupMsg').textContent=`以下機身號碼重複：\n${[...new Set(duplicateNotes)].join('\n')}\n仍然全部加入？`;
-    document.getElementById('dupMsg').style.whiteSpace='pre-line';
-    document.getElementById('dupModal').classList.add('show');
-    return;
-  }
   doAddBatchToQueue(items);
 }
 
 function doAddBatchToQueue(items){
   queue.push(...items);saveQueue();renderQueue();
+  scheduleQueueDuplicateCheck(items.length);
   clearBatchInputs();
   _updateRecentReasons(items[0]?.reason||'');
   showToast(`✓ 已加入 ${items.length} 筆待提交`);
 }
 
-async function fetchDuplicateFaults(serialNos,reason){
+async function fetchDuplicateFaults(serialNos,reason,throwOnError=false){
   if(!reason||reason.trim().toUpperCase()==='PM')return {};
   try{
     const qs=new URLSearchParams({action:'duplicateFault',company:activeCompany,serialNos:[...new Set(serialNos)].join(','),reason,date:fmtDate(document.getElementById('date').value)});
     const r=await fetch(getScriptUrl()+'?'+qs.toString());
     const data=await r.json();
     return data.duplicates||{};
-  }catch(e){return {};}
+  }catch(e){if(throwOnError)throw e;return {};}
+}
+
+function isDuplicateCheckItem(item){return String(item?.reason||'').trim().toUpperCase()!=='PM';}
+function duplicateItemKey(item){return `${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}`;}
+function scheduleQueueDuplicateCheck(addedCount){
+  _duplicateCheckPendingCount+=Number(addedCount)||0;
+  if(_duplicateCheckPendingCount<10)return;
+  _duplicateCheckPendingCount%=10;
+  refreshQueueDuplicateChecks(false);
+}
+async function refreshQueueDuplicateChecks(force){
+  if(_duplicateCheckPromise){
+    if(!force)_duplicateCheckRerun=true;
+    await _duplicateCheckPromise;
+    if(force)return refreshQueueDuplicateChecks(true);
+    if(_duplicateCheckRerun){_duplicateCheckRerun=false;return refreshQueueDuplicateChecks(false);}
+    return;
+  }
+  const allCandidates=queue.filter(isDuplicateCheckItem);
+  const candidates=allCandidates.filter(item=>!_duplicateCheckedKeys.has(duplicateItemKey(item)));
+  if(!allCandidates.length){_queueDuplicateResults=[];renderQueueDuplicateNotice();return;}
+  if(!candidates.length){renderQueueDuplicateNotice();return;}
+  const groups=new Map();
+  candidates.forEach(item=>{
+    const reason=String(item.reason||'').trim();
+    if(!groups.has(reason))groups.set(reason,new Set());
+    groups.get(reason).add(String(item.sn||''));
+  });
+  const checkVersion=_duplicateCheckContextVersion;
+  _duplicateCheckRunning=true;renderQueueDuplicateNotice();
+  _duplicateCheckPromise=(async()=>{
+    const found=[],checkedKeys=new Set();
+    for(const [reason,snSet] of groups){
+      const serialNos=[...snSet];
+      for(let i=0;i<serialNos.length;i+=50){
+        const chunk=serialNos.slice(i,i+50);
+        try{
+          const duplicates=await fetchDuplicateFaults(chunk,reason,true);
+          chunk.forEach(sn=>checkedKeys.add(`${sn}\u0000${reason}`));
+          Object.entries(duplicates).forEach(([sn,records])=>{
+            if(records?.length)found.push({sn:String(sn),reason,count:records.length});
+          });
+        }catch(e){}
+      }
+    }
+    if(checkVersion===_duplicateCheckContextVersion){
+      checkedKeys.forEach(key=>_duplicateCheckedKeys.add(key));
+      _queueDuplicateResults=_queueDuplicateResults.filter(result=>!checkedKeys.has(`${result.sn}\u0000${result.reason}`)).concat(found);
+    }
+  })();
+  try{await _duplicateCheckPromise;}
+  finally{_duplicateCheckPromise=null;_duplicateCheckRunning=false;renderQueueDuplicateNotice();}
+}
+function collectQueueDuplicateWarnings(){
+  const faultItems=queue.filter(isDuplicateCheckItem);
+  const activeKeys=new Set(faultItems.map(duplicateItemKey));
+  const counts=new Map();
+  faultItems.forEach(item=>{const key=duplicateItemKey(item);counts.set(key,(counts.get(key)||0)+1);});
+  const warnings=[];
+  counts.forEach((count,key)=>{if(count>1){const [sn,reason]=key.split('\u0000');warnings.push(`待提交內 S/N ${sn} 有 ${count} 筆「${reason}」`);}});
+  const todayKeys=new Set();
+  faultItems.forEach(item=>{
+    const exists=todayRecords.some(record=>String(record.serialNo)===String(item.sn)&&(!record.reason||String(record.reason).trim()===String(item.reason).trim()));
+    if(exists)todayKeys.add(duplicateItemKey(item));
+  });
+  todayKeys.forEach(key=>{const [sn,reason]=key.split('\u0000');warnings.push(`S/N ${sn} 今日已提交「${reason}」`);});
+  _queueDuplicateResults.forEach(result=>{
+    if(activeKeys.has(`${result.sn}\u0000${result.reason}`))warnings.push(`S/N ${result.sn} 最近 30 日已有 ${result.count} 次「${result.reason}」`);
+  });
+  return [...new Set(warnings)];
+}
+function renderQueueDuplicateNotice(){
+  const notice=document.getElementById('queueDuplicateNotice');if(!notice)return;
+  const warnings=collectQueueDuplicateWarnings();
+  if(warnings.length){
+    notice.className='warning';
+    notice.textContent=`⚠ 發現非 PM 重複記錄\n${warnings.join('\n')}${_duplicateCheckRunning?'\n正在繼續背景檢查...':''}`;
+  }else if(_duplicateCheckRunning){
+    notice.className='checking';notice.textContent='正在背景檢查非 PM 重複記錄...';
+  }else{
+    notice.className='';notice.textContent='';
+  }
 }
 
 let _poRepairMode=false,_poRepairRecords=[],_poRepairSelected=null,_poRepairLanguage='jp',_poRepairToken=0,_poSnTimer=null;
@@ -2434,27 +2501,6 @@ async function addToQueue(){
   const inspectorData=getWynnInspectorData();
   const poRepairData=_poRepairMode&&_poRepairSelected?{poRepair:{record:{..._poRepairSelected},lockedAction:action}}:{};
   const item={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
-  const isDupToday=todayRecords.some(r=>String(r.serialNo)===sn);
-  const isDupQueue=queue.some(q=>q.sn===sn);
-  if(isDupToday||isDupQueue){
-    pendingAdd=item;
-    const where=isDupToday?'今日已提交記錄':'目前待提交清單';
-    document.getElementById('dupTitle').textContent='⚠ 機身號碼重複';
-    document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 已存在於${where}。仍然加入？`;
-    document.getElementById('dupModal').classList.add('show');
-    return;
-  }
-  let faultDuplicates={};
-  setQueueAddBusy(true,false);
-  try{faultDuplicates=await fetchDuplicateFaults([sn],reason);}
-  finally{setQueueAddBusy(false,false);}
-  if(faultDuplicates[sn]?.length){
-    pendingAdd=item;
-    document.getElementById('dupTitle').textContent='⚠ 重複故障警告';
-    document.getElementById('dupMsg').textContent=`機身號碼 ${sn} 在最近 30 日已有 ${faultDuplicates[sn].length} 次「${reason}」記錄。仍然加入？`;
-    document.getElementById('dupModal').classList.add('show');
-    return;
-  }
   doAddToQueue(item);
 }
 function cancelDupAdd(){pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');}
@@ -2465,6 +2511,7 @@ function confirmDupAdd(){
 }
 function doAddToQueue(item){
   queue.push(item);saveQueue();renderQueue();
+  scheduleQueueDuplicateCheck(1);
   document.getElementById('serialNo').value='';
   if(activeCompany==='MGM')document.getElementById('aaTag').value='';
   updateSnPadDisplay();
@@ -2553,6 +2600,7 @@ function renderQueue(){
   badge.textContent=queue.length;
   btn.disabled=queue.length===0;
   card.style.display=queue.length?'block':'none';
+  renderQueueDuplicateNotice();
   const selectAll=document.getElementById('queueSelectAll');
   const selectedLabel=document.getElementById('queueSelectedCount');
   if(selectAll){selectAll.checked=queue.length>0&&selectedCount===queue.length;selectAll.indeterminate=selectedCount>0&&selectedCount<queue.length;}
@@ -2625,7 +2673,7 @@ function loadTodayRecords(){
     .then(data=>{
       todayRecords=data.records||[];
       if(data.lastPO&&!document.getElementById('poNumber').value){document.getElementById('poNumber').value=data.lastPO;localStorage.setItem('poNumber',data.lastPO);}
-      renderTodayPanel();
+      renderTodayPanel();renderQueueDuplicateNotice();
     })
     .catch(()=>{});
 }
@@ -2633,7 +2681,7 @@ function renderTodayPanel(){}
 function toggleToday(){}
 document.getElementById('casino').addEventListener('change',function(){localStorage.setItem(_casinoKey(activeCompany),this.value);localStorage.setItem('casino',this.value);});
 document.getElementById('casino').addEventListener('change',()=>{if(queue.length>0)showToast('⚠ 待提交記錄會改用新場地','warn');loadTodayRecords();});
-document.getElementById('date').addEventListener('change',()=>{if(queue.length>0)showToast('⚠ 待提交記錄會改用新日期','warn');});
+document.getElementById('date').addEventListener('change',()=>{_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;renderQueueDuplicateNotice();if(queue.length>0)showToast('⚠ 待提交記錄會改用新日期','warn');});
 document.getElementById('dashCasino').addEventListener('change',updateDashboardSearchState);
 ['dashFrom','dashTo'].forEach(id=>{
   const input=document.getElementById(id);
@@ -3050,7 +3098,8 @@ async function saveDashboardRow(rowNumber,btn){
     showToast('儲存失敗','err');
   }
 }
-function submitAll(){
+async function submitAll(){
+  if(_submitCheckBusy)return;
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
@@ -3064,9 +3113,12 @@ function submitAll(){
     if(activeCompany==='GEG'&&item.voidSeal&&!/^\d{5}$/.test(item.voidSeal))errors.push(`S/N ${item.sn} Void Seal 必須為 5 位`);
   });
   if(errors.length){showToast(errors[0],'err');return;}
-  const snCounts={};queue.forEach(item=>snCounts[item.sn]=(snCounts[item.sn]||0)+1);
-  const repeatedSn=Object.keys(snCounts).filter(sn=>snCounts[sn]>1);if(repeatedSn.length)warnings.push(`待提交內重複 S/N：${repeatedSn.join('、')}`);
-  const todayDup=[...new Set(queue.filter(item=>todayRecords.some(r=>String(r.serialNo)===item.sn)).map(item=>item.sn))];if(todayDup.length)warnings.push(`今日已提交：${todayDup.join('、')}`);
+  const submitBtn=document.getElementById('submitBtn');
+  _submitCheckBusy=true;submitBtn.disabled=true;submitBtn.textContent='檢查重複記錄中...';
+  try{await refreshQueueDuplicateChecks(true);}
+  finally{_submitCheckBusy=false;submitBtn.disabled=queue.length===0;submitBtn.textContent='全部提交';}
+  if(!queue.length){showToast('待提交清單是空的','err');return;}
+  warnings.push(...collectQueueDuplicateWarnings());
   const seals=queue.map(item=>item.voidSeal).filter(Boolean);const repeatedSeals=[...new Set(seals.filter((seal,i)=>seals.indexOf(seal)!==i))];if(repeatedSeals.length)warnings.push(`Void Seal 重複：${repeatedSeals.join('、')}`);
   const today=new Date();today.setHours(0,0,0,0);if(new Date(date+'T00:00:00')>today)warnings.push('所選日期是未來日期');
   const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
@@ -3100,7 +3152,7 @@ async function doSubmit(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
-  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
+  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;_duplicateCheckPendingCount=0;localStorage.removeItem('_ml_queue');renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
   for(let i=0;i<records.length;i+=CHUNK_SIZE){
@@ -3157,7 +3209,6 @@ if(!_isMob){
   sealInp.setAttribute('inputmode','numeric');
   sealInp.setAttribute('maxlength','5');
   document.getElementById('snLabel').textContent='機身號碼';
-  document.getElementById('snPadBtn').style.display='flex';
   snInp.addEventListener('focus',()=>{_snPadTarget='serialNo';updateSnPadDisplay();});
   snInp.addEventListener('input',()=>{snInp.value=snInp.value.replace(/\D/g,'').slice(0,4);updateSnPadDisplay();schedulePoRepairReload();});
   snInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='serialNo';handleSnEnter();}});
@@ -3191,7 +3242,7 @@ if(localStorage.getItem('_ml_auth')===_PH){
   }
 }
 initDashboardFilters();
-if(queue.length>0){renderQueue();setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
+if(queue.length>0){_duplicateCheckPendingCount=queue.length%10;renderQueue();if(queue.length>=10)setTimeout(()=>refreshQueueDuplicateChecks(false),0);setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
 _renderStats();
 _updateRetryNotice();
 </script>
