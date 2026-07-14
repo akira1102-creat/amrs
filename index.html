@@ -1098,8 +1098,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-11';
-const _APP_VERSION='v0.982';
+const _APP_BUMP='2026.07.14-12';
+const _APP_VERSION='v0.983';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2319,7 +2319,7 @@ async function addBatchToQueue(){
     const rowSeal=activeCompany==='GEG'?normalizeBatchVoidSeal({value:paired.detail||''}):'';
     return {sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...inspectorData,...bpData,...(activeCompany==='MGM'?{aaTag:canonicalAaTag(paired.detail||'')}:{}) ,...(activeCompany==='GEG'?{voidSeal:rowSeal,newVoidSeal:document.getElementById('newVoidSeal').value.trim()}:{})};
   });
-  doAddBatchToQueue(items);
+  if(!requestSameDayDuplicateConfirmation(items,true))doAddBatchToQueue(items);
 }
 
 function doAddBatchToQueue(items){
@@ -2328,6 +2328,31 @@ function doAddBatchToQueue(items){
   clearBatchInputs();
   _updateRecentReasons(items[0]?.reason||'');
   showToast(`✓ 已加入 ${items.length} 筆待提交`);
+}
+
+function sameDayDuplicateSerials(items){
+  const casino=document.getElementById('casino').value;
+  const existing=new Set([
+    ...todayRecords.map(record=>String(record.serialNo??'')),
+    ...queue.map(item=>String(item.sn??'')),
+    ..._getLocalLog().filter(record=>record.company===activeCompany&&record.casino===casino).map(record=>String(record.serialNo??''))
+  ].filter(Boolean));
+  const seen=new Set(),duplicates=new Set();
+  items.forEach(item=>{
+    const sn=String(item.sn??'');
+    if(existing.has(sn)||seen.has(sn))duplicates.add(sn);
+    seen.add(sn);
+  });
+  return [...duplicates];
+}
+function requestSameDayDuplicateConfirmation(items,batch){
+  const duplicates=sameDayDuplicateSerials(items);
+  if(!duplicates.length)return false;
+  pendingAdd=batch?null:items[0];
+  pendingBatchAdd=batch?items:null;
+  document.getElementById('dupMsg').textContent=`S/N ${duplicates.join('、')} 今日已經輸入過，是否仍然加入待提交？`;
+  document.getElementById('dupModal').classList.add('show');
+  return true;
 }
 
 async function fetchDuplicateFaults(serialNos,reason,throwOnError=false){
@@ -2542,7 +2567,7 @@ async function addToQueue(){
   const inspectorData=getWynnInspectorData();
   const poRepairData=_poRepairMode&&_poRepairSelected?{poRepair:{record:{..._poRepairSelected},lockedAction:action}}:{};
   const item={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
-  doAddToQueue(item);
+  if(!requestSameDayDuplicateConfirmation([item],false))doAddToQueue(item);
 }
 function cancelDupAdd(){pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');}
 function confirmDupAdd(){
@@ -3381,6 +3406,14 @@ async function doSubmit(){
   }
 }
 function showToast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type?' '+type:'')+' show';setTimeout(()=>el.className='toast'+(type?' '+type:''),2800);}
+function addQueueOnFieldEnter(e){
+  if(e.key!=='Enter'||e.isComposing)return;
+  e.preventDefault();
+  e.currentTarget.closest('.combo')?.classList.remove('open');
+  if(e.currentTarget.id==='reason')onReasonChange();
+  addToQueue();
+}
+['reason','actionDrop','actionCustom'].forEach(id=>document.getElementById(id).addEventListener('keydown',addQueueOnFieldEnter));
 if(!_isMob){
   const snInp=document.getElementById('serialNo');
   const sealInp=document.getElementById('voidSeal');
@@ -3412,7 +3445,7 @@ if(!_isMob){
   aaTagInp.addEventListener('blur',()=>{normalizeAaTagInput();syncSerialFromAaTag(true);});
   aaTagInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_snPadTarget='aaTag';handleSnEnter();}});
   snInp.addEventListener('input',syncAaTagFromSerial);
-  ['actionCustom','errorDescription','boxId'].forEach(id=>{
+  ['errorDescription','boxId'].forEach(id=>{
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addToQueue();}});
   });
 }
