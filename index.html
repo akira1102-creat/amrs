@@ -46,7 +46,7 @@
     .mob #pinError{font-size:20px;height:24px}
     #setupScreen{position:fixed;inset:0;background:#0d1117;display:none;align-items:center;justify-content:center;z-index:9998}
     #setupScreen.show{display:flex}
-    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #partsListPage,body.auth-locked #brokenPartsPage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
+    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #partsListPage,body.auth-locked #brokenPartsPage,body.auth-locked #monthlyStatsPage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
     #setupBox{display:flex;flex-direction:column;gap:20px;padding:40px 32px;background:#161b22;border-radius:24px;border:1px solid #30363d;width:340px}
     #setupTitle{font-size:18px;font-weight:700;color:#e6edf3}
     #setupSub{font-size:13px;color:#8b949e;line-height:1.6}
@@ -102,6 +102,8 @@
     #optionalFields.vis{display:flex}
     .wynn-only{display:none}
     body.company-wynn .wynn-only{display:block}
+    .scl-only{display:none}
+    body.company-scl .scl-only{display:block}
     .q-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0d1117;border-radius:14px;margin-bottom:10px;border:1px solid #21262d}
     .q-sn{font-size:22px;font-weight:800;color:#58a6ff;min-width:55px}
     .q-info{flex:1}
@@ -531,6 +533,34 @@
     .bp-page-status{display:inline-block;margin-left:8px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800}
     .bp-page-status.waiting{background:#21262d;color:#8b949e}
     .bp-page-status.repaired{background:#0b3d20;color:#3fb950;border:1px solid #238636}
+    .monthly-page-shell{max-width:1100px;margin:0 auto}
+    .monthly-page-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+    .monthly-page-title{font-size:18px;font-weight:800;color:#e6edf3}
+    .monthly-page-meta{font-size:12px;color:#8b949e;margin-top:4px}
+    .monthly-refresh{padding:9px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .monthly-company-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .monthly-company-grid>.dash-mobile-empty{grid-column:1/-1}
+    .monthly-company-card{border:1px solid #30363d;border-radius:14px;background:#161b22;padding:15px;min-width:0}
+    .monthly-company-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:13px}
+    .monthly-company-name{font-size:17px;font-weight:900;color:#e6edf3}
+    .monthly-company-total{font-size:11px;color:#8b949e;margin-top:3px}
+    .monthly-po{padding:4px 7px;border:1px solid #30363d;border-radius:8px;background:#0d1117;color:#58a6ff;font-size:10px;font-weight:800;white-space:nowrap}
+    .monthly-venue{padding:10px 0;border-top:1px solid #21262d}
+    .monthly-venue:first-of-type{border-top:none}
+    .monthly-venue-line{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .monthly-venue-name{font-size:12px;font-weight:800;color:#c9d1d9;min-width:0;word-break:break-word}
+    .monthly-venue-count{font-size:11px;color:#8b949e;text-align:right;white-space:nowrap}
+    .monthly-venue-count strong{font-size:13px;color:#e6edf3}
+    .monthly-progress{height:7px;margin-top:7px;border-radius:999px;background:#0d1117;overflow:hidden}
+    .monthly-progress-bar{height:100%;border-radius:999px;background:#238636;transition:width .2s ease}
+    .monthly-progress-label{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:10px;color:#8b949e}
+    .scl-monthly-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    .scl-monthly-head .card-title{margin-bottom:0}
+    .scl-monthly-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+    .scl-monthly-po{grid-column:1/-1}
+    .scl-monthly-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px}
+    .scl-monthly-status{font-size:11px;color:#8b949e}
+    .scl-monthly-save{padding:9px 13px;border:none;border-radius:10px;background:#238636;color:#fff;font-size:12px;font-weight:800;cursor:pointer}
     .parts-list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
     .parts-list-summary{font-size:12px;color:#8b949e}
     .parts-list-refresh{flex:0 0 auto;padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
@@ -584,6 +614,10 @@
     .mob .broken-parts-page-controls{grid-template-columns:1fr 1fr}
     .mob .broken-parts-page-controls button{grid-column:1/-1}
     .mob .bp-field-options{position:fixed;left:16px;right:16px;top:auto;width:auto}
+    .mob .monthly-company-grid{grid-template-columns:1fr}
+    .mob .monthly-page-title{font-size:16px}
+    .mob .scl-monthly-grid{grid-template-columns:1fr}
+    .mob .scl-monthly-po{grid-column:auto}
     .mob .parts-list-toolbar{align-items:flex-start}
     .mob .parts-list-index{position:sticky;top:8px;z-index:5;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:14px;padding:6px;background:#161b22;border:1px solid #30363d;border-radius:10px}
     .mob .parts-list-index button{height:36px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
@@ -786,6 +820,7 @@
   <div class="menu-sub" id="companyMenu"></div>
   <div class="menu-section">資料查詢</div>
   <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
+  <button class="menu-item" id="monthlyStatsMenuBtn" onclick="showPage('monthlyStats')" type="button">每月統計</button>
   <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
   <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>損壞零件列表</span><span class="menu-chevron">▼</span></button>
   <div class="menu-sub menu-collapsible" id="brokenPartsCompanyMenu"></div>
@@ -818,6 +853,25 @@
   <div style="margin-top:14px">
     <label>PO 號碼 / 月份號碼（如 2026 年 7 月請填寫 2607）</label>
     <input type="text" id="poNumber" placeholder="e.g. 7242395 / 2607">
+  </div>
+</div>
+
+<div class="card scl-only" id="sclMonthlySettingsCard">
+  <div class="scl-monthly-head">
+    <div class="card-title">SCL 本月設定</div>
+    <button class="mini-edit-btn" onclick="loadSclMonthlySettings(true)" type="button">重新載入</button>
+  </div>
+  <div class="scl-monthly-grid">
+    <div class="scl-monthly-po"><label>本月 PO 號碼（Monthly!B2）</label><input id="sclMonthlyPo" type="text" autocomplete="off"></div>
+    <div><label>Venetian 總數（C4）</label><input id="sclMonthlyVenetian" type="number" min="0" step="1"></div>
+    <div><label>Londoner 總數（C8）</label><input id="sclMonthlyLondoner" type="number" min="0" step="1"></div>
+    <div><label>Parisian 總數（C12）</label><input id="sclMonthlyParisian" type="number" min="0" step="1"></div>
+    <div><label>Sands 總數（C16）</label><input id="sclMonthlySands" type="number" min="0" step="1"></div>
+    <div><label>Plaza 總數（C20）</label><input id="sclMonthlyPlaza" type="number" min="0" step="1"></div>
+  </div>
+  <div class="scl-monthly-actions">
+    <span class="scl-monthly-status" id="sclMonthlyStatus">尚未載入</span>
+    <button class="scl-monthly-save" id="sclMonthlySaveBtn" onclick="saveSclMonthlySettings()" type="button">儲存設定</button>
   </div>
 </div>
 
@@ -1095,6 +1149,16 @@
 </div>
 </div><!-- /dashboardPage -->
 
+<div id="monthlyStatsPage" class="app-page">
+  <div class="monthly-page-shell">
+    <div class="monthly-page-head">
+      <div><div class="monthly-page-title">每月統計</div><div class="monthly-page-meta" id="monthlyStatsMeta">正在載入本月進度...</div></div>
+      <button class="monthly-refresh" id="monthlyStatsRefreshBtn" onclick="loadMonthlyStats(true)" type="button">重新整理</button>
+    </div>
+    <div class="monthly-company-grid" id="monthlyStatsGrid"><div class="dash-mobile-empty">正在載入資料...</div></div>
+  </div>
+</div><!-- /monthlyStatsPage -->
+
 <div id="partsListPage" class="app-page">
   <div class="card" id="partsListCard">
     <div class="card-title">零件列表</div>
@@ -1182,8 +1246,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-18';
-const _APP_VERSION='v0.989';
+const _APP_BUMP='2026.07.15-01';
+const _APP_VERSION='v0.990';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1294,9 +1358,11 @@ function syncCompanySpecificFields(){
   document.body.classList.toggle('company-geg',activeCompany==='GEG');
   document.body.classList.toggle('company-mgm',activeCompany==='MGM');
   document.body.classList.toggle('company-wynn',activeCompany==='Wynn');
+  document.body.classList.toggle('company-scl',activeCompany==='SCL');
   updateAaTagLoadStatus();
   updateMgmLocationButtons();
   updateBatchModeLayout();
+  if(activeCompany==='SCL'&&getDeployId('SCL'))loadSclMonthlySettings();
 }
 function resetSetupVerification(){
   setupVerifiedId='';
@@ -1312,6 +1378,7 @@ function saveSetup(){
   COMPANIES.forEach(c=>localStorage.setItem(_companyKey(c),id));
   document.getElementById('setupScreen').classList.remove('show');
   setupReturnState=null;setupVerifiedId='';
+  _sclMonthlySettingsLoaded=false;
   unlockApp();syncCompanySpecificFields();syncCasinoOptions();showPage('input');renderCompanyMenu();loadTodayRecords();
 }
 function cancelSetup(){
@@ -1372,26 +1439,106 @@ function openGasSettings(opts={}){
 function openMenu(){renderCompanyMenu();document.getElementById('menuOverlay').classList.add('show');document.getElementById('sideMenu').classList.add('show');}
 function closeMenu(){document.getElementById('menuOverlay').classList.remove('show');document.getElementById('sideMenu').classList.remove('show');}
 function showPage(page){
-  if(page==='dashboard'||page==='partsList'||page==='brokenParts'){
+  if(page==='dashboard'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'){
     if(!hasAnyDeployId()){showToast('請先設定並測試其中一個網站代號','err');openGasSettings();return;}
     if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);}
     if(page==='dashboard')syncCasinoOptions();
     if(page==='brokenParts')syncBrokenPartsVenueOptions();
   }
+  if(page!=='input'&&document.getElementById('snPad').classList.contains('show'))hideSnPad();
   activePage=page;
   document.body.classList.toggle('dashboard-view',page!=='input');
   document.getElementById('inputPage').classList.toggle('active',page==='input');
   document.getElementById('dashboardPage').classList.toggle('active',page==='dashboard');
+  document.getElementById('monthlyStatsPage').classList.toggle('active',page==='monthlyStats');
   document.getElementById('partsListPage').classList.toggle('active',page==='partsList');
   document.getElementById('brokenPartsPage').classList.toggle('active',page==='brokenParts');
   document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
+  document.getElementById('monthlyStatsMenuBtn').classList.toggle('active',page==='monthlyStats');
   document.getElementById('partsListMenuBtn').classList.toggle('active',page==='partsList');
   document.getElementById('brokenPartsMenuBtn').classList.toggle('active',page==='brokenParts');
   renderCompanyMenu();
   closeMenu();
   if(page==='dashboard')initDashboardFilters();
+  if(page==='monthlyStats')loadMonthlyStats();
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
+}
+const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
+let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null;
+function applySclMonthlySettings(settings){
+  document.getElementById('sclMonthlyPo').value=settings?.poNumber||'';
+  Object.entries(SCL_MONTHLY_INPUTS).forEach(([venue,id])=>{document.getElementById(id).value=String(settings?.targets?.[venue]??0);});
+}
+async function loadSclMonthlySettings(force=false){
+  if(activeCompany!=='SCL'||(_sclMonthlySettingsLoaded&&!force))return;
+  const url=getScriptUrl();if(!url)return;
+  _sclMonthlySettingsRequest?.abort();_sclMonthlySettingsRequest=new AbortController();
+  const status=document.getElementById('sclMonthlyStatus');status.textContent='載入中...';status.style.color='#8b949e';
+  try{
+    const data=await (await fetch(`${url}?action=monthlySettings&company=SCL`,{signal:_sclMonthlySettingsRequest.signal})).json();
+    if(!data.success||!data.settings)throw new Error(data.message||'載入失敗');
+    applySclMonthlySettings(data.settings);_sclMonthlySettingsLoaded=true;
+    status.textContent='已從 Monthly 工作表載入';status.style.color='#3fb950';
+  }catch(e){
+    if(e.name==='AbortError')return;
+    status.textContent='載入失敗';status.style.color='#ff7b72';
+  }
+}
+async function saveSclMonthlySettings(){
+  const poNumber=document.getElementById('sclMonthlyPo').value.trim();
+  const targets={};
+  for(const [venue,id] of Object.entries(SCL_MONTHLY_INPUTS)){
+    const raw=document.getElementById(id).value.trim();
+    if(!/^\d+$/.test(raw)){showToast(`${venue} 總數必須為非負整數`,'err');return;}
+    targets[venue]=Number(raw);
+  }
+  if(!poNumber){showToast('請輸入本月 PO 號碼','err');return;}
+  const btn=document.getElementById('sclMonthlySaveBtn'),status=document.getElementById('sclMonthlyStatus');
+  btn.disabled=true;btn.textContent='儲存中...';status.textContent='正在更新 Monthly 工作表...';status.style.color='#8b949e';
+  try{
+    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateMonthlySettings',company:'SCL',settings:{poNumber,targets}})})).json();
+    if(!data.success)throw new Error(data.message||'儲存失敗');
+    applySclMonthlySettings(data.settings||{poNumber,targets});_sclMonthlySettingsLoaded=true;
+    status.textContent='已更新 Monthly 工作表';status.style.color='#3fb950';showToast('✓ SCL 本月設定已更新');
+    if(activePage==='monthlyStats')loadMonthlyStats(true);
+  }catch(e){status.textContent=e.message||'儲存失敗';status.style.color='#ff7b72';showToast(e.message||'儲存失敗','err');}
+  finally{btn.disabled=false;btn.textContent='儲存設定';}
+}
+function renderMonthlyVenue(venue){
+  const done=Number(venue.done)||0;
+  if(venue.target==null)return `<div class="monthly-venue"><div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> 已完成</span></div></div>`;
+  const target=Math.max(0,Number(venue.target)||0),remaining=Math.max(0,Number(venue.remaining)||0),percent=Math.max(0,Number(venue.percent)||0),barWidth=Math.min(percent,100);
+  return `<div class="monthly-venue">
+    <div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> / ${target}</span></div>
+    <div class="monthly-progress"><div class="monthly-progress-bar" style="width:${barWidth}%"></div></div>
+    <div class="monthly-progress-label"><span>${percent}%</span><span>剩餘 ${remaining}</span></div>
+  </div>`;
+}
+function renderMonthlyCompany(company){
+  const venues=Array.isArray(company.venues)?company.venues:[];
+  const totalDone=venues.reduce((sum,item)=>sum+(Number(item.done)||0),0);
+  const targeted=venues.filter(item=>item.target!=null),totalTarget=targeted.reduce((sum,item)=>sum+(Number(item.target)||0),0);
+  const totalText=targeted.length?`本月完成 ${totalDone} / ${totalTarget}`:`本月完成 ${totalDone}`;
+  return `<section class="monthly-company-card">
+    <div class="monthly-company-head"><div><div class="monthly-company-name">${esc(company.company)}</div><div class="monthly-company-total">${totalText}</div></div><span class="monthly-po">PO ${esc(company.poNumber||'—')}</span></div>
+    ${venues.map(renderMonthlyVenue).join('')}
+  </section>`;
+}
+async function loadMonthlyStats(){
+  const url=getScriptUrl();if(!url)return;
+  _monthlyStatsRequest?.abort();_monthlyStatsRequest=new AbortController();
+  const grid=document.getElementById('monthlyStatsGrid'),meta=document.getElementById('monthlyStatsMeta'),btn=document.getElementById('monthlyStatsRefreshBtn');
+  grid.innerHTML='<div class="dash-mobile-empty">正在載入六間公司資料...</div>';meta.textContent='正在計算本月進度...';btn.disabled=true;btn.textContent='載入中...';
+  try{
+    const data=await (await fetch(`${url}?action=monthlyStats`,{signal:_monthlyStatsRequest.signal})).json();
+    if(!data.success||!Array.isArray(data.companies))throw new Error(data.message||'載入失敗');
+    meta.textContent=`${data.monthLabel} · SCL 按 Monthly!B2，其餘公司按 ${data.monthCode} 統計`;
+    grid.innerHTML=data.companies.map(renderMonthlyCompany).join('')||'<div class="dash-mobile-empty">沒有統計資料。</div>';
+  }catch(e){
+    if(e.name==='AbortError')return;
+    meta.textContent='載入失敗';grid.innerHTML=`<div class="dash-mobile-empty">${esc(e.message||'無法載入每月統計')}</div>`;
+  }finally{btn.disabled=false;btn.textContent='重新整理';}
 }
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
