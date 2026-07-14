@@ -1179,8 +1179,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-15';
-const _APP_VERSION='v0.986';
+const _APP_BUMP='2026.07.14-16';
+const _APP_VERSION='v0.987';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2216,6 +2216,7 @@ function changeBpListPage(delta){
 function setBpListPageSize(value){
   _bpListPageSize=[10,30,50,80,100].includes(Number(value))?Number(value):10;
   document.getElementById('bpListPageSize').value=String(_bpListPageSize);
+  saveListPreferences();
   loadBrokenPartsListEditor(1);
 }
 function updateBpListPager(){
@@ -2349,12 +2350,47 @@ const BP_PAGE_FIELDS=[
 ];
 let _bpPageRecords=[],_bpPage=1,_bpPageTotalPages=1,_bpPageTotalMatches=0,_bpPageSize=10,_bpPageEditingIndex=-1,_bpPageRequest=null,_bpPageCardColumns=1;
 let _bpPageVisibleFields=new Set(BP_PAGE_FIELDS.map(([key])=>key));
+const LIST_PREFERENCES_KEY='_amrs_list_preferences_v1';
+function saveListPreferences(){
+  try{
+    localStorage.setItem(LIST_PREFERENCES_KEY,JSON.stringify({
+      dashboardPageSize,dashboardCardColumns,
+      brokenPartsModalPageSize:_bpListPageSize,
+      brokenPartsPageSize:_bpPageSize,
+      brokenPartsCardColumns:_bpPageCardColumns,
+      brokenPartsVisibleFields:[..._bpPageVisibleFields]
+    }));
+  }catch(e){}
+}
+function restoreListPreferences(){
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem(LIST_PREFERENCES_KEY)||'{}')||{};}catch(e){}
+  const pageSizes=[10,30,50,80,100],columns=[1,2,3];
+  dashboardPageSize=pageSizes.includes(Number(saved.dashboardPageSize))?Number(saved.dashboardPageSize):10;
+  dashboardCardColumns=columns.includes(Number(saved.dashboardCardColumns))?Number(saved.dashboardCardColumns):1;
+  _bpListPageSize=pageSizes.includes(Number(saved.brokenPartsModalPageSize))?Number(saved.brokenPartsModalPageSize):10;
+  _bpPageSize=pageSizes.includes(Number(saved.brokenPartsPageSize))?Number(saved.brokenPartsPageSize):10;
+  _bpPageCardColumns=columns.includes(Number(saved.brokenPartsCardColumns))?Number(saved.brokenPartsCardColumns):1;
+  if(Array.isArray(saved.brokenPartsVisibleFields)){
+    const validFields=new Set(BP_PAGE_FIELDS.map(([key])=>key));
+    _bpPageVisibleFields=new Set(saved.brokenPartsVisibleFields.filter(key=>validFields.has(key)));
+  }
+  document.getElementById('dashPageSize').value=String(dashboardPageSize);
+  document.getElementById('dashCardColumns').value=String(dashboardCardColumns);
+  document.getElementById('dashMobileRows').style.setProperty('--card-columns',String(dashboardCardColumns));
+  document.getElementById('bpListPageSize').value=String(_bpListPageSize);
+  document.getElementById('bpPageSize').value=String(_bpPageSize);
+  document.getElementById('bpPageCardColumns').value=String(_bpPageCardColumns);
+  document.getElementById('bpPageRows').style.setProperty('--card-columns',String(_bpPageCardColumns));
+  renderBrokenPartsPageFieldOptions();
+}
 function renderBrokenPartsPageFieldOptions(){
   const root=document.getElementById('bpPageFieldOptions');if(!root)return;
   root.innerHTML=BP_PAGE_FIELDS.map(([key,label])=>`<label class="bp-field-option"><input type="checkbox" value="${esc(key)}" onchange="toggleBrokenPartsPageField(this.value,this.checked)"${_bpPageVisibleFields.has(key)?' checked':''}><span>${esc(label)}</span></label>`).join('');
 }
 function toggleBrokenPartsPageField(key,checked){
   if(checked)_bpPageVisibleFields.add(key);else _bpPageVisibleFields.delete(key);
+  saveListPreferences();
   renderBrokenPartsPageRows();
 }
 async function loadBrokenPartsPage(page=_bpPage){
@@ -2434,11 +2470,12 @@ async function deleteBrokenPartsPageRecord(index,btn){
     showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsPage(_bpPage);
   }catch(e){showToast(e.message||'刪除失敗','err');btn.disabled=false;btn.textContent='刪除';}
 }
-function setBrokenPartsPageSize(value){_bpPageSize=[10,30,50,80,100].includes(Number(value))?Number(value):10;document.getElementById('bpPageSize').value=String(_bpPageSize);loadBrokenPartsPage(1);}
+function setBrokenPartsPageSize(value){_bpPageSize=[10,30,50,80,100].includes(Number(value))?Number(value):10;document.getElementById('bpPageSize').value=String(_bpPageSize);saveListPreferences();loadBrokenPartsPage(1);}
 function setBrokenPartsPageCardColumns(value){
   _bpPageCardColumns=[1,2,3].includes(Number(value))?Number(value):1;
   document.getElementById('bpPageCardColumns').value=String(_bpPageCardColumns);
   document.getElementById('bpPageRows').style.setProperty('--card-columns',String(_bpPageCardColumns));
+  saveListPreferences();
 }
 function changeBrokenPartsPage(delta){const page=Math.min(Math.max(1,_bpPage+delta),_bpPageTotalPages);if(page!==_bpPage)loadBrokenPartsPage(page);}
 function updateBrokenPartsPagePager(){
@@ -3243,12 +3280,14 @@ function updateDashboardPager(){
 function setDashboardPageSize(value){
   dashboardPageSize=[10,30,50,80,100].includes(Number(value))?Number(value):10;
   document.getElementById('dashPageSize').value=String(dashboardPageSize);
+  saveListPreferences();
   if(dashboardLastQuery)loadDashboard(1);else updateDashboardPager();
 }
 function setDashboardCardColumns(value){
   dashboardCardColumns=[1,2,3].includes(Number(value))?Number(value):1;
   document.getElementById('dashCardColumns').value=String(dashboardCardColumns);
   document.getElementById('dashMobileRows').style.setProperty('--card-columns',String(dashboardCardColumns));
+  saveListPreferences();
 }
 function changeDashPage(delta){
   const nextPage=Math.min(Math.max(1,dashboardPage+delta),dashboardTotalPages);
@@ -3704,7 +3743,7 @@ if(!_isMob){
   });
 }
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-renderBrokenPartsPageFieldOptions();
+restoreListPreferences();
 renderCompanyMenu();
 syncCompanySpecificFields();
 loadTemplateMappings();
