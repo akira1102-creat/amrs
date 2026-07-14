@@ -442,14 +442,16 @@
     .dash-tool-btn.primary{background:#1f6feb;border-color:#388bfd;color:#fff}
     .dash-tool-btn:disabled{color:#484f58;cursor:not-allowed}
     .dash-selected-count{font-size:12px;color:#58a6ff;font-weight:800;margin-left:auto}
-    .dash-insights{display:none;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
-    .dash-insights.show{display:grid}
-    .dash-insight{border:1px solid #21262d;background:#0d1117;border-radius:10px;padding:10px}
+    .dash-insights{display:none;flex-wrap:wrap;align-items:stretch;gap:8px;margin-bottom:12px}
+    .dash-insights.show{display:flex}
+    .dash-insight{flex:1 1 180px;border:1px solid #21262d;background:#0d1117;border-radius:10px;padding:10px}
+    .dash-insight.compact{flex:0 0 auto;width:max-content;max-width:100%}
+    .dash-insight.compact .dash-insight-label,.dash-insight.compact .dash-insight-value{white-space:nowrap}
     .dash-insight-label{font-size:11px;color:#8b949e;margin-bottom:4px}
     .dash-insight-value{font-size:14px;color:#e6edf3;font-weight:800;line-height:1.35;word-break:break-word}
     .repeat-sn-link{display:inline;padding:0;border:none;background:none;color:#58a6ff;font:inherit;font-weight:800;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
     .repeat-sn-link:hover{color:#79c0ff}
-    .dash-history{grid-column:1/-1;border-left:3px solid #58a6ff}
+    .dash-history{flex-basis:100%;border-left:3px solid #58a6ff}
     .dash-select{width:18px;height:18px;accent-color:#388bfd;flex-shrink:0}
     .dash-table-wrap{display:none}
     .dash-table{width:100%;border-collapse:collapse;min-width:980px}
@@ -525,7 +527,8 @@
     .mob .dash-search-line{grid-template-columns:minmax(0,1fr) 100px}
     .mob .dash-actions{grid-column:1/-1}
     .mob .dash-card-form{grid-template-columns:1fr}
-    .mob .dash-insights{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .mob .dash-insight{flex-basis:calc(50% - 4px)}
+    .mob .dash-insight.compact{flex:0 0 auto}
     .mob .dash-selected-count{width:100%;margin-left:0}
     .mob #partsListCard.card{padding:16px 15px}
     .mob .parts-list-toolbar{align-items:flex-start}
@@ -1075,8 +1078,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-6';
-const _APP_VERSION='v0.977';
+const _APP_BUMP='2026.07.14-7';
+const _APP_VERSION='v0.978';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1853,7 +1856,7 @@ function setQueueAddBusy(busy,batch=false){
   if(singleBtn){singleBtn.disabled=busy;singleBtn.textContent=busy&&!batch?'檢查重複記錄中...':'＋ 加入待提交';}
   if(batchBtn){batchBtn.disabled=busy;batchBtn.textContent=busy&&batch?'檢查重複記錄中...':'＋ 全部加入待提交';}
 }
-let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0;
+let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0,_repeatRecords=[],_repeatRecordsEditingIdx=-1,_repeatRecordsSerial='';
 let dashboardSelectedRecords=new Map();
 const DASH_PAGE_SIZE=10;
 let selectedQueueIdxs=new Set();
@@ -2886,28 +2889,32 @@ function renderDashboardMobileCard(record,index){
     ${rows}
   </section>`;
 }
-function renderDashboardEditCard(record,index){
+function dashboardEditFields(record){
   const rowCompany=record.company||currentDashboardCompany||activeCompany;
   const casinoValue=record.casino||'';
   const casinoChoices=casinoOptionsForCompany(rowCompany);
   const casinoList=casinoValue&&!casinoChoices.includes(casinoValue)?[casinoValue,...casinoChoices]:casinoChoices;
   const model=record.model||'SAE';
+  return `
+    ${dashEditField('日期','date',dashDateToInput(record.date),'date')}
+    <div><label>場地</label><select data-card-field="casino">${casinoList.map(c=>`<option value="${esc(c)}"${c===casinoValue?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    ${dashEditField('PO Number','poNumber',record.poNumber)}
+    <div><label>機型</label><select data-card-field="model"><option${model==='SAE'?' selected':''}>SAE</option><option${model==='TAE'?' selected':''}>TAE</option></select></div>
+    ${dashEditField('Serial No.','serialNo',record.serialNo)}
+    ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
+    ${rowCompany==='MGM'?`<div><label>Location</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
+    ${rowCompany==='Wynn'?dashEditField('Inspector','inspector',record.inspector):''}
+    ${dashEditField('Reason','reason',record.reason)}
+    ${dashEditField('Action Taken','actionTaken',record.actionTaken)}
+    ${dashEditField('Error Description','errorDescription',record.errorDescription)}
+    ${dashEditField('Box ID','boxId',record.boxId)}`;
+}
+function renderDashboardEditCard(record,index){
   const displayNumber=(dashboardPage-1)*DASH_PAGE_SIZE+index+1;
   return `<section class="dash-mobile-card" id="dashCardEdit${index}">
     <div class="dash-mobile-title"><span>── 編輯記錄 ${displayNumber} ──</span></div>
     <div class="dash-card-form">
-      ${dashEditField('日期','date',dashDateToInput(record.date),'date')}
-      <div><label>場地</label><select data-card-field="casino">${casinoList.map(c=>`<option value="${esc(c)}"${c===casinoValue?' selected':''}>${esc(c)}</option>`).join('')}</select></div>
-      ${dashEditField('PO Number','poNumber',record.poNumber)}
-      <div><label>機型</label><select data-card-field="model"><option${model==='SAE'?' selected':''}>SAE</option><option${model==='TAE'?' selected':''}>TAE</option></select></div>
-      ${dashEditField('Serial No.','serialNo',record.serialNo)}
-      ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
-      ${rowCompany==='MGM'?`<div><label>Location</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
-      ${rowCompany==='Wynn'?dashEditField('Inspector','inspector',record.inspector):''}
-      ${dashEditField('Reason','reason',record.reason)}
-      ${dashEditField('Action Taken','actionTaken',record.actionTaken)}
-      ${dashEditField('Error Description','errorDescription',record.errorDescription)}
-      ${dashEditField('Box ID','boxId',record.boxId)}
+      ${dashboardEditFields(record)}
     </div>
     <div class="dash-card-actions">
       <button class="dash-card-btn danger" onclick="deleteDashboardCard(${index},this)" type="button">刪除</button>
@@ -2953,8 +2960,8 @@ function renderDashboardInsights(stats,history){
   const repeatLinks=items=>(items||[]).map(i=>`<button class="repeat-sn-link" data-sn="${esc(i.label)}" onclick="openRepeatRecords(this.dataset.sn)" type="button">${esc(i.label)} (${Number(i.count)||0})</button>`).join('、')||'沒有資料';
   const models=Object.entries(stats.models||{}).map(([k,v])=>`${esc(k)} (${v})`).join(' / ')||'沒有資料';
   let html=`
-    <div class="dash-insight"><div class="dash-insight-label">記錄總數</div><div class="dash-insight-value">${Number(stats.total||0)}</div></div>
-    <div class="dash-insight"><div class="dash-insight-label">機型分佈</div><div class="dash-insight-value">${models}</div></div>
+    <div class="dash-insight compact"><div class="dash-insight-label">記錄總數</div><div class="dash-insight-value">${Number(stats.total||0)}</div></div>
+    <div class="dash-insight compact"><div class="dash-insight-label">機型分佈</div><div class="dash-insight-value">${models}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">常見原因</div><div class="dash-insight-value">${list(stats.topReasons)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">場地分佈</div><div class="dash-insight-value">${list(stats.topCasinos)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">有重複維修 S/N</div><div class="dash-insight-value">${repeatLinks(stats.repeatSerials)}</div></div>`;
@@ -2964,11 +2971,59 @@ function renderDashboardInsights(stats,history){
   }
   el.innerHTML=html;el.classList.add('show');
 }
-function closeRepeatRecords(){_repeatRecordsRequestToken++;document.getElementById('repeatRecordsModal').classList.remove('show');}
+function closeRepeatRecords(){_repeatRecordsRequestToken++;_repeatRecordsEditingIdx=-1;document.getElementById('repeatRecordsModal').classList.remove('show');}
 function renderRepeatRecord(record,index){
+  if(index===_repeatRecordsEditingIdx)return renderRepeatRecordEdit(record,index);
   const rowCompany=record.company||currentDashboardCompany||activeCompany;
   const rows=dashFieldRows(record,rowCompany).map(([key,value])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(key)}</div><div class="dash-mobile-val">${esc(value)}</div></div>`).join('');
-  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span></div>${rows}</section>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span><button class="dash-card-btn" onclick="startRepeatRecordEdit(${index})" type="button">編輯</button></div>${rows}</section>`;
+}
+function renderRepeatRecordEdit(record,index){
+  return `<section class="dash-mobile-card" id="repeatCardEdit${index}">
+    <div class="dash-mobile-title"><span>── 編輯記錄 ${index+1} ──</span></div>
+    <div class="dash-card-form">${dashboardEditFields(record)}</div>
+    <div class="dash-card-actions">
+      <button class="dash-card-btn danger" onclick="deleteRepeatRecord(${index},this)" type="button">刪除</button>
+      <button class="dash-card-btn" onclick="cancelRepeatRecordEdit()" type="button">取消</button>
+      <button class="dash-card-btn primary" onclick="saveRepeatRecord(${index},this)" type="button">儲存</button>
+    </div>
+  </section>`;
+}
+function renderRepeatRecords(){
+  document.getElementById('repeatRecordsTitle').textContent=`S/N ${_repeatRecordsSerial} · ${_repeatRecords.length} 筆記錄`;
+  document.getElementById('repeatRecordsRows').innerHTML=_repeatRecords.length?_repeatRecords.map(renderRepeatRecord).join(''):'<div class="dash-mobile-empty">沒有相符記錄。</div>';
+}
+function startRepeatRecordEdit(index){_repeatRecordsEditingIdx=index;renderRepeatRecords();}
+function cancelRepeatRecordEdit(){_repeatRecordsEditingIdx=-1;renderRepeatRecords();}
+function readCardRecord(card,original){
+  const record={rowNumber:original.rowNumber,company:original.company||currentDashboardCompany||activeCompany};
+  card.querySelectorAll('[data-card-field]').forEach(element=>{record[element.dataset.cardField]=element.dataset.cardField==='date'?dashInputToDate(element.value):element.value.trim();});
+  return record;
+}
+async function saveRepeatRecord(index,button){
+  const card=document.getElementById(`repeatCardEdit${index}`),original=_repeatRecords[index];if(!card||!original)return;
+  const record=readCardRecord(card,original);button.disabled=true;button.textContent='儲存中...';
+  try{
+    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateRecord',record})})).json();
+    if(!data.success)throw new Error(data.message||'儲存失敗');
+    const updated={...original,...record};_repeatRecords[index]=updated;_repeatRecordsEditingIdx=-1;
+    const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0)dashboardRecords[outerIndex]=updated;
+    renderRepeatRecords();renderDashboardPage();showToast('✓ 記錄已更新');
+  }catch(e){button.disabled=false;button.textContent='儲存';showToast(e.message||'儲存失敗','err');}
+}
+async function deleteRepeatRecord(index,button){
+  const original=_repeatRecords[index];if(!original)return;
+  if(!window.confirm(`確定刪除 S/N ${original.serialNo||''} 這筆記錄？此操作不能復原。`))return;
+  button.disabled=true;button.textContent='刪除中...';
+  try{
+    const record={...original,company:original.company||currentDashboardCompany||activeCompany};
+    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'deleteRecord',record})})).json();
+    if(!data.success)throw new Error(data.message||'刪除失敗');
+    _repeatRecords.splice(index,1);_repeatRecordsEditingIdx=-1;dashboardSelectedRecords.delete(String(original.rowNumber));
+    const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0){dashboardRecords.splice(outerIndex,1);dashboardTotalMatches=Math.max(0,dashboardTotalMatches-1);}
+    renderRepeatRecords();renderDashboardPage();showToast('✓ 記錄已刪除');
+    if(parseDashVenueFilter().company)await loadDashboard(dashboardPage);
+  }catch(e){button.disabled=false;button.textContent='刪除';showToast(e.message||'刪除失敗','err');}
 }
 async function openRepeatRecords(serialNo){
   const sn=String(serialNo||'').trim();if(!sn||!dashboardLastQuery)return;
@@ -2989,8 +3044,7 @@ async function openRepeatRecords(serialNo){
       records.push(...(data.records||[]));
     }
     if(token!==_repeatRecordsRequestToken)return;
-    title.textContent=`S/N ${sn} · ${records.length} 筆記錄`;
-    rows.innerHTML=records.length?records.map(renderRepeatRecord).join(''):'<div class="dash-mobile-empty">沒有相符記錄。</div>';
+    _repeatRecordsSerial=sn;_repeatRecords=records;_repeatRecordsEditingIdx=-1;renderRepeatRecords();
   }catch(e){
     if(token===_repeatRecordsRequestToken)rows.innerHTML='<div class="dash-mobile-empty">記錄載入失敗。</div>';
   }
