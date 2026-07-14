@@ -120,6 +120,7 @@
     .queue-bulk-btn:disabled{color:#484f58;cursor:not-allowed}
     .queue-bulk-btn:not(:disabled):active{background:#1f6feb;color:#fff}
     .queue-clear-btn{color:#8b949e}
+    .queue-delete-btn{background:#3d1214;border-color:#da3633;color:#ff7b72}
     #queueDuplicateNotice{display:none;margin-bottom:12px;padding:10px 12px;border:1px solid #9a6700;border-radius:10px;background:#2d1f00;color:#f0b45c;font-size:12px;font-weight:700;line-height:1.55;white-space:pre-line}
     #queueDuplicateNotice.checking{display:block;border-color:#30363d;background:#0d1117;color:#8b949e}
     #queueDuplicateNotice.warning{display:block}
@@ -1000,6 +1001,7 @@
     <span class="queue-selected" id="queueSelectedCount">已選 0 筆</span>
     <button class="queue-bulk-btn" id="bulkSaeBtn" onclick="bulkSetModel('SAE')" type="button" disabled>SAE</button>
     <button class="queue-bulk-btn" id="bulkTaeBtn" onclick="bulkSetModel('TAE')" type="button" disabled>TAE</button>
+    <button class="queue-bulk-btn queue-delete-btn" id="bulkDeleteBtn" onclick="deleteQueueSelection()" type="button" disabled>刪除選取</button>
     <button class="queue-bulk-btn queue-clear-btn" id="bulkClearBtn" onclick="clearQueueSelection()" type="button" disabled>清除選取</button>
   </div>
   <div id="queueList"></div>
@@ -1180,8 +1182,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-17';
-const _APP_VERSION='v0.988';
+const _APP_BUMP='2026.07.14-18';
+const _APP_VERSION='v0.989';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1798,6 +1800,21 @@ let _templateMappings=[];
 const _comboRegistry={};
 let _comboSelecting=false;
 function _comboOption(o){return typeof o==='string'?{value:o,label:o}:o;}
+function _sortComboOptions(options,q,usageType,keepAll){
+  const usage=(_comboUsage&&_comboUsage[usageType])||{};
+  return options.map((option,index)=>{
+    const value=String(option.value||''),label=String(option.label||value);
+    const text=`${value}\n${label}`.toLowerCase();
+    const exact=q&&(value.toLowerCase()===q||label.toLowerCase()===q);
+    const starts=q&&(value.toLowerCase().startsWith(q)||label.toLowerCase().startsWith(q));
+    const related=!q||text.includes(q);
+    return {option,index,related,matchRank:!q?0:exact?0:starts?1:related?2:3,uses:Number(usage[value])||0};
+  }).filter(item=>keepAll||item.related).sort((a,b)=>{
+    if(a.matchRank!==b.matchRank)return a.matchRank-b.matchRank;
+    if(a.uses!==b.uses)return b.uses-a.uses;
+    return a.index-b.index;
+  }).map(item=>item.option);
+}
 function _setupSearchCombo(inputId,menuId,getOptions,config={}){
   const input=document.getElementById(inputId),menu=document.getElementById(menuId);
   if(!input||!menu)return;
@@ -1810,9 +1827,8 @@ function _setupSearchCombo(inputId,menuId,getOptions,config={}){
       if(box)box.classList.remove('open');
       return;
     }
-    const opts=getOptions().map(_comboOption)
-      .filter(o=>!q||o.value.toLowerCase().includes(q)||String(o.label||'').toLowerCase().includes(q))
-      .slice(0,40);
+    const opts=_sortComboOptions(getOptions().map(_comboOption),q,config.usageType,!!config.keepAll)
+      .slice(0,config.maxOptions||40);
     menu.innerHTML=opts.length?opts.map(o=>`<button class="combo-option" type="button" data-value="${esc(o.value)}">${esc(o.label||o.value)}</button>`).join(''):'<div class="combo-empty">沒有相符選項</div>';
     if(box)box.classList.add('open');
   };
@@ -1837,6 +1853,16 @@ function _refreshSearchCombo(inputId){
 document.addEventListener('click',e=>{document.querySelectorAll('.combo.open').forEach(box=>{if(!box.contains(e.target))box.classList.remove('open');});});
 let _recentReasons=[];
 try{_recentReasons=JSON.parse(localStorage.getItem('_ml_recent_r')||'[]');}catch(e){}
+const COMBO_USAGE_KEY='_amrs_combo_usage_v1';
+let _comboUsage={reason:{},action:{}};
+try{
+  const savedUsage=JSON.parse(localStorage.getItem(COMBO_USAGE_KEY)||'{}');
+  ['reason','action'].forEach(type=>{
+    if(savedUsage?.[type]&&typeof savedUsage[type]==='object'){
+      Object.entries(savedUsage[type]).forEach(([value,count])=>{if(value&&Number(count)>0)_comboUsage[type][value]=Number(count);});
+    }
+  });
+}catch(e){}
 function _reasonOptions(){return _recentReasons.length?_recentReasons.concat(REASONS.filter(r=>!_recentReasons.includes(r))):REASONS;}
 function applyTemplateMappings(mappings){
   _templateMappings=(mappings||[]).map(m=>({reason:String(m.reason||'').trim(),action:String(m.action||'').trim()})).filter(m=>m.reason||m.action);
@@ -1955,17 +1981,20 @@ function _rebuildReasonSelect(){
   if(!rSel.value)rSel.value=_recentReasons[0]||'PM';
   _refreshSearchCombo('reason');
 }
-function _updateRecentReasons(reason){
-  _recentReasons=[reason,..._recentReasons.filter(r=>r!==reason)].slice(0,5);
+function _updateRecentReasons(reason,action=''){
+  if(reason)_recentReasons=[reason,..._recentReasons.filter(r=>r!==reason)].slice(0,5);
   localStorage.setItem('_ml_recent_r',JSON.stringify(_recentReasons));
+  if(reason)_comboUsage.reason[reason]=(_comboUsage.reason[reason]||0)+1;
+  if(action)_comboUsage.action[action]=(_comboUsage.action[action]||0)+1;
+  try{localStorage.setItem(COMBO_USAGE_KEY,JSON.stringify(_comboUsage));}catch(e){}
   const rSel=document.getElementById('reason');
   const cur=rSel.value;
   _rebuildReasonSelect();
   rSel.value=cur;
 }
 _rebuildReasonSelect();
-_setupSearchCombo('reason','reasonMenu',_reasonOptions);
-_setupSearchCombo('actionDrop','actionMenu',()=>ALL_ACTIONS);
+_setupSearchCombo('reason','reasonMenu',_reasonOptions,{keepAll:true,usageType:'reason',maxOptions:Infinity});
+_setupSearchCombo('actionDrop','actionMenu',()=>ALL_ACTIONS,{keepAll:true,usageType:'action',maxOptions:Infinity});
 _setupSearchCombo('itemCode','itemCodeMenu',()=>_partsCodes.map(p=>({value:p.code,label:`${p.code} ${_partsLanguage==='en'?(p.colC||p.desc||''):(p.desc||p.colC||'')}`})),{minChars:1});
 document.getElementById('actionDrop').value='Preventive Maintenance';
 const _t=new Date();
@@ -2616,7 +2645,7 @@ function doAddBatchToQueue(items){
   queue.push(...items);saveQueue();renderQueue();
   scheduleQueueDuplicateCheck(items);
   clearBatchInputs();
-  _updateRecentReasons(items[0]?.reason||'');
+  _updateRecentReasons(items[0]?.reason||'',items[0]?.action||'');
   showToast(`✓ 已加入 ${items.length} 筆待提交`);
 }
 
@@ -2874,7 +2903,7 @@ function doAddToQueue(item){
   if(activeCompany==='GEG'){document.getElementById('voidSeal').value='';document.getElementById('newVoidSeal').value='';}
   if(optionalVisible){document.getElementById('errorDescription').value='';document.getElementById('boxId').value='';document.getElementById('inspector').value='';}
   _resetBpFields();
-  _updateRecentReasons(item.reason);
+  _updateRecentReasons(item.reason,item.action);
   document.getElementById('reason').value='PM';
   detachPoRepairMode(false);
   switchToDrop();document.getElementById('actionDrop').value='Preventive Maintenance';
@@ -2921,6 +2950,15 @@ function toggleQueueSelectAll(checked){
   renderQueue();
 }
 function clearQueueSelection(){selectedQueueIdxs.clear();renderQueue();}
+function deleteQueueSelection(){
+  const idxs=[...selectedQueueIdxs].filter(i=>queue[i]).sort((a,b)=>b-a);
+  if(!idxs.length){showToast('請先選擇記錄','err');return;}
+  if(!confirm(`確定刪除已選擇的 ${idxs.length} 筆待提交記錄？`))return;
+  if(editingIdx>=0&&selectedQueueIdxs.has(editingIdx)){editingIdx=-1;editTemp=null;}
+  idxs.forEach(i=>queue.splice(i,1));
+  selectedQueueIdxs.clear();
+  saveQueue();renderQueue();showToast(`✓ 已刪除 ${idxs.length} 筆待提交記錄`);
+}
 function bulkSetModel(model){
   const idxs=[...selectedQueueIdxs].filter(i=>queue[i]);
   if(!idxs.length){showToast('請先選擇記錄','err');return;}
@@ -2962,7 +3000,7 @@ function renderQueue(){
   const selectedLabel=document.getElementById('queueSelectedCount');
   if(selectAll){selectAll.checked=queue.length>0&&selectedCount===queue.length;selectAll.indeterminate=selectedCount>0&&selectedCount<queue.length;}
   if(selectedLabel)selectedLabel.textContent=`已選 ${selectedCount} 筆`;
-  ['bulkSaeBtn','bulkTaeBtn','bulkClearBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=selectedCount===0;});
+  ['bulkSaeBtn','bulkTaeBtn','bulkDeleteBtn','bulkClearBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=selectedCount===0;});
   if(!_isMob)document.getElementById('mainLayout').classList.toggle('has-queue',queue.length>0);
   updateSnPadQueue();
   const displayIdxs=[...queue.keys()].reverse();
@@ -3018,8 +3056,8 @@ function renderQueue(){
     </div>`;
   }).join('');
   if(editingIdx>=0&&editTemp){
-    _setupSearchCombo('eq-reason','eq-reason-menu',()=>REASONS);
-    if(editTemp.actionMode==='drop')_setupSearchCombo('eq-action-drop','eq-action-menu',()=>ALL_ACTIONS);
+    _setupSearchCombo('eq-reason','eq-reason-menu',_reasonOptions,{keepAll:true,usageType:'reason',maxOptions:Infinity});
+    if(editTemp.actionMode==='drop')_setupSearchCombo('eq-action-drop','eq-action-menu',()=>ALL_ACTIONS,{keepAll:true,usageType:'action',maxOptions:Infinity});
   }
 }
 function loadTodayRecords(){
