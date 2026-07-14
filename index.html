@@ -447,6 +447,8 @@
     .dash-insight{border:1px solid #21262d;background:#0d1117;border-radius:10px;padding:10px}
     .dash-insight-label{font-size:11px;color:#8b949e;margin-bottom:4px}
     .dash-insight-value{font-size:14px;color:#e6edf3;font-weight:800;line-height:1.35;word-break:break-word}
+    .repeat-sn-link{display:inline;padding:0;border:none;background:none;color:#58a6ff;font:inherit;font-weight:800;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+    .repeat-sn-link:hover{color:#79c0ff}
     .dash-history{grid-column:1/-1;border-left:3px solid #58a6ff}
     .dash-select{width:18px;height:18px;accent-color:#388bfd;flex-shrink:0}
     .dash-table-wrap{display:none}
@@ -501,8 +503,8 @@
     .parts-list-jp{color:#e6edf3;margin-top:4px}
     .parts-list-en{color:#8b949e;margin-top:2px}
     .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
-    #bulkEditModal,#auditModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
-    #bulkEditModal.show,#auditModal.show{display:flex}
+    #bulkEditModal,#auditModal,#repeatRecordsModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #bulkEditModal.show,#auditModal.show,#repeatRecordsModal.show{display:flex}
     .work-modal-box{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
     .bulk-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .bulk-edit-grid label{display:block;font-size:12px;color:#8b949e;margin-bottom:5px}
@@ -698,6 +700,13 @@
     <div class="template-head"><div class="template-title">操作記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeAuditLog()" type="button">關閉</button></div>
     <div class="template-note">顯示目前公司最近 30 次新增或修改。只有修改記錄可以復原。</div>
     <div id="auditRows"><div class="dash-mobile-empty">載入中...</div></div>
+  </div>
+</div>
+
+<div id="repeatRecordsModal">
+  <div class="work-modal-box">
+    <div class="template-head"><div class="template-title" id="repeatRecordsTitle">重複維修記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeRepeatRecords()" type="button">關閉</button></div>
+    <div id="repeatRecordsRows"><div class="dash-mobile-empty">載入中...</div></div>
   </div>
 </div>
 
@@ -1066,8 +1075,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-5';
-const _APP_VERSION='v0.976';
+const _APP_BUMP='2026.07.14-6';
+const _APP_VERSION='v0.977';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1844,7 +1853,7 @@ function setQueueAddBusy(busy,batch=false){
   if(singleBtn){singleBtn.disabled=busy;singleBtn.textContent=busy&&!batch?'檢查重複記錄中...':'＋ 加入待提交';}
   if(batchBtn){batchBtn.disabled=busy;batchBtn.textContent=busy&&batch?'檢查重複記錄中...':'＋ 全部加入待提交';}
 }
-let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null;
+let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0;
 let dashboardSelectedRecords=new Map();
 const DASH_PAGE_SIZE=10;
 let selectedQueueIdxs=new Set();
@@ -2941,19 +2950,50 @@ function renderDashboardInsights(stats,history){
   if(!el)return;
   if(!stats){el.classList.remove('show');el.innerHTML='';return;}
   const list=items=>(items||[]).map(i=>`${esc(i.label)} (${i.count})`).join('、')||'沒有資料';
+  const repeatLinks=items=>(items||[]).map(i=>`<button class="repeat-sn-link" data-sn="${esc(i.label)}" onclick="openRepeatRecords(this.dataset.sn)" type="button">${esc(i.label)} (${Number(i.count)||0})</button>`).join('、')||'沒有資料';
   const models=Object.entries(stats.models||{}).map(([k,v])=>`${esc(k)} (${v})`).join(' / ')||'沒有資料';
   let html=`
     <div class="dash-insight"><div class="dash-insight-label">記錄總數</div><div class="dash-insight-value">${Number(stats.total||0)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">機型分佈</div><div class="dash-insight-value">${models}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">常見原因</div><div class="dash-insight-value">${list(stats.topReasons)}</div></div>
-    <div class="dash-insight"><div class="dash-insight-label">常用零件</div><div class="dash-insight-value">${list(stats.topParts)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">場地分佈</div><div class="dash-insight-value">${list(stats.topCasinos)}</div></div>
-    <div class="dash-insight"><div class="dash-insight-label">有重複維修 S/N</div><div class="dash-insight-value">${list(stats.repeatSerials)}</div></div>`;
+    <div class="dash-insight"><div class="dash-insight-label">有重複維修 S/N</div><div class="dash-insight-value">${repeatLinks(stats.repeatSerials)}</div></div>`;
   if(history){
     const parts=(history.parts||[]).map(p=>`${esc(p.brokenParts||'未填編號')} · ${esc(p.bpRepairDay||'未設定')} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
     html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件履歷：<br>${parts}</div></div>`;
   }
   el.innerHTML=html;el.classList.add('show');
+}
+function closeRepeatRecords(){_repeatRecordsRequestToken++;document.getElementById('repeatRecordsModal').classList.remove('show');}
+function renderRepeatRecord(record,index){
+  const rowCompany=record.company||currentDashboardCompany||activeCompany;
+  const rows=dashFieldRows(record,rowCompany).map(([key,value])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(key)}</div><div class="dash-mobile-val">${esc(value)}</div></div>`).join('');
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span></div>${rows}</section>`;
+}
+async function openRepeatRecords(serialNo){
+  const sn=String(serialNo||'').trim();if(!sn||!dashboardLastQuery)return;
+  const token=++_repeatRecordsRequestToken;
+  const modal=document.getElementById('repeatRecordsModal');
+  const title=document.getElementById('repeatRecordsTitle');
+  const rows=document.getElementById('repeatRecordsRows');
+  title.textContent=`S/N ${sn} 重複維修記錄`;rows.innerHTML='<div class="dash-mobile-empty">載入中...</div>';modal.classList.add('show');
+  const params={...dashboardLastQuery,q:'',serialNo:sn,searchMode:'serial',page:'1',pageSize:'50'};
+  try{
+    const first=await (await fetch(getScriptUrl()+'?'+new URLSearchParams(params))).json();
+    if(!first.success)throw new Error(first.message||'載入失敗');
+    const records=[...(first.records||[])];
+    for(let page=2;page<=Number(first.totalPages||1);page++){
+      params.page=String(page);
+      const data=await (await fetch(getScriptUrl()+'?'+new URLSearchParams(params))).json();
+      if(!data.success)throw new Error(data.message||'載入失敗');
+      records.push(...(data.records||[]));
+    }
+    if(token!==_repeatRecordsRequestToken)return;
+    title.textContent=`S/N ${sn} · ${records.length} 筆記錄`;
+    rows.innerHTML=records.length?records.map(renderRepeatRecord).join(''):'<div class="dash-mobile-empty">沒有相符記錄。</div>';
+  }catch(e){
+    if(token===_repeatRecordsRequestToken)rows.innerHTML='<div class="dash-mobile-empty">記錄載入失敗。</div>';
+  }
 }
 function toggleDashboardRecord(index,checked){
   const record=dashboardRecords[index];if(!record)return;
