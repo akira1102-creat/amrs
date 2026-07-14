@@ -482,9 +482,12 @@
     .dash-save{padding:7px 10px;font-size:12px;font-weight:700;background:#238636;color:#fff;border:none;border-radius:9px;cursor:pointer;white-space:nowrap}
     .dash-save:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
     .dash-empty{padding:18px;color:#8b949e;font-size:13px;text-align:center}
-    .dash-mobile-list{display:block}
+    .dash-mobile-list{display:grid;grid-template-columns:repeat(var(--card-columns,1),minmax(0,1fr));gap:10px}
     .dash-mobile-empty{padding:16px;color:#8b949e;font-size:13px;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .dash-mobile-card{border:1px solid #21262d;border-radius:14px;background:#0d1117;margin-bottom:10px;padding:13px 14px}
+    .dash-mobile-list>.dash-mobile-empty{grid-column:1/-1}
+    .dash-mobile-card{border:1px solid #21262d;border-radius:14px;background:#0d1117;margin-bottom:10px;padding:13px 14px;min-width:0}
+    .dash-mobile-list>.dash-mobile-card{margin-bottom:0}
+    .dash-mobile-card.is-editing{grid-column:1/-1}
     .dash-mobile-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;color:#58a6ff;margin-bottom:10px;letter-spacing:.02em}
     .dash-mobile-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.55)}
     .dash-mobile-row:last-child{border-bottom:none}
@@ -509,6 +512,8 @@
     #brokenPartsPageCard{max-width:1100px}
     .list-page-size{display:inline-flex;align-items:center;gap:7px;color:#8b949e;font-size:12px;font-weight:700;white-space:nowrap}
     .list-page-size select{width:auto;min-width:72px;padding:7px 9px;border-radius:9px;font-size:12px}
+    .card-column-size{display:inline-flex;align-items:center;gap:7px;color:#8b949e;font-size:12px;font-weight:700;white-space:nowrap}
+    .card-column-size select{width:auto;min-width:64px;padding:7px 9px;border-radius:9px;font-size:12px}
     .broken-parts-page-controls{display:grid;grid-template-columns:minmax(130px,1fr) minmax(130px,1fr) minmax(120px,.7fr) auto;gap:8px;margin-bottom:10px}
     .broken-parts-page-controls input,.broken-parts-page-controls select,.broken-parts-page-controls button{font-size:12px;padding:9px 10px;border-radius:10px}
     .broken-parts-page-controls button{border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
@@ -571,6 +576,8 @@
     .mob .dash-selected-count{width:100%;margin-left:0}
     .mob #partsListCard.card{padding:16px 15px}
     .mob #brokenPartsPageCard.card{padding:16px 15px}
+    .mob .dash-mobile-list{grid-template-columns:minmax(0,1fr) !important}
+    .mob .desktop-card-layout{display:none}
     .mob .broken-parts-page-controls{grid-template-columns:1fr 1fr}
     .mob .broken-parts-page-controls button{grid-column:1/-1}
     .mob .bp-field-options{position:fixed;left:16px;right:16px;top:auto;width:auto}
@@ -1057,6 +1064,7 @@
     <button class="dash-tool-btn" onclick="openExportDialog('xls')" type="button">Excel</button>
     <button class="dash-tool-btn" onclick="openExportDialog('pdf')" type="button">PDF</button>
     <label class="list-page-size">每頁<select id="dashPageSize" onchange="setDashboardPageSize(this.value)"><option>10</option><option>30</option><option>50</option><option>80</option><option>100</option></select></label>
+    <label class="card-column-size desktop-card-layout">每行<select id="dashCardColumns" onchange="setDashboardCardColumns(this.value)"><option value="1">1 張</option><option value="2">2 張</option><option value="3">3 張</option></select></label>
     <span class="dash-selected-count" id="dashSelectedCount">已選 0 筆</span>
   </div>
   <div class="dash-insights" id="dashInsights"></div>
@@ -1116,8 +1124,9 @@
         <div class="bp-field-options" id="bpPageFieldOptions"></div>
       </details>
       <label class="list-page-size">每頁<select id="bpPageSize" onchange="setBrokenPartsPageSize(this.value)"><option>10</option><option>30</option><option>50</option><option>80</option><option>100</option></select></label>
+      <label class="card-column-size desktop-card-layout">每行<select id="bpPageCardColumns" onchange="setBrokenPartsPageCardColumns(this.value)"><option value="1">1 張</option><option value="2">2 張</option><option value="3">3 張</option></select></label>
     </div>
-    <div id="bpPageRows"><div class="dash-mobile-empty">請從左側選擇公司。</div></div>
+    <div class="dash-mobile-list" id="bpPageRows"><div class="dash-mobile-empty">請從左側選擇公司。</div></div>
     <div class="dash-pager" id="bpPagePager">
       <button class="dash-page-btn" id="bpPagePrevBtn" onclick="changeBrokenPartsPage(-1)" type="button">上一頁</button>
       <span class="dash-page-info" id="bpPagePageInfo">第 1 / 1 頁</span>
@@ -1170,8 +1179,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-14';
-const _APP_VERSION='v0.985';
+const _APP_BUMP='2026.07.14-15';
+const _APP_VERSION='v0.986';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1970,7 +1979,7 @@ function setQueueAddBusy(busy,batch=false){
   if(batchBtn){batchBtn.disabled=busy;batchBtn.textContent=busy&&batch?'檢查重複記錄中...':'＋ 全部加入待提交';}
 }
 let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0,_repeatRecords=[],_repeatRecordsEditingIdx=-1,_repeatRecordsSerial='';
-let dashboardSelectedRecords=new Map(),dashboardPageSize=10;
+let dashboardSelectedRecords=new Map(),dashboardPageSize=10,dashboardCardColumns=1;
 let selectedQueueIdxs=new Set();
 function saveQueue(){localStorage.setItem('_ml_queue',JSON.stringify(queue));}
 try{const _sq=localStorage.getItem('_ml_queue');if(_sq)queue=JSON.parse(_sq);}catch(e){}
@@ -2338,7 +2347,7 @@ const BP_PAGE_FIELDS=[
   ['bpDesc','Required Parts(JP)'],['bpColC','Required Parts(EN)'],['bpQty','Qty'],
   ['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark']
 ];
-let _bpPageRecords=[],_bpPage=1,_bpPageTotalPages=1,_bpPageTotalMatches=0,_bpPageSize=10,_bpPageEditingIndex=-1,_bpPageRequest=null;
+let _bpPageRecords=[],_bpPage=1,_bpPageTotalPages=1,_bpPageTotalMatches=0,_bpPageSize=10,_bpPageEditingIndex=-1,_bpPageRequest=null,_bpPageCardColumns=1;
 let _bpPageVisibleFields=new Set(BP_PAGE_FIELDS.map(([key])=>key));
 function renderBrokenPartsPageFieldOptions(){
   const root=document.getElementById('bpPageFieldOptions');if(!root)return;
@@ -2390,7 +2399,7 @@ function renderBrokenPartsPageRows(){
 function bpPageEditInput(label,key,value){return `<div><label>${esc(label)}</label><input data-bp-page-field="${esc(key)}" value="${esc(value??'')}"></div>`;}
 function renderBrokenPartsPageEditCard(record,index){
   const number=(_bpPage-1)*_bpPageSize+index+1;
-  return `<section class="dash-mobile-card" id="bpPageEditCard${index}">
+  return `<section class="dash-mobile-card is-editing" id="bpPageEditCard${index}">
     <div class="dash-mobile-title"><span>── 編輯記錄 ${number} ──</span></div>
     <div class="dash-card-form">
       ${bpPageEditInput('CASINO','casino',record.casino)}${bpPageEditInput('Model','model',record.model)}${bpPageEditInput('Serial No.','serialNo',record.serialNo)}${bpPageEditInput('Parts No.','brokenParts',record.brokenParts)}
@@ -2426,6 +2435,11 @@ async function deleteBrokenPartsPageRecord(index,btn){
   }catch(e){showToast(e.message||'刪除失敗','err');btn.disabled=false;btn.textContent='刪除';}
 }
 function setBrokenPartsPageSize(value){_bpPageSize=[10,30,50,80,100].includes(Number(value))?Number(value):10;document.getElementById('bpPageSize').value=String(_bpPageSize);loadBrokenPartsPage(1);}
+function setBrokenPartsPageCardColumns(value){
+  _bpPageCardColumns=[1,2,3].includes(Number(value))?Number(value):1;
+  document.getElementById('bpPageCardColumns').value=String(_bpPageCardColumns);
+  document.getElementById('bpPageRows').style.setProperty('--card-columns',String(_bpPageCardColumns));
+}
 function changeBrokenPartsPage(delta){const page=Math.min(Math.max(1,_bpPage+delta),_bpPageTotalPages);if(page!==_bpPage)loadBrokenPartsPage(page);}
 function updateBrokenPartsPagePager(){
   const pager=document.getElementById('bpPagePager');pager.classList.toggle('show',_bpPageTotalMatches>_bpPageSize);
@@ -3191,7 +3205,7 @@ function dashboardEditFields(record){
 }
 function renderDashboardEditCard(record,index){
   const displayNumber=(dashboardPage-1)*dashboardPageSize+index+1;
-  return `<section class="dash-mobile-card" id="dashCardEdit${index}">
+  return `<section class="dash-mobile-card is-editing" id="dashCardEdit${index}">
     <div class="dash-mobile-title"><span>── 編輯記錄 ${displayNumber} ──</span></div>
     <div class="dash-card-form">
       ${dashboardEditFields(record)}
@@ -3230,6 +3244,11 @@ function setDashboardPageSize(value){
   dashboardPageSize=[10,30,50,80,100].includes(Number(value))?Number(value):10;
   document.getElementById('dashPageSize').value=String(dashboardPageSize);
   if(dashboardLastQuery)loadDashboard(1);else updateDashboardPager();
+}
+function setDashboardCardColumns(value){
+  dashboardCardColumns=[1,2,3].includes(Number(value))?Number(value):1;
+  document.getElementById('dashCardColumns').value=String(dashboardCardColumns);
+  document.getElementById('dashMobileRows').style.setProperty('--card-columns',String(dashboardCardColumns));
 }
 function changeDashPage(delta){
   const nextPage=Math.min(Math.max(1,dashboardPage+delta),dashboardTotalPages);
