@@ -174,6 +174,7 @@
     .template-actions button{flex:1;padding:11px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer}
     .template-add{background:#21262d;border:1px solid #30363d;color:#e6edf3}
     .template-save{background:#238636;border:none;color:#fff}
+    .template-delete{background:#da3633;border:none;color:#fff}
     #bpListModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8890;align-items:center;justify-content:center;padding:18px}
     #bpListModal.show{display:flex}
     #bpListBox{width:min(1180px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
@@ -685,7 +686,10 @@
       <div><label>原因</label><input id="bulkDashReason" type="text" placeholder="不更改"></div>
       <div style="grid-column:1/-1"><label>處理方法</label><input id="bulkDashAction" type="text" placeholder="不更改"></div>
     </div>
-    <div class="template-actions"><button class="template-save" id="bulkDashSaveBtn" onclick="saveBulkDashboardEdit()" type="button">套用修改</button></div>
+    <div class="template-actions">
+      <button class="template-delete" id="bulkDashDeleteBtn" onclick="deleteBulkDashboardRecords()" type="button">刪除已選記錄</button>
+      <button class="template-save" id="bulkDashSaveBtn" onclick="saveBulkDashboardEdit()" type="button">套用修改</button>
+    </div>
   </div>
 </div>
 
@@ -1062,8 +1066,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-4';
-const _APP_VERSION='v0.975';
+const _APP_BUMP='2026.07.14-5';
+const _APP_VERSION='v0.976';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2973,6 +2977,7 @@ function openBulkEdit(){
   select.innerHTML='<option value="">不更改</option>'+casinoOptionsForCompany(currentDashboardCompany).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   ['bulkDashDate','bulkDashReason','bulkDashAction'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('bulkDashModel').value='';
+  document.getElementById('bulkDashDeleteBtn').textContent=`刪除已選 ${dashboardSelectedRecords.size} 筆`;
   document.getElementById('bulkEditModal').classList.add('show');
 }
 function closeBulkEdit(){document.getElementById('bulkEditModal').classList.remove('show');}
@@ -2991,6 +2996,31 @@ async function saveBulkDashboardEdit(){
     closeBulkEdit();dashboardSelectedRecords.clear();showToast(`✓ 已修改 ${data.saved} 筆記錄`);await loadDashboard(dashboardPage);
   }catch(e){showToast('批量修改失敗','err');}
   finally{btn.disabled=false;btn.textContent='套用修改';}
+}
+async function deleteBulkDashboardRecords(){
+  const records=[...dashboardSelectedRecords.values()].filter(record=>Number.isFinite(Number(record.rowNumber))).sort((a,b)=>Number(b.rowNumber)-Number(a.rowNumber));
+  if(!records.length){showToast('請先選擇記錄','err');return;}
+  if(!window.confirm(`確定永久刪除已選的 ${records.length} 筆記錄？此操作不能復原。`))return;
+  const deleteBtn=document.getElementById('bulkDashDeleteBtn');
+  const saveBtn=document.getElementById('bulkDashSaveBtn');
+  deleteBtn.disabled=true;saveBtn.disabled=true;
+  let deleted=0;
+  try{
+    for(const original of records){
+      deleteBtn.textContent=`刪除中 ${deleted+1}/${records.length}`;
+      const record={...original,company:original.company||currentDashboardCompany||activeCompany};
+      const response=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'deleteRecord',record})});
+      const data=await response.json();
+      if(!data.success)throw new Error(data.message||'刪除失敗');
+      dashboardSelectedRecords.delete(String(original.rowNumber));deleted++;
+    }
+    closeBulkEdit();dashboardSelectedRecords.clear();showToast(`✓ 已刪除 ${deleted} 筆記錄`);await loadDashboard(dashboardPage);
+  }catch(e){
+    closeBulkEdit();dashboardSelectedRecords.clear();await loadDashboard(dashboardPage);
+    showToast(deleted?`已刪除 ${deleted} 筆，其餘記錄刪除失敗`:(e.message||'批量刪除失敗'),'err');
+  }finally{
+    deleteBtn.disabled=false;saveBtn.disabled=false;deleteBtn.textContent='刪除已選記錄';
+  }
 }
 function dashboardQueryForPage(page,pageSize=50){
   const params={...(dashboardLastQuery||{})};params.page=String(page);params.pageSize=String(pageSize);return new URLSearchParams(params);
