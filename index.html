@@ -242,7 +242,14 @@
     #snPad{position:fixed;bottom:0;left:0;right:0;background:#161b22;border-top:2px solid #388bfd;padding:12px 16px 24px;z-index:600;transform:translateY(100%);transition:transform .22s ease}
     #snPad.show{transform:translateY(0)}
     #snPadHeader{display:flex;align-items:center;padding:4px 0 12px;max-width:380px;margin:0 auto}
-    #snPadDisplay{flex:1;font-size:44px;font-weight:800;color:#58a6ff;text-align:center;letter-spacing:5px;min-height:58px;word-break:break-all}
+    #snPadDisplays{flex:1;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;min-width:0}
+    #snPadDisplays.dual{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .snpad-value{display:block;min-width:0;height:68px;padding:5px 8px;border:1px solid #30363d;border-radius:12px;background:#0d1117;color:#8b949e;text-align:center;overflow:hidden;cursor:pointer}
+    .snpad-value[hidden]{display:none}
+    .snpad-value.active{border-color:#388bfd;box-shadow:0 0 0 2px rgba(56,139,253,.24)}
+    .snpad-value-label{display:block;height:15px;font-size:10px;font-weight:700;color:#8b949e;line-height:15px;white-space:nowrap}
+    .snpad-value-text{display:block;max-width:100%;font-size:32px;font-weight:800;color:#58a6ff;line-height:42px;letter-spacing:1px;white-space:nowrap;overflow:hidden}
+    .snpad-value-text.tag{font-size:22px;letter-spacing:0}
     #soundToggleBtn{flex-shrink:0;background:none;border:1px solid #30363d;border-radius:10px;color:#484f58;font-size:18px;padding:6px 10px;cursor:pointer;margin-left:10px;transition:color .15s,border-color .15s}
     #soundToggleBtn.on{color:#3fb950;border-color:#3fb950}
     .snpad-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:380px;margin:0 auto}
@@ -297,7 +304,11 @@
     .mob .t-dim{font-size:13px}
     .mob #appTitle{font-size:10px;padding:2px 0 8px}
     .mob .snpad-btn{padding:20px 0;font-size:28px}
-    .mob #snPadDisplay{font-size:46px}
+    .mob #snPadHeader{gap:7px}
+    .mob #snPadCloseBtn,.mob #soundToggleBtn{width:36px;height:42px;padding:0;margin:0}
+    .mob .snpad-value{height:68px;padding:5px 6px}
+    .mob .snpad-value-text{font-size:30px;letter-spacing:1px}
+    .mob .snpad-value-text.tag{font-size:21px;letter-spacing:0}
     #snPadQueue{display:flex;flex-wrap:wrap;gap:6px;align-items:center;max-width:380px;margin:0 auto 10px;min-height:0;padding:4px 0;max-height:72px;overflow:hidden}
     .spq-label{font-size:11px;color:#8b949e;flex-shrink:0;margin-right:2px}
     .spq-sn{font-size:13px;font-weight:700;color:#58a6ff;background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:2px 8px}
@@ -1014,8 +1025,17 @@
 <div id="snPad">
   <div id="snPadHeader">
     <button id="snPadCloseBtn" onclick="hideSnPad()" type="button" title="關閉數字鍵盤">✕</button>
-    <div id="snPadDisplay">—</div>
-    <button id="soundToggleBtn" onclick="toggleSound()" title="切換鍵盤聲音">🔇</button>
+    <div id="snPadDisplays">
+      <button class="snpad-value active" id="snPadSerialValue" onclick="setSnPadTarget('serialNo')" type="button">
+        <span class="snpad-value-label">機身號碼</span>
+        <span class="snpad-value-text" id="snPadSerialDisplay">—</span>
+      </button>
+      <button class="snpad-value" id="snPadSecondaryValue" onclick="setSnPadTarget('aaTag')" type="button" hidden>
+        <span class="snpad-value-label" id="snPadSecondaryLabel">AA Tag</span>
+        <span class="snpad-value-text tag" id="snPadSecondaryDisplay">—</span>
+      </button>
+    </div>
+    <button id="soundToggleBtn" onclick="toggleSound()" type="button" title="切換鍵盤聲音">🔇</button>
   </div>
   <div id="snPadQueue"></div>
   <div class="snpad-grid">
@@ -1038,8 +1058,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-1';
-const _APP_VERSION='v0.972';
+const _APP_BUMP='2026.07.14-2';
+const _APP_VERSION='v0.973';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1500,9 +1520,13 @@ let _snPadTarget='serialNo';
 function _snPadInput(){return document.getElementById(_snPadTarget)||document.getElementById('serialNo');}
 function _snPadMaxLen(){return _snPadTarget==='voidSeal'?5:4;}
 function _snPadDigits(){return _snPadTarget==='aaTag'?String(_snPadInput().value||'').replace(/\D/g,''):_snPadInput().value||'';}
-function showSnPad(target='serialNo'){
-  _snPadTarget=target;
+function setSnPadTarget(target){
+  const allowed=target==='serialNo'||(activeCompany==='MGM'&&target==='aaTag')||(activeCompany==='GEG'&&target==='voidSeal');
+  _snPadTarget=allowed?target:'serialNo';
   updateSnPadDisplay();
+}
+function showSnPad(target='serialNo'){
+  setSnPadTarget(target);
   const pad=document.getElementById('snPad');
   if(!pad.classList.contains('show')){
     history.pushState({snPad:true},'');
@@ -1585,8 +1609,22 @@ function handleSnEnter(){
 }
 function snPadDone(){playDoneSound();handleSnEnter();}
 function updateSnPadDisplay(){
-  const v=_snPadInput().value||'';
-  document.getElementById('snPadDisplay').textContent=v||'—';
+  const dual=activeCompany==='MGM'||activeCompany==='GEG';
+  const secondaryTarget=activeCompany==='MGM'?'aaTag':'voidSeal';
+  const serial=(document.getElementById('serialNo').value||'').trim();
+  const secondaryInput=document.getElementById(secondaryTarget);
+  const secondary=secondaryInput?(secondaryInput.value||'').trim():'';
+  const displays=document.getElementById('snPadDisplays');
+  const serialValue=document.getElementById('snPadSerialValue');
+  const secondaryValue=document.getElementById('snPadSecondaryValue');
+  displays.classList.toggle('dual',dual);
+  serialValue.classList.toggle('active',_snPadTarget==='serialNo');
+  document.getElementById('snPadSerialDisplay').textContent=serial||(dual?'0000':'—');
+  secondaryValue.hidden=!dual;
+  secondaryValue.onclick=()=>setSnPadTarget(secondaryTarget);
+  secondaryValue.classList.toggle('active',dual&&_snPadTarget===secondaryTarget);
+  document.getElementById('snPadSecondaryLabel').textContent=activeCompany==='MGM'?'AA Tag':'Void Seal';
+  document.getElementById('snPadSecondaryDisplay').textContent=secondary||(activeCompany==='MGM'?'TAE0000':'00000');
 }
 document.addEventListener('click',function(e){
   const pad=document.getElementById('snPad');
