@@ -851,7 +851,7 @@
     </div>
   </div>
   <div>
-    <label>處理方法</label>
+    <label>處理方法&備註</label>
     <div class="row-action" id="actionDropRow">
       <div class="combo" data-combo="actionDrop">
         <input type="text" id="actionDrop" oninput="_syncBpFromAction()" onchange="_syncBpFromAction()" placeholder="搜尋處理方法..." autocomplete="off">
@@ -1098,8 +1098,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-10';
-const _APP_VERSION='v0.981';
+const _APP_BUMP='2026.07.14-11';
+const _APP_VERSION='v0.982';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2431,7 +2431,7 @@ function onReasonInput(){const r=document.getElementById('reason').value;if(REAS
 function onReasonChange(){
   const r=document.getElementById('reason').value;
   if(r==='PO'&&!_batchMode){enterPoRepairMode();return;}
-  if(_poRepairMode)detachPoRepairMode(false);
+  detachPoRepairMode(false);
   const def=ACTION_MAP[r];
   if(def){switchToDrop();document.getElementById('actionDrop').value=def;}
   else{switchToCustom();document.getElementById('actionCustom').value='';}
@@ -2561,7 +2561,7 @@ function doAddToQueue(item){
   _resetBpFields();
   _updateRecentReasons(item.reason);
   document.getElementById('reason').value='PM';
-  if(_poRepairMode)detachPoRepairMode(false);
+  detachPoRepairMode(false);
   switchToDrop();document.getElementById('actionDrop').value='Preventive Maintenance';
   if(_isMob)showSnPad();else document.getElementById('serialNo').focus();
 }
@@ -2674,7 +2674,7 @@ function renderQueue(){
         ${locationEditHtml}
         ${inspectorEditHtml}
         <div class="ef-row"><label>原因</label><div class="combo" data-combo="eq-reason"><input id="eq-reason" type="text" value="${esc(editTemp.reason)}" oninput="onEditReasonInput()" onchange="onEditReasonChange()" placeholder="搜尋原因..." autocomplete="off"><div class="combo-menu" id="eq-reason-menu"></div></div></div>
-        <div class="ef-row"><label>處理方法</label>${aHtml}</div>
+        <div class="ef-row"><label>處理方法&備註</label>${aHtml}</div>
         <div class="ef-row"><label>錯誤描述</label><input id="eq-error" type="text" value="${esc(editTemp.errorDescription)}" placeholder="選填"></div>
         <div class="ef-row"><label>Box ID</label><input id="eq-boxid" type="text" value="${esc(editTemp.boxId)}" placeholder="選填"></div>
         <div class="q-edit-btns">
