@@ -138,6 +138,10 @@
     .toast.err{background:#da3633}
     .toast.warn{background:#9a6700}
     .toast.show{transform:translateX(-50%) translateY(0)}
+    #exportProgress{display:none;position:fixed;left:50%;bottom:28px;z-index:9100;transform:translateX(-50%);align-items:center;gap:10px;padding:12px 20px;border:1px solid #388bfd;border-radius:50px;background:#161b22;color:#e6edf3;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap}
+    #exportProgress.show{display:flex}
+    .export-spinner{width:18px;height:18px;border:3px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:export-spin .75s linear infinite}
+    @keyframes export-spin{to{transform:rotate(360deg)}}
     #dupModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8888;align-items:center;justify-content:center}
     #dupModal.show{display:flex}
     #dupBox{background:#161b22;border:1px solid #30363d;border-radius:20px;padding:28px;max-width:340px;width:90%;text-align:center}
@@ -505,9 +509,14 @@
     .parts-list-jp{color:#e6edf3;margin-top:4px}
     .parts-list-en{color:#8b949e;margin-top:2px}
     .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
-    #bulkEditModal,#auditModal,#repeatRecordsModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
-    #bulkEditModal.show,#auditModal.show,#repeatRecordsModal.show{display:flex}
+    #bulkEditModal,#auditModal,#repeatRecordsModal,#exportModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #bulkEditModal.show,#auditModal.show,#repeatRecordsModal.show,#exportModal.show{display:flex}
     .work-modal-box{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
+    .export-modal-box{width:min(520px,96vw)}
+    .export-select-all{display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#e6edf3;font-size:13px;font-weight:800;cursor:pointer}
+    .export-select-all input,.export-field input{width:18px;height:18px;accent-color:#388bfd;flex-shrink:0}
+    .export-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}
+    .export-field{display:flex;align-items:center;gap:8px;min-width:0;padding:8px 9px;border-bottom:1px solid #21262d;color:#c9d1d9;font-size:12px;cursor:pointer}
     .bulk-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .bulk-edit-grid label{display:block;font-size:12px;color:#8b949e;margin-bottom:5px}
     .audit-item{border:1px solid #21262d;background:#0d1117;border-radius:12px;padding:11px;margin-bottom:8px}
@@ -683,7 +692,7 @@
 <div id="bulkEditModal">
   <div class="work-modal-box">
     <div class="template-head"><div class="template-title">批量修改記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeBulkEdit()" type="button">關閉</button></div>
-    <div class="template-note">留空代表不更改。修改會記錄在 Audit Log，可從操作記錄復原。</div>
+    <div class="template-note">留空代表不更改。</div>
     <div class="bulk-edit-grid">
       <div><label>日期</label><input id="bulkDashDate" type="date"></div>
       <div><label>場地</label><select id="bulkDashCasino"><option value="">不更改</option></select></div>
@@ -710,6 +719,16 @@
   <div class="work-modal-box">
     <div class="template-head"><div class="template-title" id="repeatRecordsTitle">重複維修記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeRepeatRecords()" type="button">關閉</button></div>
     <div id="repeatRecordsRows"><div class="dash-mobile-empty">載入中...</div></div>
+  </div>
+</div>
+
+<div id="exportModal">
+  <div class="work-modal-box export-modal-box">
+    <div class="template-head"><div class="template-title" id="exportModalTitle">選擇匯出欄位</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeExportDialog()" type="button">關閉</button></div>
+    <div class="template-note">未勾選的欄位不會出現在匯出檔案。</div>
+    <label class="export-select-all"><input id="exportSelectAll" type="checkbox" onchange="toggleAllExportFields(this.checked)" checked> 全選</label>
+    <div class="export-fields" id="exportFields"></div>
+    <div class="template-actions"><button class="template-save" id="exportConfirmBtn" onclick="confirmDashboardExport()" type="button">開始匯出</button></div>
   </div>
 </div>
 
@@ -990,9 +1009,8 @@
   <div class="dash-tools" id="dashTools">
     <button class="dash-tool-btn" onclick="toggleDashboardPageSelection()" type="button">選取本頁</button>
     <button class="dash-tool-btn primary" id="dashBulkEditBtn" onclick="openBulkEdit()" type="button" disabled>批量修改</button>
-    <button class="dash-tool-btn" onclick="exportDashboard('xls')" type="button">Excel</button>
-    <button class="dash-tool-btn" onclick="exportDashboard('pdf')" type="button">PDF</button>
-    <button class="dash-tool-btn" onclick="openAuditLog()" type="button">操作記錄</button>
+    <button class="dash-tool-btn" onclick="openExportDialog('xls')" type="button">Excel</button>
+    <button class="dash-tool-btn" onclick="openExportDialog('pdf')" type="button">PDF</button>
     <span class="dash-selected-count" id="dashSelectedCount">已選 0 筆</span>
   </div>
   <div class="dash-insights" id="dashInsights"></div>
@@ -1040,6 +1058,7 @@
 <div id="appVersion"></div>
 <div style="height:8px"></div>
 <div class="toast" id="toast"></div>
+<div id="exportProgress" role="status" aria-live="polite"><span class="export-spinner" aria-hidden="true"></span><span>匯出資料中，請稍等...</span></div>
 
 <!-- SN Numpad (7-8-9 / 4-5-6 / 1-2-3 / ⌫-0-✓) -->
 <div id="snPad">
@@ -1078,8 +1097,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.14-7';
-const _APP_VERSION='v0.978';
+const _APP_BUMP='2026.07.14-8';
+const _APP_VERSION='v0.979';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3136,19 +3155,45 @@ function exportColumns(){
   if(currentDashboardCompany==='Wynn')cols.push(['inspector','Inspector']);
   return cols.concat([['reason','Reason'],['actionTaken','Action Taken'],['errorDescription','Error Description'],['boxId','Box ID']]);
 }
+let _pendingExportType='';
+function openExportDialog(type){
+  if(!dashboardLastQuery){showToast('請先搜尋資料','err');return;}
+  _pendingExportType=type==='pdf'?'pdf':'xls';
+  document.getElementById('exportModalTitle').textContent=`選擇 ${_pendingExportType==='pdf'?'PDF':'Excel'} 匯出欄位`;
+  document.getElementById('exportFields').innerHTML=exportColumns().map(([key,label])=>`<label class="export-field"><input type="checkbox" value="${esc(key)}" onchange="syncExportSelectAll()" checked><span>${esc(label)}</span></label>`).join('');
+  document.getElementById('exportSelectAll').checked=true;
+  document.getElementById('exportSelectAll').indeterminate=false;
+  document.getElementById('exportModal').classList.add('show');
+}
+function closeExportDialog(){document.getElementById('exportModal').classList.remove('show');}
+function toggleAllExportFields(checked){document.querySelectorAll('#exportFields input').forEach(input=>{input.checked=checked;});syncExportSelectAll();}
+function syncExportSelectAll(){
+  const fields=[...document.querySelectorAll('#exportFields input')],checked=fields.filter(input=>input.checked).length;
+  const all=document.getElementById('exportSelectAll');all.checked=fields.length>0&&checked===fields.length;all.indeterminate=checked>0&&checked<fields.length;
+}
+function showExportProgress(){document.getElementById('exportProgress').classList.add('show');}
+function hideExportProgress(){document.getElementById('exportProgress').classList.remove('show');}
+function confirmDashboardExport(){
+  const selected=[...document.querySelectorAll('#exportFields input:checked')].map(input=>input.value);
+  if(!selected.length){showToast('請至少選擇一個匯出欄位','err');return;}
+  const type=_pendingExportType;closeExportDialog();exportDashboard(type,selected);
+}
 function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-async function exportDashboard(type){
+async function exportDashboard(type,selectedKeys){
   let printWindow=null;if(type==='pdf')printWindow=window.open('','_blank');
+  showExportProgress();
   try{
-    showToast('正在準備匯出...');const records=await fetchAllDashboardRecords();let cols=exportColumns();
+    const records=await fetchAllDashboardRecords();let cols=exportColumns().filter(([key])=>selectedKeys.includes(key));
     if(!records.length)throw new Error('沒有資料');
     if(type==='pdf')cols=cols.filter(([key])=>records.some(record=>cleanDashValue(record[key])!==''));
+    if(!cols.length)throw new Error('所選欄位沒有資料');
     const stamp=new Date().toISOString().slice(0,10);const base=`AMRS_${currentDashboardCompany}_${stamp}`;
     const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${records.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     if(type==='xls')downloadBlob(new Blob([`<html><meta charset="utf-8"><body>${table}</body></html>`],{type:'application/vnd.ms-excel'}),base+'.xls');
     else if(printWindow){printWindow.document.write(`<html><head><title>${base}</title><style>body{font-family:Arial;font-size:10px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left}</style></head><body><h2>AMRS ${esc(currentDashboardCompany)} 維修記錄</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
     showToast(`✓ 已準備 ${records.length} 筆記錄`);
   }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
+  finally{await new Promise(resolve=>setTimeout(resolve,150));hideExportProgress();}
 }
 function closeAuditLog(){document.getElementById('auditModal').classList.remove('show');}
 async function openAuditLog(){
