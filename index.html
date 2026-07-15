@@ -141,8 +141,8 @@
     .toast.err{background:#da3633}
     .toast.warn{background:#9a6700}
     .toast.show{transform:translateX(-50%) translateY(0)}
-    #exportProgress,#submitProgress{display:none;position:fixed;left:50%;bottom:28px;z-index:9100;transform:translateX(-50%);align-items:center;gap:10px;padding:12px 20px;border:1px solid #388bfd;border-radius:50px;background:#161b22;color:#e6edf3;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap}
-    #exportProgress.show,#submitProgress.show{display:flex}
+    #exportProgress,#submitProgress,#loadingProgress{display:none;position:fixed;left:50%;bottom:28px;z-index:9100;transform:translateX(-50%);align-items:center;gap:10px;padding:12px 20px;border:1px solid #388bfd;border-radius:50px;background:#161b22;color:#e6edf3;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.5);white-space:nowrap}
+    #exportProgress.show,#submitProgress.show,#loadingProgress.show{display:flex}
     .export-spinner{width:18px;height:18px;border:3px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:export-spin .75s linear infinite}
     @keyframes export-spin{to{transform:rotate(360deg)}}
     #dupModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8888;align-items:center;justify-content:center}
@@ -631,7 +631,8 @@
     .schedule-shift-label{font-size:11px;font-weight:900;color:#8b949e}
     .schedule-person-list{display:flex;flex-wrap:wrap;gap:6px}
     .schedule-person{padding:4px 7px;border-radius:6px;background:#21262d;color:#c9d1d9;font-size:11px;line-height:1.35}
-    .schedule-input-btn{display:flex;flex:0 0 44px;width:44px;height:44px;align-items:center;justify-content:center;flex-direction:column;padding:0;border:1px solid #2f81f7;border-radius:8px;background:#1f6feb;color:#fff;font-size:11px;font-weight:900;line-height:1.15;cursor:pointer}
+    .schedule-input-btn{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;margin-left:auto;padding:4px 7px;border:1px solid #2f81f7;border-radius:6px;background:#0d203d;color:#79c0ff;font-size:11px;font-weight:800;line-height:1.35;white-space:nowrap;cursor:pointer}
+    .schedule-input-btn:hover,.schedule-input-btn:active{background:#1f6feb;color:#fff}
     .schedule-week{margin-top:24px}
     .schedule-week-title{font-size:16px;font-weight:900;color:#e6edf3}
     .schedule-week-range{margin-top:3px;font-size:11px;color:#8b949e}
@@ -1353,6 +1354,7 @@
 <div class="toast" id="toast"></div>
 <div id="exportProgress" role="status" aria-live="polite"><span class="export-spinner" aria-hidden="true"></span><span>匯出資料中，請稍等...</span></div>
 <div id="submitProgress" role="status" aria-live="polite"><span class="export-spinner" aria-hidden="true"></span><span id="submitProgressText">提交資料中，請稍等...</span></div>
+<div id="loadingProgress" role="status" aria-live="polite"><span class="export-spinner" aria-hidden="true"></span><span id="loadingProgressText">載入資料中，請稍等...</span></div>
 
 <!-- SN Numpad (7-8-9 / 4-5-6 / 1-2-3 / ⌫-0-✓) -->
 <div id="snPad">
@@ -1391,8 +1393,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-21';
-const _APP_VERSION='v1.011';
+const _APP_BUMP='2026.07.15-22';
+const _APP_VERSION='v1.012';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1400,6 +1402,24 @@ const _isMob=document.documentElement.classList.contains('mob');
   const el=document.getElementById('appVersion');
   if(el)el.textContent=_APP_VERSION;
 })();
+const _loadingProgressTokens=new Set();
+function showLoadingProgress(message='載入資料中，請稍等...'){
+  const token={message};
+  _loadingProgressTokens.add(token);
+  document.getElementById('loadingProgressText').textContent=message;
+  const pinScreen=document.getElementById('pinScreen');
+  if(!pinScreen||getComputedStyle(pinScreen).display==='none')document.getElementById('loadingProgress').classList.add('show');
+  return token;
+}
+function hideLoadingProgress(token){
+  _loadingProgressTokens.delete(token);
+  if(_loadingProgressTokens.size){
+    const latest=Array.from(_loadingProgressTokens).pop();
+    document.getElementById('loadingProgressText').textContent=latest.message;
+    return;
+  }
+  document.getElementById('loadingProgress').classList.remove('show');
+}
 
 async function _pbkdf2(pin){
   const salt=Uint8Array.from(atob(_PS),c=>c.charCodeAt(0));
@@ -1671,10 +1691,15 @@ async function requestScheduleRange(from,days,force,signal){
 }
 function renderScheduleAssignment(item,date,shift){
   const people=item[shift]||[];
-  const count=new Set(people.map(person=>person.name).filter(Boolean)).size,company=item.linked?item.company:'其他安排';
+  const count=new Set(people.map(person=>person.name).filter(Boolean)).size;
+  const code=String(item.title||'').trim().toUpperCase();
+  const leaveLabel=!item.linked&&code==='SL'?'病假':!item.linked&&code==='AL'?'年假':'';
+  const company=item.linked?item.company:(leaveLabel?code:'其他安排');
+  const title=leaveLabel||item.title;
+  const canInput=item.linked&&date<=scheduleLocalIso();
   return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
-    <div class="schedule-assignment-head"><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(item.title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span></div></div>
-    <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div>${item.linked?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button"><span>輸入</span><span>資料</span></button>`:''}</div></div>
+    <div class="schedule-assignment-head"><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span></div></div>
+    <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div>${canInput?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">輸入資料</button>`:''}</div></div>
   </article>`;
 }
 function renderSchedulePeriod(label,shift,items,date){
@@ -1712,6 +1737,7 @@ async function loadScheduleOverview(force=false,weekOnly=false){
   _scheduleRequest?.abort();
   const controller=new AbortController();_scheduleRequest=controller;
   const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=true;btn.textContent='載入中...';
+  const loadingToken=showLoadingProgress('工作安排載入中，請稍等...');
   try{
     const needToday=force||!weekOnly||!_scheduleTodayData;
     const todayPromise=needToday?requestScheduleRange(today,35,force,controller.signal):Promise.resolve(_scheduleTodayData);
@@ -1726,6 +1752,7 @@ async function loadScheduleOverview(force=false,weekOnly=false){
     if(!_scheduleTodayData)document.getElementById('scheduleFocusItems').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
     if(!_scheduleWeekDays.length)document.getElementById('scheduleTimeline').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
   }finally{
+    hideLoadingProgress(loadingToken);
     if(_scheduleRequest===controller){btn.disabled=false;btn.textContent='重新整理';}
   }
 }
@@ -1758,6 +1785,7 @@ async function loadSclMonthlySettings(force=false){
   const url=getScriptUrl();if(!url)return;
   _sclMonthlySettingsRequest?.abort();_sclMonthlySettingsRequest=new AbortController();
   const status=document.getElementById('sclMonthlyStatus');status.textContent='載入中...';status.style.color='#8b949e';
+  const loadingToken=showLoadingProgress('本月設定載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(`${url}?action=monthlySettings&company=SCL`,{signal:_sclMonthlySettingsRequest.signal},30000);
     if(!data.success||!data.settings)throw new Error(data.message||'載入失敗');
@@ -1766,7 +1794,7 @@ async function loadSclMonthlySettings(force=false){
   }catch(e){
     if(e.name==='AbortError')return;
     status.textContent='載入失敗';status.style.color='#ff7b72';
-  }
+  }finally{hideLoadingProgress(loadingToken);}
 }
 async function saveSclMonthlySettings(){
   const poNumber=document.getElementById('sclMonthlyPo').value.trim();
@@ -1871,6 +1899,7 @@ async function loadMonthlyStats(force=false){
   const grid=document.getElementById('monthlyStatsGrid'),btn=document.getElementById('monthlyStatsRefreshBtn'),cached=getCachedMonthlyStats();
   if(cached)renderMonthlyStatsData(cached);else grid.innerHTML='<div class="dash-mobile-empty">正在載入六間公司資料...</div>';
   btn.disabled=true;btn.textContent=cached&&!force?'更新中...':'載入中...';
+  const loadingToken=showLoadingProgress('每月統計載入中，請稍等...');
   try{
     const suffix=force?'&refresh=1':'';
     const now=new Date(),monthCode=String(now.getFullYear()).slice(-2)+String(now.getMonth()+1).padStart(2,'0');
@@ -1898,7 +1927,7 @@ async function loadMonthlyStats(force=false){
   }catch(e){
     if(e.name==='AbortError')return;
     if(!cached)grid.innerHTML=`<div class="dash-mobile-empty">${esc(e.message||'無法載入每月統計')}</div>`;
-  }finally{btn.disabled=false;btn.textContent='重新整理';}
+  }finally{hideLoadingProgress(loadingToken);btn.disabled=false;btn.textContent='重新整理';}
 }
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
@@ -2196,6 +2225,7 @@ async function fetchAaTags(triggerBtn){
   const btn=triggerBtn||document.getElementById('aaTagLoadBtn');
   const originalText=btn.textContent;
   btn.disabled=true;btn.textContent='載入中...';
+  const loadingToken=showLoadingProgress('AA Tag 號碼載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(getScriptUrl()+'?action=aaTags&company=MGM&refresh=1',{},45000);
     if(!data.success||!Array.isArray(data.tags))throw new Error(data.message||'載入失敗');
@@ -2204,7 +2234,7 @@ async function fetchAaTags(triggerBtn){
     if(currentDashboardCompany==='MGM'&&dashboardRecords.length)renderDashboardPage();
     showToast(`✓ 已載入 ${_aaTags.length} 個 AA Tag 號碼`);
   }catch(e){showToast('AA Tag 號碼載入失敗','err');}
-  finally{btn.disabled=false;btn.textContent=originalText;}
+  finally{hideLoadingProgress(loadingToken);btn.disabled=false;btn.textContent=originalText;}
 }
 function syncAaTagFromSerial(){
   if(activeCompany!=='MGM')return;
@@ -2440,10 +2470,12 @@ function applyTemplateMappings(mappings){
 async function loadTemplateMappings(){
   const SCRIPT_URL=getScriptUrl();
   if(!SCRIPT_URL)return;
+  const loadingToken=showLoadingProgress('原因及處理方法載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=template&'+companyParam(),{},30000);
     if(data.success)applyTemplateMappings(data.mappings||[]);
   }catch(e){}
+  finally{hideLoadingProgress(loadingToken);}
 }
 function closeTemplateEditor(){document.getElementById('templateModal').classList.remove('show');}
 function renderTemplateEditorRows(){
@@ -2774,6 +2806,7 @@ async function fetchPartsCodes(){
   const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL){showToast('尚未設定網站代號','err');return;}
   const btn=document.getElementById('bpUpdateBtn');
   if(btn){btn.textContent='…';btn.disabled=true;}
+  const loadingToken=showLoadingProgress('零件清單載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=parts&'+companyParam(),{},45000);
     if(Array.isArray(data.parts)&&data.parts.length){
@@ -2784,7 +2817,7 @@ async function fetchPartsCodes(){
       showToast('✓ 零件清單已更新（'+_partsCodes.length+' 項）');
     }else{showToast('沒有零件資料','err');}
   }catch(e){showToast('零件清單載入失敗','err');}
-  if(btn){btn.textContent='↻';btn.disabled=false;}
+  finally{hideLoadingProgress(loadingToken);if(btn){btn.textContent='↻';btn.disabled=false;}}
 }
 _loadPartsFromCache();
 updatePartsLanguageButtons();
@@ -2848,6 +2881,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage){
   const serialNo=bpListFilterSerial();
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
   _bpListEditingIndex=-1;
+  const loadingToken=showLoadingProgress('損壞零件列表載入中，請稍等...');
   try{
     const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize)});
     const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
@@ -2860,7 +2894,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage){
     _bpListRecords=[];
     _bpListPage=1;_bpListTotalPages=1;_bpListTotalMatches=0;
     showToast('損壞零件列表載入失敗','err');
-  }
+  }finally{hideLoadingProgress(loadingToken);}
   renderBrokenPartsListRows();
   updateBpListPager();
 }
@@ -3043,6 +3077,7 @@ async function loadBrokenPartsPage(page=_bpPage){
   document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
   document.getElementById('bpPageSummary').textContent='正在載入資料...';
   const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize)});
+  const loadingToken=showLoadingProgress('損壞零件列表載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:_bpPageRequest.signal},45000);
     if(!data.success)throw new Error(data.message||'載入失敗');
@@ -3055,7 +3090,7 @@ async function loadBrokenPartsPage(page=_bpPage){
     _bpPageRecords=[];_bpPage=1;_bpPageTotalPages=1;_bpPageTotalMatches=0;
     document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入損壞零件列表失敗。</div>';
     document.getElementById('bpPageSummary').textContent='載入失敗';updateBrokenPartsPagePager();
-  }
+  }finally{hideLoadingProgress(loadingToken);}
 }
 function brokenPartsPageValueHtml(key,value){
   const clean=cleanDashValue(value);
@@ -3404,6 +3439,7 @@ async function loadPoRepairRecords(){
   }
   const token=++_poRepairToken;
   document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">載入損壞零件中...</div>';
+  const loadingToken=showLoadingProgress('損壞零件載入中，請稍等...');
   try{
     const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:sn,sort:'newest',page:'1',pageSize:'50'});
     const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
@@ -3413,7 +3449,7 @@ async function loadPoRepairRecords(){
     renderPoRepairRows();
   }catch(e){
     if(token===_poRepairToken)document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">損壞零件列表載入失敗。</div>';
-  }
+  }finally{hideLoadingProgress(loadingToken);}
 }
 function renderPoRepairRows(){
   updatePoLanguageButtons();
@@ -3665,13 +3701,15 @@ function renderQueue(){
 function loadTodayRecords(){
   const SCRIPT_URL=getScriptUrl();
   const casino=document.getElementById('casino').value;
+  const loadingToken=showLoadingProgress('當日記錄載入中，請稍等...');
   fetchJsonWithTimeout(SCRIPT_URL+'?action=today&'+companyParam()+'&casino='+encodeURIComponent(casino),{},30000)
     .then(data=>{
       todayRecords=data.records||[];
       if(data.lastPO&&!document.getElementById('poNumber').value){document.getElementById('poNumber').value=data.lastPO;localStorage.setItem('poNumber',data.lastPO);}
       renderTodayPanel();renderQueueDuplicateNotice();
     })
-    .catch(()=>{});
+    .catch(()=>{})
+    .finally(()=>hideLoadingProgress(loadingToken));
 }
 function renderTodayPanel(){}
 function toggleToday(){}
@@ -3794,6 +3832,7 @@ async function loadDashboard(page=1){
     pageSize:String(dashboardPageSize)
   });
   dashboardLastQuery=Object.fromEntries(qs.entries());
+  const loadingToken=showLoadingProgress('維修記錄載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:dashboardRequest.signal},60000);
     if(!data.success){throw new Error(data.message||'載入失敗');}
@@ -3812,7 +3851,7 @@ async function loadDashboard(page=1){
     updateDashboardPager();
     summary.textContent='載入失敗';
     showToast('資料查詢載入失敗','err');
-  }
+  }finally{hideLoadingProgress(loadingToken);}
 }
 function renderDashboardRows(records){
   const rowsEl=document.getElementById('dashRows');
@@ -3877,6 +3916,7 @@ async function openSchedulePeople(source,index){
   const token=++_schedulePeopleRequestToken;
   _schedulePeopleController?.abort();const controller=new AbortController();_schedulePeopleController=controller;
   if(!date||!casino){body.innerHTML='<div class="schedule-people-empty">沒有資料</div>';_schedulePeopleController=null;return;}
+  const loadingToken=showLoadingProgress('人員安排載入中，請稍等...');
   try{
     const data=readScheduleCache(date,1)||await requestScheduleRange(date,1,false,controller.signal);
     if(token!==_schedulePeopleRequestToken)return;
@@ -3888,6 +3928,7 @@ async function openSchedulePeople(source,index){
     if(error.name==='AbortError'||token!==_schedulePeopleRequestToken)return;
     body.innerHTML='<div class="schedule-people-empty">沒有資料</div>';
   }finally{
+    hideLoadingProgress(loadingToken);
     if(_schedulePeopleController===controller)_schedulePeopleController=null;
   }
 }
@@ -4063,13 +4104,14 @@ async function openRepeatRecords(serialNo){
   const rows=document.getElementById('repeatRecordsRows');
   title.textContent=`S/N ${sn} 重複維修記錄`;rows.innerHTML='<div class="dash-mobile-empty">載入中...</div>';modal.classList.add('show');
   const params={...dashboardLastQuery,q:'',serialNo:sn,searchMode:'serial'};
+  const loadingToken=showLoadingProgress('重複維修記錄載入中，請稍等...');
   try{
     const records=await fetchPagedRecords((page,pageSize)=>new URLSearchParams({...params,page:String(page),pageSize:String(pageSize)}));
     if(token!==_repeatRecordsRequestToken)return;
     _repeatRecordsSerial=sn;_repeatRecords=records;_repeatRecordsEditingIdx=-1;renderRepeatRecords();
   }catch(e){
     if(token===_repeatRecordsRequestToken)rows.innerHTML='<div class="dash-mobile-empty">記錄載入失敗。</div>';
-  }
+  }finally{hideLoadingProgress(loadingToken);}
 }
 function toggleDashboardRecord(index,checked){
   const record=dashboardRecords[index];if(!record)return;
