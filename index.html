@@ -46,7 +46,7 @@
     .mob #pinError{font-size:20px;height:24px}
     #setupScreen{position:fixed;inset:0;background:#0d1117;display:none;align-items:center;justify-content:center;z-index:9998}
     #setupScreen.show{display:flex}
-    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #partsListPage,body.auth-locked #brokenPartsPage,body.auth-locked #monthlyStatsPage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
+    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #partsListPage,body.auth-locked #brokenPartsPage,body.auth-locked #monthlyStatsPage,body.auth-locked #schedulePage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
     #setupBox{display:flex;flex-direction:column;gap:20px;padding:40px 32px;background:#161b22;border-radius:24px;border:1px solid #30363d;width:340px}
     #setupTitle{font-size:18px;font-weight:700;color:#e6edf3}
     #setupSub{font-size:13px;color:#8b949e;line-height:1.6}
@@ -591,6 +591,47 @@
     html:not(.mob) .monthly-metric-value span{font-size:11px}
     html:not(.mob) .monthly-metric-foot{margin-top:7px;font-size:11px}
     html:not(.mob) .monthly-machines-per-visit{margin-top:8px;padding:7px 9px;font-size:12px}
+    .schedule-page-shell{max-width:1100px;margin:0 auto}
+    .schedule-page-head,.schedule-week-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .schedule-page-head{margin-bottom:18px}
+    .schedule-page-title{font-size:20px;font-weight:900;color:#e6edf3}
+    .schedule-refresh,.schedule-week-btn{height:38px;padding:0 13px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    .schedule-refresh:disabled,.schedule-week-btn:disabled{opacity:.55;cursor:not-allowed}
+    .schedule-focus{padding:18px 0 22px;border-top:1px solid #21262d;border-bottom:1px solid #30363d}
+    .schedule-kicker{font-size:12px;font-weight:900;color:#58a6ff}
+    .schedule-focus-date{margin-top:5px;font-size:17px;font-weight:800;color:#e6edf3}
+    .schedule-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:14px}
+    .schedule-assignment{min-width:0;border:1px solid #30363d;border-radius:9px;background:#161b22;overflow:hidden}
+    .schedule-assignment[open]{border-color:#484f58}
+    .schedule-assignment summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;list-style:none;cursor:pointer}
+    .schedule-assignment summary::-webkit-details-marker{display:none}
+    .schedule-assignment-main{min-width:0}
+    .schedule-company{display:inline-block;margin-bottom:5px;padding:3px 6px;border:1px solid #1f6feb;border-radius:6px;background:#0d203d;color:#79c0ff;font-size:10px;font-weight:900}
+    .schedule-assignment.unlinked .schedule-company{border-color:#484f58;background:#21262d;color:#8b949e}
+    .schedule-assignment-title{font-size:14px;font-weight:850;color:#e6edf3;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
+    .schedule-assignment-meta{display:flex;align-items:center;gap:7px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
+    .schedule-assignment-chevron{transition:transform .18s ease}
+    .schedule-assignment[open] .schedule-assignment-chevron{transform:rotate(180deg)}
+    .schedule-assignment-details{padding:0 14px 13px;border-top:1px solid #21262d}
+    .schedule-shift{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;padding-top:11px}
+    .schedule-shift-label{font-size:11px;font-weight:900;color:#8b949e}
+    .schedule-person-list{display:flex;flex-wrap:wrap;gap:6px}
+    .schedule-person{padding:4px 7px;border-radius:6px;background:#21262d;color:#c9d1d9;font-size:11px;line-height:1.35}
+    .schedule-person small{display:block;color:#8b949e;font-size:9px;white-space:pre-line}
+    .schedule-input-btn{width:100%;height:38px;margin-top:12px;border:1px solid #2f81f7;border-radius:8px;background:#1f6feb;color:#fff;font-size:12px;font-weight:900;cursor:pointer}
+    .schedule-week{margin-top:24px}
+    .schedule-week-title{font-size:16px;font-weight:900;color:#e6edf3}
+    .schedule-week-range{margin-top:3px;font-size:11px;color:#8b949e}
+    .schedule-week-actions{display:flex;gap:7px}
+    .schedule-timeline{margin-top:14px}
+    .schedule-day{display:grid;grid-template-columns:116px minmax(0,1fr);gap:18px;padding:15px 0;border-top:1px solid #21262d}
+    .schedule-day:first-child{border-top:none}
+    .schedule-day-date{font-size:13px;font-weight:900;color:#c9d1d9;line-height:1.5}
+    .schedule-day-date span{display:block;color:#8b949e;font-size:11px;font-weight:700}
+    .schedule-day.today .schedule-day-date{color:#58a6ff}
+    .schedule-day .schedule-items{margin-top:0}
+    .schedule-empty{padding:14px 0;color:#484f58;font-size:12px}
+    .schedule-error{padding:18px;border:1px solid #f85149;border-radius:9px;color:#ff7b72;font-size:12px}
     .scl-monthly-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     .scl-monthly-head .card-title{margin-bottom:0}
     .scl-monthly-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:none;background:none;color:#8b949e;font-size:12px;font-weight:800;text-align:left;cursor:pointer}
@@ -656,6 +697,28 @@
     .mob .bp-field-options{position:fixed;left:16px;right:16px;top:auto;width:auto}
     .mob .monthly-company-grid{grid-template-columns:1fr}
     .mob .monthly-page-title{font-size:16px}
+    .mob .schedule-page-title{font-size:16px}
+    .mob .schedule-page-head{align-items:center}
+    .mob .schedule-focus{padding-top:14px}
+    .mob .schedule-items{grid-template-columns:1fr}
+    .mob .schedule-week-head{align-items:flex-start;flex-direction:column}
+    .mob .schedule-week-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+    .mob .schedule-week-btn{padding:0 7px}
+    .mob .schedule-day{grid-template-columns:1fr;gap:8px;padding:14px 0}
+    .mob .schedule-day-date{display:flex;align-items:baseline;gap:8px}
+    .mob .schedule-day-date span{display:inline}
+    @media (max-width:600px){
+      .schedule-page-title{font-size:16px}
+      .schedule-page-head{align-items:center}
+      .schedule-focus{padding-top:14px}
+      .schedule-items{grid-template-columns:minmax(0,1fr)}
+      .schedule-week-head{align-items:flex-start;flex-direction:column}
+      .schedule-week-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+      .schedule-week-btn{padding:0 7px}
+      .schedule-day{grid-template-columns:minmax(0,1fr);gap:8px;padding:14px 0}
+      .schedule-day-date{display:flex;align-items:baseline;gap:8px}
+      .schedule-day-date span{display:inline}
+    }
     .mob .scl-monthly-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .mob .scl-monthly-po{grid-column:1/-1}
     .mob .parts-list-toolbar{align-items:flex-start}
@@ -852,6 +915,7 @@
   <div class="menu-sub" id="companyMenu"></div>
   <div class="menu-section">資料查詢</div>
   <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
+  <button class="menu-item" id="scheduleMenuBtn" onclick="showPage('schedule')" type="button">工作安排</button>
   <button class="menu-item" id="monthlyStatsMenuBtn" onclick="showPage('monthlyStats')" type="button">每月統計</button>
   <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
   <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>損壞零件列表</span><span class="menu-chevron">▼</span></button>
@@ -1180,6 +1244,31 @@
 </div>
 </div><!-- /dashboardPage -->
 
+<div id="schedulePage" class="app-page">
+  <div class="schedule-page-shell">
+    <div class="schedule-page-head">
+      <div class="schedule-page-title">工作安排</div>
+      <button class="schedule-refresh" id="scheduleRefreshBtn" onclick="loadScheduleOverview(true)" type="button">重新整理</button>
+    </div>
+    <section class="schedule-focus">
+      <div class="schedule-kicker" id="scheduleFocusLabel">今日工作</div>
+      <div class="schedule-focus-date" id="scheduleFocusDate">正在載入...</div>
+      <div class="schedule-items" id="scheduleFocusItems"></div>
+    </section>
+    <section class="schedule-week">
+      <div class="schedule-week-head">
+        <div><div class="schedule-week-title">七日安排</div><div class="schedule-week-range" id="scheduleWeekRange"></div></div>
+        <div class="schedule-week-actions">
+          <button class="schedule-week-btn" onclick="changeScheduleWeek(-1)" type="button">上一週</button>
+          <button class="schedule-week-btn" onclick="returnScheduleToday()" type="button">本週</button>
+          <button class="schedule-week-btn" onclick="changeScheduleWeek(1)" type="button">下一週</button>
+        </div>
+      </div>
+      <div class="schedule-timeline" id="scheduleTimeline"><div class="schedule-empty">正在載入...</div></div>
+    </section>
+  </div>
+</div><!-- /schedulePage -->
+
 <div id="monthlyStatsPage" class="app-page">
   <div class="monthly-page-shell">
     <div class="monthly-page-head">
@@ -1279,8 +1368,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-16';
-const _APP_VERSION='v1.006';
+const _APP_BUMP='2026.07.15-17';
+const _APP_VERSION='v1.007';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1492,7 +1581,7 @@ function openGasSettings(opts={}){
 function openMenu(){renderCompanyMenu();document.getElementById('menuOverlay').classList.add('show');document.getElementById('sideMenu').classList.add('show');}
 function closeMenu(){document.getElementById('menuOverlay').classList.remove('show');document.getElementById('sideMenu').classList.remove('show');}
 function showPage(page){
-  if(page==='dashboard'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'){
+  if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'){
     if(!hasAnyDeployId()){showToast('請先設定並測試其中一個網站代號','err');openGasSettings();return;}
     if(!getDeployId())switchQueueCompany(firstConfiguredCompany());
     if(page==='dashboard')syncCasinoOptions();
@@ -1503,19 +1592,121 @@ function showPage(page){
   document.body.classList.toggle('dashboard-view',page!=='input');
   document.getElementById('inputPage').classList.toggle('active',page==='input');
   document.getElementById('dashboardPage').classList.toggle('active',page==='dashboard');
+  document.getElementById('schedulePage').classList.toggle('active',page==='schedule');
   document.getElementById('monthlyStatsPage').classList.toggle('active',page==='monthlyStats');
   document.getElementById('partsListPage').classList.toggle('active',page==='partsList');
   document.getElementById('brokenPartsPage').classList.toggle('active',page==='brokenParts');
   document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
+  document.getElementById('scheduleMenuBtn').classList.toggle('active',page==='schedule');
   document.getElementById('monthlyStatsMenuBtn').classList.toggle('active',page==='monthlyStats');
   document.getElementById('partsListMenuBtn').classList.toggle('active',page==='partsList');
   document.getElementById('brokenPartsMenuBtn').classList.toggle('active',page==='brokenParts');
   renderCompanyMenu();
   closeMenu();
   if(page==='dashboard')initDashboardFilters();
+  if(page==='schedule')loadScheduleOverview();
   if(page==='monthlyStats')loadMonthlyStats();
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
+}
+const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v1_';
+let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null;
+function scheduleLocalIso(date=new Date()){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function scheduleDateObject(iso){
+  const [year,month,day]=String(iso||'').split('-').map(Number);
+  return new Date(year,month-1,day,12,0,0);
+}
+function scheduleAddDays(iso,days){const date=scheduleDateObject(iso);date.setDate(date.getDate()+days);return scheduleLocalIso(date);}
+function scheduleDateLabel(iso){
+  const date=scheduleDateObject(iso),weekdays=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+  return `${date.getMonth()+1}月${date.getDate()}日 ${weekdays[date.getDay()]}`;
+}
+function scheduleCacheKey(from,days){return `${SCHEDULE_CACHE_PREFIX}${from}_${days}`;}
+function readScheduleCache(from,days){
+  try{return JSON.parse(localStorage.getItem(scheduleCacheKey(from,days))||'null')?.data||null;}catch(e){return null;}
+}
+function saveScheduleCache(from,days,data){
+  try{localStorage.setItem(scheduleCacheKey(from,days),JSON.stringify({savedAt:Date.now(),data}));}catch(e){}
+}
+async function requestScheduleRange(from,days,force,signal){
+  const params=new URLSearchParams({action:'scheduleOverview',from,days:String(days)});if(force)params.set('refresh','1');
+  const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+params.toString(),{signal},45000);
+  if(!data.success||!Array.isArray(data.days))throw new Error(data.message||'工作安排載入失敗');
+  saveScheduleCache(from,days,data);return data;
+}
+function scheduleStaffCount(item){
+  return new Set([...(item.am||[]),...(item.pm||[])].map(person=>person.name).filter(Boolean)).size;
+}
+function renderScheduleShift(label,people,item){
+  if(!people?.length)return '';
+  return `<div class="schedule-shift"><div class="schedule-shift-label">${label}</div><div class="schedule-person-list">${people.map(person=>`<span class="schedule-person">${esc(person.name)}${item.linked&&person.assignment?`<small>${esc(person.assignment)}</small>`:''}</span>`).join('')}</div></div>`;
+}
+function renderScheduleAssignment(item,date){
+  const count=scheduleStaffCount(item),company=item.linked?item.company:'其他安排';
+  return `<details class="schedule-assignment ${item.linked?'linked':'unlinked'}">
+    <summary><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(item.title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span><span class="schedule-assignment-chevron">▼</span></div></summary>
+    <div class="schedule-assignment-details">${renderScheduleShift('上午',item.am,item)}${renderScheduleShift('下午',item.pm,item)}${item.linked?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">開始輸入</button>`:''}</div>
+  </details>`;
+}
+function renderScheduleItems(items,date){
+  return items?.length?items.map(item=>renderScheduleAssignment(item,date)).join(''):'<div class="schedule-empty">沒有安排</div>';
+}
+function renderScheduleFocus(){
+  const label=document.getElementById('scheduleFocusLabel'),dateEl=document.getElementById('scheduleFocusDate'),itemsEl=document.getElementById('scheduleFocusItems');
+  const days=_scheduleTodayData?.days||[];
+  let focus=days[0]?.items?.length?days[0]:days.slice(1).find(day=>day.items?.length);
+  if(!focus){label.textContent='工作安排';dateEl.textContent='未來 35 日沒有安排';itemsEl.innerHTML='';return;}
+  const isToday=focus.date===scheduleLocalIso();
+  label.textContent=isToday?'今日工作':'下一個工作日';dateEl.textContent=scheduleDateLabel(focus.date);
+  itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date);
+}
+function renderScheduleWeek(){
+  const days=_scheduleWeekDays||[],today=scheduleLocalIso();
+  if(days.length){document.getElementById('scheduleWeekRange').textContent=`${scheduleDateLabel(days[0].date)} 至 ${scheduleDateLabel(days[days.length-1].date)}`;}
+  else document.getElementById('scheduleWeekRange').textContent='';
+  document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day ${day.date===today?'today':''}"><div class="schedule-day-date">${scheduleDateLabel(day.date)}${day.date===today?'<span>今日</span>':''}</div><div class="schedule-items">${renderScheduleItems(day.items,day.date)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
+}
+function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();}
+async function loadScheduleOverview(force=false,weekOnly=false){
+  const today=scheduleLocalIso();if(!_scheduleAnchor)_scheduleAnchor=today;
+  const cachedToday=readScheduleCache(today,35),cachedWeek=_scheduleAnchor===today?cachedToday:readScheduleCache(_scheduleAnchor,7);
+  if(cachedToday&&!_scheduleTodayData)_scheduleTodayData=cachedToday;
+  if(cachedWeek)_scheduleWeekDays=(cachedWeek.days||[]).slice(0,7);
+  else if(_scheduleAnchor===today&&_scheduleTodayData)_scheduleWeekDays=(_scheduleTodayData.days||[]).slice(0,7);
+  renderSchedulePage();
+  _scheduleRequest?.abort();
+  const controller=new AbortController();_scheduleRequest=controller;
+  const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=true;btn.textContent='載入中...';
+  try{
+    const needToday=force||!weekOnly||!_scheduleTodayData;
+    const todayPromise=needToday?requestScheduleRange(today,35,force,controller.signal):Promise.resolve(_scheduleTodayData);
+    const weekPromise=_scheduleAnchor===today?Promise.resolve(null):requestScheduleRange(_scheduleAnchor,7,force,controller.signal);
+    const [todayData,weekData]=await Promise.all([todayPromise,weekPromise]);
+    if(todayData)_scheduleTodayData=todayData;
+    const sourceDays=_scheduleAnchor===today?(_scheduleTodayData?.days||[]):(weekData?.days||cachedWeek?.days||[]);
+    _scheduleWeekDays=sourceDays.slice(0,7);
+    renderSchedulePage();
+  }catch(error){
+    if(error.name==='AbortError')return;
+    if(!_scheduleTodayData)document.getElementById('scheduleFocusItems').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
+    if(!_scheduleWeekDays.length)document.getElementById('scheduleTimeline').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
+  }finally{
+    if(_scheduleRequest===controller){btn.disabled=false;btn.textContent='重新整理';}
+  }
+}
+function changeScheduleWeek(direction){_scheduleAnchor=scheduleAddDays(_scheduleAnchor||scheduleLocalIso(),Number(direction)*7);loadScheduleOverview(false,true);}
+function returnScheduleToday(){_scheduleAnchor=scheduleLocalIso();loadScheduleOverview(false,true);}
+function openScheduleInputFromButton(button){
+  const {company,venue,date}=button.dataset;
+  if(!company||!venue||!date)return;
+  selectCompany(company);
+  const casino=document.getElementById('casino'),dateInput=document.getElementById('date');
+  if(!Array.from(casino.options).some(option=>option.value===venue)){showToast('此安排暫時未能連結資料輸入','err');return;}
+  casino.value=venue;casino.dispatchEvent(new Event('change',{bubbles:true}));
+  dateInput.value=date;dateInput.dispatchEvent(new Event('change',{bubbles:true}));
+  window.scrollTo({top:0,behavior:'smooth'});showToast(`已開啟 ${venue} · ${scheduleDateLabel(date)}`);
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
 const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v3',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
