@@ -574,6 +574,23 @@
     .monthly-metric-fill{position:absolute;left:0;bottom:0;height:3px;background:#238636}
     .monthly-metric.visits .monthly-metric-fill{background:#2f81f7}
     .monthly-venue.visual .monthly-machines-per-visit{text-align:center}
+    html:not(.mob) .monthly-company-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
+    html:not(.mob) .monthly-company-card{padding:19px}
+    html:not(.mob) .monthly-company-head{margin-bottom:16px}
+    html:not(.mob) .monthly-company-name{font-size:20px}
+    html:not(.mob) .monthly-company-total{font-size:13px;margin-top:5px}
+    html:not(.mob) .monthly-po{padding:5px 9px;font-size:12px}
+    html:not(.mob) .monthly-drag{width:32px;height:32px;font-size:17px}
+    html:not(.mob) .monthly-venue.visual{padding:15px 0}
+    html:not(.mob) .monthly-venue-name{font-size:14px}
+    html:not(.mob) .monthly-metrics{gap:10px;margin-top:10px}
+    html:not(.mob) .monthly-metric{padding:12px 12px 13px}
+    html:not(.mob) .monthly-metric-label{font-size:11px}
+    html:not(.mob) .monthly-metric-value{gap:5px;margin-top:6px}
+    html:not(.mob) .monthly-metric-value strong{font-size:22px}
+    html:not(.mob) .monthly-metric-value span{font-size:11px}
+    html:not(.mob) .monthly-metric-foot{margin-top:7px;font-size:11px}
+    html:not(.mob) .monthly-machines-per-visit{margin-top:8px;padding:7px 9px;font-size:12px}
     .scl-monthly-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     .scl-monthly-head .card-title{margin-bottom:0}
     .scl-monthly-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:none;background:none;color:#8b949e;font-size:12px;font-weight:800;text-align:left;cursor:pointer}
@@ -1262,8 +1279,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-15';
-const _APP_VERSION='v1.005';
+const _APP_BUMP='2026.07.15-16';
+const _APP_VERSION='v1.006';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
