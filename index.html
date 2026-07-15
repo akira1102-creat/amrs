@@ -561,7 +561,11 @@
     .monthly-venue-count strong{font-size:13px;color:#e6edf3}
     .monthly-progress{height:7px;margin-top:7px;border-radius:999px;background:#0d1117;overflow:hidden}
     .monthly-progress-bar{height:100%;border-radius:999px;background:#238636;transition:width .2s ease}
+    .monthly-progress-bar.visits{background:#2f81f7}
     .monthly-progress-label{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:10px;color:#8b949e}
+    .monthly-visit-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:10px;color:#8b949e}
+    .monthly-visit-summary strong{color:#58a6ff;font-size:11px}
+    .monthly-machines-per-visit{margin-top:6px;padding:5px 7px;border:1px solid #1f6feb;border-radius:7px;background:#0d203d;color:#79c0ff;font-size:10px;font-weight:800;text-align:center}
     .scl-monthly-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     .scl-monthly-head .card-title{margin-bottom:0}
     .scl-monthly-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:none;background:none;color:#8b949e;font-size:12px;font-weight:800;text-align:left;cursor:pointer}
@@ -1261,8 +1265,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-07';
-const _APP_VERSION='v0.996';
+const _APP_BUMP='2026.07.15-08';
+const _APP_VERSION='v0.997';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1479,7 +1483,7 @@ function showPage(page){
   if(page==='brokenParts')loadBrokenPartsPage(1);
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
-const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v1',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
+const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v2',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
 let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null;
 function toggleSclMonthlySettings(){
   const content=document.getElementById('sclMonthlySettingsContent'),toggle=document.getElementById('sclMonthlyToggle');
@@ -1528,12 +1532,19 @@ async function saveSclMonthlySettings(){
 }
 function renderMonthlyVenue(venue){
   const done=Number(venue.done)||0;
-  if(venue.target==null)return `<div class="monthly-venue"><div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> 已完成</span></div></div>`;
+  const scheduledVisits=Number(venue.scheduledVisits)||0,completedVisits=Number(venue.completedVisits)||0,remainingVisits=Number(venue.remainingVisits)||0;
+  const visitPercent=Math.max(0,Number(venue.visitPercent)||0),visitBarWidth=Math.min(visitPercent,100);
+  const visitBlock=scheduledVisits>0?`<div class="monthly-visit-summary"><span>到訪已完成 <strong>${completedVisits}</strong> 次</span><span>剩餘 <strong>${remainingVisits}</strong> 次</span></div>
+    <div class="monthly-progress"><div class="monthly-progress-bar visits" style="width:${visitBarWidth}%"></div></div>
+    <div class="monthly-progress-label"><span>到訪進度 ${visitPercent}%</span><span>共 ${scheduledVisits} 次</span></div>
+    ${venue.machinesPerRemainingVisit!=null?`<div class="monthly-machines-per-visit">餘下每次需做 ${Math.max(0,Number(venue.machinesPerRemainingVisit)||0)} 台</div>`:''}`:'';
+  if(venue.target==null)return `<div class="monthly-venue"><div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> 已完成</span></div>${visitBlock}</div>`;
   const target=Math.max(0,Number(venue.target)||0),remaining=Math.max(0,Number(venue.remaining)||0),percent=Math.max(0,Number(venue.percent)||0),barWidth=Math.min(percent,100);
   return `<div class="monthly-venue">
     <div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> / ${target}</span></div>
     <div class="monthly-progress"><div class="monthly-progress-bar" style="width:${barWidth}%"></div></div>
-    <div class="monthly-progress-label"><span>${percent}%</span><span>剩餘 ${remaining}</span></div>
+    <div class="monthly-progress-label"><span>維護台數 ${percent}%</span><span>剩餘 ${remaining} 台</span></div>
+    ${visitBlock}
   </div>`;
 }
 function renderMonthlyCompany(company){
