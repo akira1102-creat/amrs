@@ -935,11 +935,11 @@
   <div class="menu-head menu-head-close">
     <button class="menu-close" onclick="closeMenu()" type="button">✕</button>
   </div>
+  <button class="menu-item" id="scheduleMenuBtn" onclick="showPage('schedule')" type="button">工作安排</button>
   <div class="menu-section">資料輸入</div>
   <div class="menu-sub" id="companyMenu"></div>
   <div class="menu-section">資料查詢</div>
   <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
-  <button class="menu-item" id="scheduleMenuBtn" onclick="showPage('schedule')" type="button">工作安排</button>
   <button class="menu-item" id="monthlyStatsMenuBtn" onclick="showPage('monthlyStats')" type="button">每月統計</button>
   <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
   <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>損壞零件列表</span><span class="menu-chevron">▼</span></button>
@@ -952,7 +952,7 @@
   <div id="activeCompanyLabel">SCL</div>
 </div>
 
-<div id="inputPage" class="app-page active">
+<div id="inputPage" class="app-page">
 <div id="mainLayout">
 <div id="mainLeft">
 <div class="card">
@@ -1268,7 +1268,7 @@
 </div>
 </div><!-- /dashboardPage -->
 
-<div id="schedulePage" class="app-page">
+<div id="schedulePage" class="app-page active">
   <div class="schedule-page-shell">
     <div class="schedule-page-head">
       <div class="schedule-page-title">工作安排</div>
@@ -1393,8 +1393,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.16-01';
-const _APP_VERSION='v1.014';
+const _APP_BUMP='2026.07.16-02';
+const _APP_VERSION='v1.015';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1437,7 +1437,7 @@ const COMPANY_CASINOS={
   GEG:['Galaxy','StarWorld'],
   Wynn:['Wynn','Wynn Palace']
 };
-let activePage='input';
+let activePage='schedule';
 let activeCompany=localStorage.getItem('_ml_company')||'SCL';
 let setupVerifiedId='';
 let setupReturnState=null;
@@ -1566,7 +1566,7 @@ function saveSetup(){
   document.getElementById('setupScreen').classList.remove('show');
   setupReturnState=null;setupVerifiedId='';
   _sclMonthlySettingsLoaded=false;
-  unlockApp();syncCompanySpecificFields();syncCasinoOptions();showPage('input');renderCompanyMenu();loadTodayRecords();
+  unlockApp();syncCompanySpecificFields();syncCasinoOptions();showPage('schedule');renderCompanyMenu();
 }
 function cancelSetup(){
   document.getElementById('setupScreen').classList.remove('show');
@@ -2108,7 +2108,7 @@ async function _checkPin(){
     if(!hasAnyDeployId()){openGasSettings();}
     else{
       if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);renderCompanyMenu();}
-      unlockApp();loadTodayRecords();
+      unlockApp();showPage('schedule');
     }
   }else{
     _pin='';_pinBusy=false;_updateDots();
@@ -4468,7 +4468,7 @@ if(localStorage.getItem('_ml_auth')===_PH){
   if(!hasAnyDeployId()){openGasSettings();}
   else{
     if(!getDeployId()){switchQueueCompany(firstConfiguredCompany());renderCompanyMenu();syncCompanySpecificFields();}
-    unlockApp();loadTodayRecords();
+    unlockApp();showPage('schedule');
   }
 }
 initDashboardFilters();
