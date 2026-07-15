@@ -1273,8 +1273,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-11';
-const _APP_VERSION='v1.000';
+const _APP_BUMP='2026.07.15-12';
+const _APP_VERSION='v1.001';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2289,13 +2289,32 @@ let dashboardSelectedRecords=new Map(),dashboardPageSize=10,dashboardCardColumns
 let selectedQueueIdxs=new Set();
 function saveQueue(){localStorage.setItem('_ml_queue',JSON.stringify(queue));}
 try{const _sq=localStorage.getItem('_ml_queue');if(_sq)queue=JSON.parse(_sq);}catch(e){}
+function makeSubmissionId(){
+  if(globalThis.crypto?.randomUUID)return crypto.randomUUID();
+  const random=new Uint32Array(2);
+  if(globalThis.crypto?.getRandomValues)crypto.getRandomValues(random);
+  else{random[0]=Math.floor(Math.random()*0xffffffff);random[1]=Math.floor(Math.random()*0xffffffff);}
+  return `${Date.now().toString(36)}-${random[0].toString(36)}-${random[1].toString(36)}`;
+}
+function ensureSubmissionIds(items){
+  let changed=false;
+  (items||[]).forEach(item=>{if(!item.submissionId){item.submissionId=makeSubmissionId();changed=true;}});
+  return changed;
+}
+if(ensureSubmissionIds(queue))saveQueue();
 
 // ── Local Log & Stats ──────────────────────────────────────
 function _todayLogKey(){const t=new Date();return `_ml_log_${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;}
 function _appendLocalLog(records){
   const key=_todayLogKey();let log=[];
   try{log=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
-  localStorage.setItem(key,JSON.stringify(log.concat(records)));
+  const existingIds=new Set(log.map(record=>record.submissionId).filter(Boolean));
+  const fresh=(records||[]).filter(record=>{
+    if(!record.submissionId)return true;
+    if(existingIds.has(record.submissionId))return false;
+    existingIds.add(record.submissionId);return true;
+  });
+  localStorage.setItem(key,JSON.stringify(log.concat(fresh)));
   _renderStats();
 }
 function _getLocalLog(){try{return JSON.parse(localStorage.getItem(_todayLogKey())||'[]');}catch(e){return[];}}
@@ -2314,6 +2333,7 @@ function _renderStats(){
 let _retryQueue=[];
 try{_retryQueue=JSON.parse(localStorage.getItem('_ml_retry')||'[]');}catch(e){}
 function _saveRetry(){localStorage.setItem('_ml_retry',JSON.stringify(_retryQueue));}
+if(_retryQueue.some(item=>ensureSubmissionIds(item.records)))_saveRetry();
 function _updateRetryNotice(){
   const el=document.getElementById('retryNotice');if(!el)return;
   if(_retryQueue.length){
@@ -2890,6 +2910,7 @@ async function addBatchToQueue(){
 }
 
 function doAddBatchToQueue(items){
+  ensureSubmissionIds(items);
   queue.push(...items);saveQueue();renderQueue();
   scheduleQueueDuplicateCheck(items);
   clearBatchInputs();
@@ -3143,6 +3164,7 @@ function confirmDupAdd(){
   pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');
 }
 function doAddToQueue(item){
+  ensureSubmissionIds([item]);
   queue.push(item);saveQueue();renderQueue();
   scheduleQueueDuplicateCheck(item);
   document.getElementById('serialNo').value='';
@@ -3972,7 +3994,8 @@ async function doSubmit(){
   localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);localStorage.setItem('poNumber',poNumber);
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
-  const records=queue.map(item=>({company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
+  if(ensureSubmissionIds(queue))saveQueue();
+  const records=queue.map(item=>({submissionId:item.submissionId,company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
   const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem('_ml_queue');localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
@@ -3981,7 +4004,7 @@ async function doSubmit(){
     const repairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>({company:activeCompany,record:{...item.poRepair.record,bpRepairDay:fmtDate(date)}}));
     chunks.push({records:records.slice(i,i+CHUNK_SIZE),repairs});
   }
-  let savedCount=0,completedChunks=0;
+  let savedCount=0,skippedCount=0,completedChunks=0;
   showSubmitProgress(0,chunks.length);
   try{
     for(let ci=0;ci<chunks.length;ci++){
@@ -3992,19 +4015,22 @@ async function doSubmit(){
       const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body});
       const data=await r.json();
       if(data.success){
-        savedCount+=chunk.records.length;
+        savedCount+=Number.isFinite(Number(data.inserted))?Number(data.inserted):chunk.records.length;
+        skippedCount+=Number(data.skipped)||0;
         completedChunks=ci+1;
+        queue.splice(0,chunk.records.length);saveQueue();
         showSubmitProgress(completedChunks,chunks.length);
         btn.textContent=chunks.length>1?`儲存中... (${completedChunks}/${chunks.length})`:'儲存中...';
         _appendLocalLog(chunk.records);
       }else{
+        renderQueue();
         showToast('錯誤：'+(data.message||'伺服器錯誤'),'err');
         btn.disabled=false;
         return;
       }
     }
     if(navigator.vibrate)navigator.vibrate([80,40,80]);
-    showToast(`✓ 已儲存 ${savedCount} 筆記錄`);
+    showToast(skippedCount?`✓ 已完成：新增 ${savedCount} 筆，略過 ${skippedCount} 筆已提交記錄`:`✓ 已儲存 ${savedCount} 筆記錄`);
     clearQueue();
   }catch(e){
     chunks.slice(completedChunks).forEach(chunk=>_retryQueue.push({records:chunk.records,repairs:chunk.repairs}));
