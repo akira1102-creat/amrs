@@ -639,8 +639,8 @@
     .mob .bp-field-options{position:fixed;left:16px;right:16px;top:auto;width:auto}
     .mob .monthly-company-grid{grid-template-columns:1fr}
     .mob .monthly-page-title{font-size:16px}
-    .mob .scl-monthly-grid{grid-template-columns:1fr}
-    .mob .scl-monthly-po{grid-column:auto}
+    .mob .scl-monthly-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .mob .scl-monthly-po{grid-column:1/-1}
     .mob .parts-list-toolbar{align-items:flex-start}
     .mob .parts-list-index{position:sticky;top:8px;z-index:5;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:14px;padding:6px;background:#161b22;border:1px solid #30363d;border-radius:10px}
     .mob .parts-list-index button{height:36px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
@@ -1262,8 +1262,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-14';
-const _APP_VERSION='v1.004';
+const _APP_BUMP='2026.07.15-15';
+const _APP_VERSION='v1.005';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
