@@ -1368,8 +1368,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-17';
-const _APP_VERSION='v1.007';
+const _APP_BUMP='2026.07.15-18';
+const _APP_VERSION='v1.008';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1609,7 +1609,7 @@ function showPage(page){
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
 }
-const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v1_';
+const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_';
 let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null;
 function scheduleLocalIso(date=new Date()){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -1622,6 +1622,16 @@ function scheduleAddDays(iso,days){const date=scheduleDateObject(iso);date.setDa
 function scheduleDateLabel(iso){
   const date=scheduleDateObject(iso),weekdays=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
   return `${date.getMonth()+1}月${date.getDate()}日 ${weekdays[date.getDay()]}`;
+}
+function scheduleVisibleDays(days){
+  return (days||[]).filter(day=>{
+    const weekday=scheduleDateObject(day.date).getDay();
+    return weekday!==0&&weekday!==6;
+  }).map(day=>({...day,items:(day.items||[]).filter(item=>!/資料輸入\s*\/\s*緊急任務/.test(String(item.title||'')))}));
+}
+function scheduleWeekRange(days,anchor){
+  const end=scheduleAddDays(anchor,6);
+  return (days||[]).filter(day=>day.date>=anchor&&day.date<=end);
 }
 function scheduleCacheKey(from,days){return `${SCHEDULE_CACHE_PREFIX}${from}_${days}`;}
 function readScheduleCache(from,days){
@@ -1655,7 +1665,7 @@ function renderScheduleItems(items,date){
 }
 function renderScheduleFocus(){
   const label=document.getElementById('scheduleFocusLabel'),dateEl=document.getElementById('scheduleFocusDate'),itemsEl=document.getElementById('scheduleFocusItems');
-  const days=_scheduleTodayData?.days||[];
+  const days=scheduleVisibleDays(_scheduleTodayData?.days);
   let focus=days[0]?.items?.length?days[0]:days.slice(1).find(day=>day.items?.length);
   if(!focus){label.textContent='工作安排';dateEl.textContent='未來 35 日沒有安排';itemsEl.innerHTML='';return;}
   const isToday=focus.date===scheduleLocalIso();
@@ -1663,7 +1673,7 @@ function renderScheduleFocus(){
   itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date);
 }
 function renderScheduleWeek(){
-  const days=_scheduleWeekDays||[],today=scheduleLocalIso();
+  const days=scheduleVisibleDays(_scheduleWeekDays),today=scheduleLocalIso();
   if(days.length){document.getElementById('scheduleWeekRange').textContent=`${scheduleDateLabel(days[0].date)} 至 ${scheduleDateLabel(days[days.length-1].date)}`;}
   else document.getElementById('scheduleWeekRange').textContent='';
   document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day ${day.date===today?'today':''}"><div class="schedule-day-date">${scheduleDateLabel(day.date)}${day.date===today?'<span>今日</span>':''}</div><div class="schedule-items">${renderScheduleItems(day.items,day.date)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
@@ -1673,8 +1683,8 @@ async function loadScheduleOverview(force=false,weekOnly=false){
   const today=scheduleLocalIso();if(!_scheduleAnchor)_scheduleAnchor=today;
   const cachedToday=readScheduleCache(today,35),cachedWeek=_scheduleAnchor===today?cachedToday:readScheduleCache(_scheduleAnchor,7);
   if(cachedToday&&!_scheduleTodayData)_scheduleTodayData=cachedToday;
-  if(cachedWeek)_scheduleWeekDays=(cachedWeek.days||[]).slice(0,7);
-  else if(_scheduleAnchor===today&&_scheduleTodayData)_scheduleWeekDays=(_scheduleTodayData.days||[]).slice(0,7);
+  if(cachedWeek)_scheduleWeekDays=scheduleWeekRange(cachedWeek.days,_scheduleAnchor);
+  else if(_scheduleAnchor===today&&_scheduleTodayData)_scheduleWeekDays=scheduleWeekRange(_scheduleTodayData.days,_scheduleAnchor);
   renderSchedulePage();
   _scheduleRequest?.abort();
   const controller=new AbortController();_scheduleRequest=controller;
@@ -1686,7 +1696,7 @@ async function loadScheduleOverview(force=false,weekOnly=false){
     const [todayData,weekData]=await Promise.all([todayPromise,weekPromise]);
     if(todayData)_scheduleTodayData=todayData;
     const sourceDays=_scheduleAnchor===today?(_scheduleTodayData?.days||[]):(weekData?.days||cachedWeek?.days||[]);
-    _scheduleWeekDays=sourceDays.slice(0,7);
+    _scheduleWeekDays=scheduleWeekRange(sourceDays,_scheduleAnchor);
     renderSchedulePage();
   }catch(error){
     if(error.name==='AbortError')return;
