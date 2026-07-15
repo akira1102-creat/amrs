@@ -499,6 +499,7 @@
     .dash-mobile-list>.dash-mobile-card{margin-bottom:0}
     .dash-mobile-card.is-editing{grid-column:1/-1}
     .dash-mobile-title{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;font-weight:800;color:#58a6ff;margin-bottom:10px;letter-spacing:.02em}
+    .dash-card-title-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
     .dash-mobile-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;padding:5px 0;border-bottom:1px solid rgba(48,54,61,.55)}
     .dash-mobile-row:last-child{border-bottom:none}
     .dash-mobile-key{font-size:12px;color:#8b949e;font-weight:700}
@@ -507,12 +508,21 @@
     .dash-aa-load:disabled{color:#484f58;cursor:not-allowed}
     .dash-card-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
     .dash-card-btn{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .dash-card-btn.people{color:#79c0ff;border-color:#1f6feb;background:#0d203d}
     .dash-card-btn.primary{background:#238636;border-color:#2ea043;color:#fff}
     .dash-card-btn.danger{margin-right:auto;background:#3d1214;border-color:#da3633;color:#ff7b72}
     .dash-card-btn:disabled{background:#21262d;color:#484f58;cursor:not-allowed}
     .dash-card-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:4px}
     .dash-card-form label{display:block;font-size:12px;color:#8b949e;font-weight:700;margin-bottom:5px}
     .dash-card-form input,.dash-card-form select{width:100%;font-size:13px;padding:8px 10px;border-radius:10px}
+    .schedule-people-box{width:min(430px,96vw)}
+    .schedule-people-context{margin:-2px 0 14px;color:#8b949e;font-size:12px;line-height:1.5}
+    .schedule-people-shift{padding:12px 0;border-top:1px solid #30363d}
+    .schedule-people-shift:first-child{border-top:none;padding-top:0}
+    .schedule-people-shift-label{margin-bottom:8px;color:#8b949e;font-size:12px;font-weight:800}
+    .schedule-people-names{display:flex;flex-wrap:wrap;gap:7px}
+    .schedule-people-name{padding:7px 10px;border:1px solid #30363d;border-radius:8px;background:#0d1117;color:#e6edf3;font-size:13px;font-weight:800}
+    .schedule-people-empty{padding:20px 8px;color:#8b949e;font-size:13px;text-align:center}
     .dash-pager{display:none;align-items:center;justify-content:center;gap:10px;margin-top:12px}
     .dash-pager.show{display:flex}
     .dash-page-info{font-size:12px;color:#8b949e;font-weight:700;min-width:76px;text-align:center}
@@ -660,8 +670,9 @@
     .parts-list-jp{color:#e6edf3;margin-top:4px}
     .parts-list-en{color:#8b949e;margin-top:2px}
     .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
-    #bulkEditModal,#repeatRecordsModal,#exportModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
-    #bulkEditModal.show,#repeatRecordsModal.show,#exportModal.show{display:flex}
+    #bulkEditModal,#repeatRecordsModal,#exportModal,#schedulePeopleModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #bulkEditModal.show,#repeatRecordsModal.show,#exportModal.show,#schedulePeopleModal.show{display:flex}
+    #schedulePeopleModal{z-index:8910}
     .work-modal-box{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
     .export-modal-box{width:min(520px,96vw)}
     .export-select-all{display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#e6edf3;font-size:13px;font-weight:800;cursor:pointer}
@@ -893,6 +904,14 @@
   <div class="work-modal-box">
     <div class="template-head"><div class="template-title" id="repeatRecordsTitle">重複維修記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeRepeatRecords()" type="button">關閉</button></div>
     <div id="repeatRecordsRows"><div class="dash-mobile-empty">載入中...</div></div>
+  </div>
+</div>
+
+<div id="schedulePeopleModal" onclick="if(event.target===this)closeSchedulePeople()">
+  <div class="work-modal-box schedule-people-box">
+    <div class="template-head"><div class="template-title">當日安排人員</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeSchedulePeople()" type="button">關閉</button></div>
+    <div class="schedule-people-context" id="schedulePeopleContext"></div>
+    <div id="schedulePeopleBody"><div class="schedule-people-empty">載入中...</div></div>
   </div>
 </div>
 
@@ -1368,8 +1387,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-18';
-const _APP_VERSION='v1.008';
+const _APP_BUMP='2026.07.15-19';
+const _APP_VERSION='v1.009';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2552,6 +2571,7 @@ function setQueueAddBusy(busy,batch=false){
 }
 let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0,_repeatRecords=[],_repeatRecordsEditingIdx=-1,_repeatRecordsSerial='';
 let dashboardSelectedRecords=new Map(),dashboardPageSize=10,dashboardCardColumns=1;
+let _schedulePeopleRequestToken=0,_schedulePeopleController=null;
 let selectedQueueIdxs=new Set();
 const QUEUE_KEY_PREFIX='_ml_queue_v2_';
 function queueStorageKey(company){return QUEUE_KEY_PREFIX+String(company||activeCompany);}
@@ -3827,6 +3847,46 @@ function dashFieldRows(record, rowCompany){
   ];
   return fields.map(([key,val])=>[key,cleanDashValue(val)]).filter(([,v])=>v!=='');
 }
+function schedulePeopleRecord(source,index){
+  return source==='repeat'?_repeatRecords[index]:dashboardRecords[index];
+}
+function schedulePeopleKey(value){
+  return cleanDashValue(value).toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,'');
+}
+function closeSchedulePeople(){
+  _schedulePeopleRequestToken++;
+  _schedulePeopleController?.abort();_schedulePeopleController=null;
+  document.getElementById('schedulePeopleModal').classList.remove('show');
+}
+function renderSchedulePeopleShift(label,people){
+  const names=[...new Set((people||[]).map(person=>cleanDashValue(person.name)).filter(Boolean))];
+  if(!names.length)return '';
+  return `<div class="schedule-people-shift"><div class="schedule-people-shift-label">${label}</div><div class="schedule-people-names">${names.map(name=>`<span class="schedule-people-name">${esc(name)}</span>`).join('')}</div></div>`;
+}
+async function openSchedulePeople(source,index){
+  const record=schedulePeopleRecord(source,index);if(!record)return;
+  const company=record.company||currentDashboardCompany||activeCompany;
+  const casino=cleanDashValue(record.casino),date=dashDateToInput(record.date);
+  const modal=document.getElementById('schedulePeopleModal'),body=document.getElementById('schedulePeopleBody');
+  document.getElementById('schedulePeopleContext').textContent=`${cleanDashValue(record.date)||'日期未設定'} · ${casino||'場地未設定'}`;
+  body.innerHTML='<div class="schedule-people-empty">載入中...</div>';modal.classList.add('show');
+  const token=++_schedulePeopleRequestToken;
+  _schedulePeopleController?.abort();const controller=new AbortController();_schedulePeopleController=controller;
+  if(!date||!casino){body.innerHTML='<div class="schedule-people-empty">沒有資料</div>';_schedulePeopleController=null;return;}
+  try{
+    const data=readScheduleCache(date,1)||await requestScheduleRange(date,1,false,controller.signal);
+    if(token!==_schedulePeopleRequestToken)return;
+    const day=(data.days||[]).find(item=>item.date===date);
+    const target=(day?.items||[]).find(item=>item.linked&&schedulePeopleKey(item.company)===schedulePeopleKey(company)&&schedulePeopleKey(item.venue)===schedulePeopleKey(casino));
+    const shifts=target?renderSchedulePeopleShift('上午',target.am)+renderSchedulePeopleShift('下午',target.pm):'';
+    body.innerHTML=shifts||'<div class="schedule-people-empty">沒有資料</div>';
+  }catch(error){
+    if(error.name==='AbortError'||token!==_schedulePeopleRequestToken)return;
+    body.innerHTML='<div class="schedule-people-empty">沒有資料</div>';
+  }finally{
+    if(_schedulePeopleController===controller)_schedulePeopleController=null;
+  }
+}
 function renderDashboardMobileCard(record,index){
   if(index===dashboardEditingIdx)return renderDashboardEditCard(record,index);
   const rowCompany=record.company||currentDashboardCompany||activeCompany;
@@ -3839,7 +3899,7 @@ function renderDashboardMobileCard(record,index){
   const displayNumber=(dashboardPage-1)*dashboardPageSize+index+1;
   const selected=dashboardSelectedRecords.has(String(record.rowNumber))?' checked':'';
   return `<section class="dash-mobile-card">
-    <div class="dash-mobile-title"><input class="dash-select" type="checkbox" onchange="toggleDashboardRecord(${index},this.checked)"${selected}><span style="flex:1">── 記錄 ${displayNumber} ──</span><button class="dash-card-btn" onclick="startDashboardCardEdit(${index})" type="button">編輯</button></div>
+    <div class="dash-mobile-title"><input class="dash-select" type="checkbox" onchange="toggleDashboardRecord(${index},this.checked)"${selected}><span style="flex:1">── 記錄 ${displayNumber} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openSchedulePeople('dashboard',${index})" type="button">查看人員</button><button class="dash-card-btn" onclick="startDashboardCardEdit(${index})" type="button">編輯</button></div></div>
     ${rows}
   </section>`;
 }
@@ -3942,7 +4002,7 @@ function renderRepeatRecord(record,index){
   if(index===_repeatRecordsEditingIdx)return renderRepeatRecordEdit(record,index);
   const rowCompany=record.company||currentDashboardCompany||activeCompany;
   const rows=dashFieldRows(record,rowCompany).map(([key,value])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(key)}</div><div class="dash-mobile-val">${esc(value)}</div></div>`).join('');
-  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span><button class="dash-card-btn" onclick="startRepeatRecordEdit(${index})" type="button">編輯</button></div>${rows}</section>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openSchedulePeople('repeat',${index})" type="button">查看人員</button><button class="dash-card-btn" onclick="startRepeatRecordEdit(${index})" type="button">編輯</button></div></div>${rows}</section>`;
 }
 function renderRepeatRecordEdit(record,index){
   return `<section class="dash-mobile-card" id="repeatCardEdit${index}">
