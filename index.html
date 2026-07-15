@@ -616,26 +616,22 @@
     .schedule-period-head{display:flex;align-items:center;gap:8px;color:#c9d1d9;font-size:13px;font-weight:900}
     .schedule-period-head::after{content:"";height:1px;flex:1;background:#30363d}
     .schedule-period .schedule-items{margin-top:9px}
-    .schedule-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:14px}
-    .schedule-assignment{min-width:0;border:1px solid #30363d;border-radius:9px;background:#161b22;overflow:hidden}
-    .schedule-assignment[open]{border-color:#484f58}
-    .schedule-assignment summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;list-style:none;cursor:pointer}
-    .schedule-assignment summary::-webkit-details-marker{display:none}
+    .schedule-items{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;margin-top:14px}
+    .schedule-assignment{width:fit-content;max-width:100%;min-width:150px;border:1px solid #30363d;border-radius:9px;background:#161b22;overflow:hidden}
+    .schedule-assignment-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px}
     .schedule-assignment-main{min-width:0}
     .schedule-company{display:inline-block;margin-bottom:5px;padding:3px 6px;border:1px solid #1f6feb;border-radius:6px;background:#0d203d;color:#79c0ff;font-size:10px;font-weight:900}
     .schedule-assignment.unlinked .schedule-company{border-color:#484f58;background:#21262d;color:#8b949e}
     .schedule-assignment-title{font-size:14px;font-weight:850;color:#e6edf3;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
     .schedule-assignment-meta{display:flex;align-items:center;gap:7px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
-    .schedule-assignment-chevron{transition:transform .18s ease}
-    .schedule-assignment[open] .schedule-assignment-chevron{transform:rotate(180deg)}
-    .schedule-assignment-details{padding:0 14px 13px;border-top:1px solid #21262d}
-    .schedule-assignment-people{padding-top:11px}
+    .schedule-assignment-details{padding:9px 10px;border-top:1px solid #21262d}
+    .schedule-assignment-people-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .schedule-assignment-people{min-width:0}
     .schedule-shift{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;padding-top:11px}
     .schedule-shift-label{font-size:11px;font-weight:900;color:#8b949e}
     .schedule-person-list{display:flex;flex-wrap:wrap;gap:6px}
     .schedule-person{padding:4px 7px;border-radius:6px;background:#21262d;color:#c9d1d9;font-size:11px;line-height:1.35}
-    .schedule-person small{display:block;color:#8b949e;font-size:9px;white-space:pre-line}
-    .schedule-input-btn{width:100%;height:38px;margin-top:12px;border:1px solid #2f81f7;border-radius:8px;background:#1f6feb;color:#fff;font-size:12px;font-weight:900;cursor:pointer}
+    .schedule-input-btn{display:flex;flex:0 0 44px;width:44px;height:44px;align-items:center;justify-content:center;flex-direction:column;padding:0;border:1px solid #2f81f7;border-radius:8px;background:#1f6feb;color:#fff;font-size:11px;font-weight:900;line-height:1.15;cursor:pointer}
     .schedule-week{margin-top:24px}
     .schedule-week-title{font-size:16px;font-weight:900;color:#e6edf3}
     .schedule-week-range{margin-top:3px;font-size:11px;color:#8b949e}
@@ -1395,8 +1391,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-20';
-const _APP_VERSION='v1.010';
+const _APP_BUMP='2026.07.15-21';
+const _APP_VERSION='v1.011';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1676,10 +1672,10 @@ async function requestScheduleRange(from,days,force,signal){
 function renderScheduleAssignment(item,date,shift){
   const people=item[shift]||[];
   const count=new Set(people.map(person=>person.name).filter(Boolean)).size,company=item.linked?item.company:'其他安排';
-  return `<details class="schedule-assignment ${item.linked?'linked':'unlinked'}">
-    <summary><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(item.title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span><span class="schedule-assignment-chevron">▼</span></div></summary>
-    <div class="schedule-assignment-details"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}${item.linked&&person.assignment?`<small>${esc(person.assignment)}</small>`:''}</span>`).join('')}</div>${item.linked?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">開始輸入</button>`:''}</div>
-  </details>`;
+  return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
+    <div class="schedule-assignment-head"><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(item.title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span></div></div>
+    <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div>${item.linked?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button"><span>輸入</span><span>資料</span></button>`:''}</div></div>
+  </article>`;
 }
 function renderSchedulePeriod(label,shift,items,date){
   const shiftItems=(items||[]).filter(item=>item[shift]?.length);
