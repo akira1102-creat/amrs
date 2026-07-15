@@ -542,10 +542,6 @@
     .monthly-page-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
     .monthly-page-title{font-size:18px;font-weight:800;color:#e6edf3}
     .monthly-refresh{flex:0 0 auto;padding:9px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
-    .monthly-view-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
-    .monthly-view-switch{display:inline-grid;grid-template-columns:repeat(2,minmax(72px,1fr));padding:3px;border:1px solid #30363d;border-radius:9px;background:#0d1117}
-    .monthly-view-btn{height:32px;padding:0 12px;border:none;border-radius:6px;background:transparent;color:#8b949e;font-size:11px;font-weight:800;cursor:pointer}
-    .monthly-view-btn.active{background:#1f6feb;color:#fff}
     .monthly-company-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .monthly-company-grid>.dash-mobile-empty{grid-column:1/-1}
     .monthly-company-card{border:1px solid #30363d;border-radius:14px;background:#161b22;padding:15px;min-width:0}
@@ -563,12 +559,6 @@
     .monthly-venue-name{font-size:12px;font-weight:800;color:#c9d1d9;min-width:0;word-break:break-word}
     .monthly-venue-count{font-size:11px;color:#8b949e;text-align:right;white-space:nowrap}
     .monthly-venue-count strong{font-size:13px;color:#e6edf3}
-    .monthly-progress{height:7px;margin-top:7px;border-radius:999px;background:#0d1117;overflow:hidden}
-    .monthly-progress-bar{height:100%;border-radius:999px;background:#238636;transition:width .2s ease}
-    .monthly-progress-bar.visits{background:#2f81f7}
-    .monthly-progress-label{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:10px;color:#8b949e}
-    .monthly-visit-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:10px;color:#8b949e}
-    .monthly-visit-summary strong{color:#58a6ff;font-size:11px}
     .monthly-machines-per-visit{margin-top:6px;padding:5px 7px;border:1px solid #1f6feb;border-radius:7px;background:#0d203d;color:#79c0ff;font-size:10px;font-weight:800;text-align:center}
     .monthly-venue.visual{padding:11px 0}
     .monthly-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px}
@@ -652,8 +642,6 @@
     .mob .bp-field-options{position:fixed;left:16px;right:16px;top:auto;width:auto}
     .mob .monthly-company-grid{grid-template-columns:1fr}
     .mob .monthly-page-title{font-size:16px}
-    .mob .monthly-view-toolbar{justify-content:stretch}
-    .mob .monthly-view-switch{width:100%}
     .mob .scl-monthly-grid{grid-template-columns:1fr}
     .mob .scl-monthly-po{grid-column:auto}
     .mob .parts-list-toolbar{align-items:flex-start}
@@ -1192,12 +1180,6 @@
       <div class="monthly-page-title">每月統計</div>
       <button class="monthly-refresh" id="monthlyStatsRefreshBtn" onclick="loadMonthlyStats(true)" type="button">重新整理</button>
     </div>
-    <div class="monthly-view-toolbar">
-      <div class="monthly-view-switch" aria-label="統計顯示方式">
-        <button class="monthly-view-btn active" id="monthlyDetailedBtn" onclick="setMonthlyDisplayMode('detailed')" type="button" aria-pressed="true">詳細</button>
-        <button class="monthly-view-btn" id="monthlyVisualBtn" onclick="setMonthlyDisplayMode('visual')" type="button" aria-pressed="false">儀表</button>
-      </div>
-    </div>
     <div class="monthly-company-grid" id="monthlyStatsGrid"><div class="dash-mobile-empty">正在載入資料...</div></div>
   </div>
 </div><!-- /monthlyStatsPage -->
@@ -1291,8 +1273,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-10';
-const _APP_VERSION='v0.999';
+const _APP_BUMP='2026.07.15-11';
+const _APP_VERSION='v1.000';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1509,22 +1491,8 @@ function showPage(page){
   if(page==='brokenParts')loadBrokenPartsPage(1);
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
-const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v3',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1',MONTHLY_DISPLAY_MODE_KEY='_amrs_monthly_display_mode_v1';
-let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null,_monthlyStatsData=null;
-let _monthlyDisplayMode=['compact','visual'].includes(localStorage.getItem(MONTHLY_DISPLAY_MODE_KEY))?'visual':'detailed';
-function syncMonthlyDisplayModeButtons(){
-  const detailed=_monthlyDisplayMode==='detailed';
-  document.getElementById('monthlyDetailedBtn').classList.toggle('active',detailed);
-  document.getElementById('monthlyVisualBtn').classList.toggle('active',!detailed);
-  document.getElementById('monthlyDetailedBtn').setAttribute('aria-pressed',String(detailed));
-  document.getElementById('monthlyVisualBtn').setAttribute('aria-pressed',String(!detailed));
-}
-function setMonthlyDisplayMode(mode){
-  _monthlyDisplayMode=mode==='visual'?'visual':'detailed';
-  localStorage.setItem(MONTHLY_DISPLAY_MODE_KEY,_monthlyDisplayMode);
-  syncMonthlyDisplayModeButtons();
-  if(_monthlyStatsData)renderMonthlyStatsData(_monthlyStatsData);
-}
+const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v3',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
+let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null;
 function toggleSclMonthlySettings(){
   const content=document.getElementById('sclMonthlySettingsContent'),toggle=document.getElementById('sclMonthlyToggle');
   const open=!content.classList.contains('show');content.classList.toggle('show',open);toggle.setAttribute('aria-expanded',String(open));
@@ -1570,43 +1538,29 @@ async function saveSclMonthlySettings(){
   }catch(e){status.textContent=e.message||'儲存失敗';status.style.color='#ff7b72';showToast(e.message||'儲存失敗','err');}
   finally{btn.disabled=false;btn.textContent='儲存設定';}
 }
-function renderMonthlyVenue(venue,mode){
+function renderMonthlyVenue(venue){
   const done=Number(venue.done)||0;
   const scheduledVisits=Number(venue.scheduledVisits)||0,completedVisits=Number(venue.completedVisits)||0,remainingVisits=Number(venue.remainingVisits)||0;
   const visitPercent=Math.max(0,Number(venue.visitPercent)||0),visitBarWidth=Math.min(visitPercent,100);
   const hasTarget=venue.target!=null,target=Math.max(0,Number(venue.target)||0),remaining=Math.max(0,Number(venue.remaining)||0);
   const machinesPerVisit=venue.machinesPerRemainingVisit!=null?Math.max(0,Number(venue.machinesPerRemainingVisit)||0):null;
-  if(mode==='visual'){
-    const maintenancePercent=hasTarget?Math.max(0,Number(venue.percent)||0):100;
-    const maintenanceMetric=`<div class="monthly-metric maintenance">
-      <div class="monthly-metric-label">維護台數</div>
-      <div class="monthly-metric-value"><strong>${done}</strong><span>${hasTarget?`/ ${target} 台`:'台已完成'}</span></div>
-      <div class="monthly-metric-foot">${hasTarget?`${maintenancePercent}% · 剩餘 ${remaining} 台`:'本月記錄'}</div>
-      <div class="monthly-metric-fill" style="width:${Math.min(maintenancePercent,100)}%"></div>
-    </div>`;
-    const visitMetric=scheduledVisits>0?`<div class="monthly-metric visits">
-      <div class="monthly-metric-label">到訪次數</div>
-      <div class="monthly-metric-value"><strong>${completedVisits}</strong><span>/ ${scheduledVisits} 次</span></div>
-      <div class="monthly-metric-foot">${visitPercent}% · 剩餘 ${remainingVisits} 次</div>
-      <div class="monthly-metric-fill" style="width:${visitBarWidth}%"></div>
-    </div>`:'';
-    return `<div class="monthly-venue visual">
-      <div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span></div>
-      <div class="monthly-metrics${scheduledVisits>0?'':' single'}">${maintenanceMetric}${visitMetric}</div>
-      ${machinesPerVisit!=null?`<div class="monthly-machines-per-visit">餘下每次需做 ${machinesPerVisit} 台</div>`:''}
-    </div>`;
-  }
-  const visitBlock=scheduledVisits>0?`<div class="monthly-visit-summary"><span>到訪已完成 <strong>${completedVisits}</strong> 次</span><span>剩餘 <strong>${remainingVisits}</strong> 次</span></div>
-    <div class="monthly-progress"><div class="monthly-progress-bar visits" style="width:${visitBarWidth}%"></div></div>
-    <div class="monthly-progress-label"><span>到訪進度 ${visitPercent}%</span><span>共 ${scheduledVisits} 次</span></div>
-    ${machinesPerVisit!=null?`<div class="monthly-machines-per-visit">餘下每次需做 ${machinesPerVisit} 台</div>`:''}`:'';
-  if(!hasTarget)return `<div class="monthly-venue"><div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> 已完成</span></div>${visitBlock}</div>`;
-  const percent=Math.max(0,Number(venue.percent)||0),barWidth=Math.min(percent,100);
-  return `<div class="monthly-venue">
-    <div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> / ${target}</span></div>
-    <div class="monthly-progress"><div class="monthly-progress-bar" style="width:${barWidth}%"></div></div>
-    <div class="monthly-progress-label"><span>維護台數 ${percent}%</span><span>剩餘 ${remaining} 台</span></div>
-    ${visitBlock}
+  const maintenancePercent=hasTarget?Math.max(0,Number(venue.percent)||0):100;
+  const maintenanceMetric=`<div class="monthly-metric maintenance">
+    <div class="monthly-metric-label">維護台數</div>
+    <div class="monthly-metric-value"><strong>${done}</strong><span>${hasTarget?`/ ${target} 台`:'台已完成'}</span></div>
+    <div class="monthly-metric-foot">${hasTarget?`${maintenancePercent}% · 剩餘 ${remaining} 台`:'本月記錄'}</div>
+    <div class="monthly-metric-fill" style="width:${Math.min(maintenancePercent,100)}%"></div>
+  </div>`;
+  const visitMetric=scheduledVisits>0?`<div class="monthly-metric visits">
+    <div class="monthly-metric-label">到訪次數</div>
+    <div class="monthly-metric-value"><strong>${completedVisits}</strong><span>/ ${scheduledVisits} 次</span></div>
+    <div class="monthly-metric-foot">${visitPercent}% · 剩餘 ${remainingVisits} 次</div>
+    <div class="monthly-metric-fill" style="width:${visitBarWidth}%"></div>
+  </div>`:'';
+  return `<div class="monthly-venue visual">
+    <div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span></div>
+    <div class="monthly-metrics${scheduledVisits>0?'':' single'}">${maintenanceMetric}${visitMetric}</div>
+    ${machinesPerVisit!=null?`<div class="monthly-machines-per-visit">餘下每次需做 ${machinesPerVisit} 台</div>`:''}
   </div>`;
 }
 function renderMonthlyCompany(company){
@@ -1616,7 +1570,7 @@ function renderMonthlyCompany(company){
   const totalText=targeted.length?`本月完成 ${totalDone} / ${totalTarget}`:`本月完成 ${totalDone}`;
   return `<section class="monthly-company-card" data-monthly-company="${esc(company.company)}">
     <div class="monthly-company-head"><div><div class="monthly-company-name">${esc(company.company)}</div><div class="monthly-company-total">${totalText}</div></div><div class="monthly-company-tools"><span class="monthly-po">PO ${esc(company.poNumber||'—')}</span><button class="monthly-drag" type="button" title="拖拉更改順序" aria-label="拖拉更改 ${esc(company.company)} 順序">☰</button></div></div>
-    ${venues.map(venue=>renderMonthlyVenue(venue,_monthlyDisplayMode)).join('')}
+    ${venues.map(renderMonthlyVenue).join('')}
   </section>`;
 }
 function monthlyCompanyOrder(companies){
@@ -1627,7 +1581,6 @@ function monthlyCompanyOrder(companies){
   }catch(e){return names;}
 }
 function renderMonthlyStatsData(data){
-  _monthlyStatsData=data;syncMonthlyDisplayModeButtons();
   const grid=document.getElementById('monthlyStatsGrid'),byCompany=new Map(data.companies.map(company=>[company.company,company]));
   const companies=monthlyCompanyOrder(data.companies).map(name=>byCompany.get(name)).filter(Boolean);
   grid.innerHTML=companies.map(renderMonthlyCompany).join('')||'<div class="dash-mobile-empty">沒有統計資料。</div>';
