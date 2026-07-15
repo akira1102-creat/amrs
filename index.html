@@ -1262,8 +1262,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-13';
-const _APP_VERSION='v1.003';
+const _APP_BUMP='2026.07.15-14';
+const _APP_VERSION='v1.004';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1365,6 +1365,29 @@ function _migrateCompanyCodes(){
 _migrateCompanyCodes();
 function getDeployId(company){return localStorage.getItem(_companyKey(company||activeCompany))||localStorage.getItem('_ml_gas')||'';}
 function getScriptUrl(){const id=getDeployId();if(!id)return '';if(id.startsWith('https://'))return id;return 'https://script.google.com/macros/s/'+id+'/exec';}
+async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
+  const controller=new AbortController(),externalSignal=options.signal;
+  const abortFromExternal=()=>controller.abort();
+  if(externalSignal){
+    if(externalSignal.aborted)controller.abort();
+    else externalSignal.addEventListener('abort',abortFromExternal,{once:true});
+  }
+  const timer=setTimeout(()=>controller.abort('timeout'),timeoutMs);
+  try{
+    const response=await fetch(url,{...options,signal:controller.signal});
+    if(!response.ok)throw new Error(`伺服器錯誤 (${response.status})`);
+    return await response.json();
+  }catch(error){
+    if(controller.signal.aborted&&!externalSignal?.aborted){const timeoutError=new Error('伺服器回應逾時，系統會安全重試');timeoutError.name='TimeoutError';throw timeoutError;}
+    throw error;
+  }finally{
+    clearTimeout(timer);
+    if(externalSignal)externalSignal.removeEventListener('abort',abortFromExternal);
+  }
+}
+function postGasJson(payload,timeoutMs=60000){
+  return fetchJsonWithTimeout(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)},timeoutMs);
+}
 function hasAnyDeployId(){return getCompanyOrder().some(c=>!!getDeployId(c));}
 function firstConfiguredCompany(){return getCompanyOrder().find(c=>!!getDeployId(c))||'';}
 function unlockApp(){document.body.classList.remove('auth-locked');}
@@ -1399,8 +1422,7 @@ function saveSetup(){
 function cancelSetup(){
   document.getElementById('setupScreen').classList.remove('show');
   if(setupReturnState){
-    activeCompany=setupReturnState.company;
-    localStorage.setItem('_ml_company',activeCompany);
+    switchQueueCompany(setupReturnState.company);
     syncCompanySpecificFields();
     syncCasinoOptions();
     showPage(setupReturnState.page);
@@ -1418,8 +1440,7 @@ async function testConnection(){
   btn.textContent='測試中…';btn.disabled=true;
   res.className='';res.style.display='none';
   try{
-    const r=await fetch(url);
-    const data=await r.json();
+    const data=await fetchJsonWithTimeout(url,{},30000);
     if(Array.isArray(data.records)){
       res.className='setupTestResult ok';
       res.textContent='✓ 連接成功！今日有 '+data.records.length+' 條記錄';
@@ -1456,7 +1477,7 @@ function closeMenu(){document.getElementById('menuOverlay').classList.remove('sh
 function showPage(page){
   if(page==='dashboard'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'){
     if(!hasAnyDeployId()){showToast('請先設定並測試其中一個網站代號','err');openGasSettings();return;}
-    if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);}
+    if(!getDeployId())switchQueueCompany(firstConfiguredCompany());
     if(page==='dashboard')syncCasinoOptions();
     if(page==='brokenParts')syncBrokenPartsVenueOptions();
   }
@@ -1497,7 +1518,7 @@ async function loadSclMonthlySettings(force=false){
   _sclMonthlySettingsRequest?.abort();_sclMonthlySettingsRequest=new AbortController();
   const status=document.getElementById('sclMonthlyStatus');status.textContent='載入中...';status.style.color='#8b949e';
   try{
-    const data=await (await fetch(`${url}?action=monthlySettings&company=SCL`,{signal:_sclMonthlySettingsRequest.signal})).json();
+    const data=await fetchJsonWithTimeout(`${url}?action=monthlySettings&company=SCL`,{signal:_sclMonthlySettingsRequest.signal},30000);
     if(!data.success||!data.settings)throw new Error(data.message||'載入失敗');
     applySclMonthlySettings(data.settings);_sclMonthlySettingsLoaded=true;
     status.textContent='已從 Monthly 工作表載入';status.style.color='#3fb950';
@@ -1518,7 +1539,7 @@ async function saveSclMonthlySettings(){
   const btn=document.getElementById('sclMonthlySaveBtn'),status=document.getElementById('sclMonthlyStatus');
   btn.disabled=true;btn.textContent='儲存中...';status.textContent='正在更新 Monthly 工作表...';status.style.color='#8b949e';
   try{
-    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateMonthlySettings',company:'SCL',settings:{poNumber,targets}})})).json();
+    const data=await postGasJson({action:'updateMonthlySettings',company:'SCL',settings:{poNumber,targets}});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     applySclMonthlySettings(data.settings||{poNumber,targets});_sclMonthlySettingsLoaded=true;
     localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);
@@ -1582,6 +1603,27 @@ function getCachedMonthlyStats(){
     return cached?.data?.monthCode===monthCode&&Array.isArray(cached.data.companies)?cached.data:null;
   }catch(e){return null;}
 }
+function assembleMonthlyStats(base,companyResults){
+  const schedule=base.scheduleVenues||{},sclSettings=base.sclSettings||{poNumber:'',targets:{}},gegTargets=base.gegTargets||{};
+  const companies=companyResults.map(result=>{
+    const company=result.company,targets=company==='SCL'?(sclSettings.targets||{}):company==='GEG'?gegTargets:{};
+    return {
+      company,poNumber:result.poNumber,
+      venues:(base.monthlyVenues?.[company]||[]).map(venue=>{
+        const done=Number(result.counts?.[venue])||0,hasTarget=Object.prototype.hasOwnProperty.call(targets,venue);
+        const target=hasTarget?Math.max(0,Number(targets[venue])||0):null,remaining=hasTarget?Math.max(target-done,0):null,visit=schedule[venue]||null;
+        return {
+          venue,done,target,remaining,
+          percent:hasTarget?(target>0?Math.round(done/target*100):(done>0?100:0)):null,
+          scheduledVisits:visit?.scheduledVisits??null,completedVisits:visit?.completedVisits??null,
+          remainingVisits:visit?.remainingVisits??null,visitPercent:visit?.visitPercent??null,
+          machinesPerRemainingVisit:(company==='SCL'||company==='GEG')&&visit?.remainingVisits>0?Math.ceil(remaining/visit.remainingVisits):null
+        };
+      })
+    };
+  });
+  return {success:true,monthCode:base.monthCode,scheduleSheet:base.scheduleSheet,monthLabel:base.monthLabel,companies};
+}
 async function loadMonthlyStats(force=false){
   const url=getScriptUrl();if(!url)return;
   _monthlyStatsRequest?.abort();_monthlyStatsRequest=new AbortController();
@@ -1589,7 +1631,27 @@ async function loadMonthlyStats(force=false){
   if(cached)renderMonthlyStatsData(cached);else grid.innerHTML='<div class="dash-mobile-empty">正在載入六間公司資料...</div>';
   btn.disabled=true;btn.textContent=cached&&!force?'更新中...':'載入中...';
   try{
-    const data=await (await fetch(`${url}?action=monthlyStats${force?'&refresh=1':''}`,{signal:_monthlyStatsRequest.signal})).json();
+    const suffix=force?'&refresh=1':'';
+    const now=new Date(),monthCode=String(now.getFullYear()).slice(-2)+String(now.getMonth()+1).padStart(2,'0');
+    const loadCompany=async company=>{
+      const endpoint=`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`;
+      try{
+        const result=await fetchJsonWithTimeout(endpoint,{signal:_monthlyStatsRequest.signal},45000);
+        if(!result.success)throw new Error(result.message||`${company} 載入失敗`);
+        return result;
+      }catch(error){
+        if(error.name==='AbortError')throw error;
+        const retry=await fetchJsonWithTimeout(endpoint,{signal:_monthlyStatsRequest.signal},45000);
+        if(!retry.success)throw new Error(retry.message||`${company} 載入失敗`);
+        return retry;
+      }
+    };
+    const [base,companyResults]=await Promise.all([
+      fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:_monthlyStatsRequest.signal},45000),
+      Promise.all(COMPANIES.map(loadCompany))
+    ]);
+    if(!base.success)throw new Error(base.message||'載入失敗');
+    const data=assembleMonthlyStats(base,companyResults);
     if(!data.success||!Array.isArray(data.companies))throw new Error(data.message||'載入失敗');
     localStorage.setItem(MONTHLY_STATS_CACHE_KEY,JSON.stringify({savedAt:Date.now(),data}));renderMonthlyStatsData(data);
   }catch(e){
@@ -1599,7 +1661,7 @@ async function loadMonthlyStats(force=false){
 }
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
-  activeCompany=company;localStorage.setItem('_ml_company',company);
+  switchQueueCompany(company);
   _queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;
   document.getElementById('activeCompanyLabel').textContent=company;
   syncCompanySpecificFields();
@@ -1628,7 +1690,7 @@ function renderBrokenPartsCompanyMenu(){
   toggleBrokenPartsCompanyMenu(_brokenPartsMenuOpen||activePage==='brokenParts');
 }
 function selectBrokenPartsCompany(company){
-  activeCompany=company;localStorage.setItem('_ml_company',company);
+  switchQueueCompany(company);
   document.getElementById('activeCompanyLabel').textContent=company;
   syncCompanySpecificFields();syncCasinoOptions();
   showPage('brokenParts');
@@ -1894,8 +1956,7 @@ async function fetchAaTags(triggerBtn){
   const originalText=btn.textContent;
   btn.disabled=true;btn.textContent='載入中...';
   try{
-    const r=await fetch(getScriptUrl()+'?action=aaTags&company=MGM&refresh=1');
-    const data=await r.json();
+    const data=await fetchJsonWithTimeout(getScriptUrl()+'?action=aaTags&company=MGM&refresh=1',{},45000);
     if(!data.success||!Array.isArray(data.tags))throw new Error(data.message||'載入失敗');
     setAaTags(data.tags);
     localStorage.setItem(_AA_TAG_KEY,JSON.stringify({data:_aaTags,ts:Date.now()}));
@@ -2139,8 +2200,7 @@ async function loadTemplateMappings(){
   const SCRIPT_URL=getScriptUrl();
   if(!SCRIPT_URL)return;
   try{
-    const r=await fetch(SCRIPT_URL+'?action=template&'+companyParam());
-    const data=await r.json();
+    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=template&'+companyParam(),{},30000);
     if(data.success)applyTemplateMappings(data.mappings||[]);
   }catch(e){}
 }
@@ -2219,8 +2279,7 @@ async function saveTemplateEditor(){
   const mappings=collectTemplateRows();
   btn.disabled=true;btn.textContent='儲存中...';
   try{
-    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateTemplate',company:activeCompany,mappings})});
-    const data=await r.json();
+    const data=await postGasJson({action:'updateTemplate',company:activeCompany,mappings});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     applyTemplateMappings(data.mappings||mappings);
     closeTemplateEditor();
@@ -2276,8 +2335,36 @@ function setQueueAddBusy(busy,batch=false){
 let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0,_repeatRecords=[],_repeatRecordsEditingIdx=-1,_repeatRecordsSerial='';
 let dashboardSelectedRecords=new Map(),dashboardPageSize=10,dashboardCardColumns=1;
 let selectedQueueIdxs=new Set();
-function saveQueue(){localStorage.setItem('_ml_queue',JSON.stringify(queue));}
-try{const _sq=localStorage.getItem('_ml_queue');if(_sq)queue=JSON.parse(_sq);}catch(e){}
+const QUEUE_KEY_PREFIX='_ml_queue_v2_';
+function queueStorageKey(company){return QUEUE_KEY_PREFIX+String(company||activeCompany);}
+function currentQueueContext(){
+  const dateValue=document.getElementById('date')?.value||'';
+  return {company:activeCompany,casino:document.getElementById('casino')?.value||'',date:fmtDate(dateValue),poNumber:document.getElementById('poNumber')?.value.trim()||''};
+}
+function withQueueContext(item,company=activeCompany){
+  const current=currentQueueContext();
+  return {...item,company:item.company||company,casino:item.casino??current.casino,date:item.date||current.date,poNumber:item.poNumber??current.poNumber};
+}
+function loadCompanyQueue(company){
+  let items=[];
+  try{
+    const key=queueStorageKey(company);
+    let raw=localStorage.getItem(key);
+    if(!raw&&company===activeCompany){raw=localStorage.getItem('_ml_queue');if(raw){localStorage.setItem(key,raw);localStorage.removeItem('_ml_queue');}}
+    items=raw?JSON.parse(raw):[];
+  }catch(e){items=[];}
+  return Array.isArray(items)?items.map(item=>withQueueContext(item,company)):[];
+}
+function saveQueue(){localStorage.setItem(queueStorageKey(activeCompany),JSON.stringify(queue));}
+function switchQueueCompany(company){
+  company=COMPANIES.includes(company)?company:'SCL';
+  if(company===activeCompany)return;
+  saveQueue();
+  activeCompany=company;localStorage.setItem('_ml_company',company);
+  queue=loadCompanyQueue(company);selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;
+  if(document.getElementById('queueList'))renderQueue();
+}
+queue=loadCompanyQueue(activeCompany);
 function makeSubmissionId(){
   if(globalThis.crypto?.randomUUID)return crypto.randomUUID();
   const random=new Uint32Array(2);
@@ -2323,30 +2410,43 @@ let _retryQueue=[];
 try{_retryQueue=JSON.parse(localStorage.getItem('_ml_retry')||'[]');}catch(e){}
 function _saveRetry(){localStorage.setItem('_ml_retry',JSON.stringify(_retryQueue));}
 if(_retryQueue.some(item=>ensureSubmissionIds(item.records)))_saveRetry();
+let _retryBusy=false,_retryTimer=null,_retryAttempts=0,_retryLastError='';
 function _updateRetryNotice(){
   const el=document.getElementById('retryNotice');if(!el)return;
   if(_retryQueue.length){
     const total=_retryQueue.reduce((s,i)=>s+i.records.length,0);
-    document.getElementById('retryNoticeMsg').textContent=`${total} 筆記錄等待同步（已離線儲存）`;
+    document.getElementById('retryNoticeMsg').textContent=_retryBusy?`${total} 筆記錄正在安全同步...`:`${total} 筆記錄等待同步${_retryLastError?`（${_retryLastError}）`:''}`;
+    const button=document.getElementById('retrySyncBtn');button.disabled=_retryBusy;button.textContent=_retryBusy?'同步中...':'立即同步';
     el.style.display='flex';
   }else{el.style.display='none';}
 }
+function _scheduleRetry(delay=1500){
+  clearTimeout(_retryTimer);
+  if(!_retryQueue.length||!navigator.onLine)return;
+  _retryTimer=setTimeout(_attemptRetry,delay);
+}
 async function _attemptRetry(){
-  if(!_retryQueue.length)return;
+  if(_retryBusy||!_retryQueue.length||!navigator.onLine)return;
   const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL)return;
   const item=_retryQueue[0];
+  _retryBusy=true;_updateRetryNotice();
   try{
     const body=item.repairs?.length?{action:'submitRecords',records:item.records,brokenPartsRepairs:item.repairs}:item.records;
-    const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});
-    const data=await r.json();
-    if(!data.success)return;
+    const data=await postGasJson(body);
+    if(!data.success)throw new Error(data.message||'同步失敗');
     _appendLocalLog(item.records);
-  }catch(e){return;}
-  _retryQueue.shift();_saveRetry();_updateRetryNotice();
-  showToast(`✓ ${item.records.length} 筆離線記錄已同步`);
-  if(_retryQueue.length)setTimeout(_attemptRetry,1000);
+    _retryQueue.shift();_retryAttempts=0;_retryLastError='';_saveRetry();
+    showToast(`✓ ${item.records.length} 筆暫存記錄已同步`);
+  }catch(e){
+    _retryAttempts++;
+    _retryLastError=e.message||'同步失敗，稍後自動重試';
+  }finally{
+    _retryBusy=false;_updateRetryNotice();
+    if(_retryQueue.length)_scheduleRetry(_retryLastError?Math.min(60000,5000*Math.pow(2,Math.min(_retryAttempts-1,3))):1000);
+  }
 }
-window.addEventListener('online',()=>setTimeout(_attemptRetry,1000));
+window.addEventListener('online',()=>_scheduleRetry(1000));
+if(_retryQueue.length&&navigator.onLine)_scheduleRetry(1200);
 
 // ── Broken Parts ───────────────────────────────────────────
 let _partsCodes=[];
@@ -2433,8 +2533,7 @@ async function fetchPartsCodes(){
   const btn=document.getElementById('bpUpdateBtn');
   if(btn){btn.textContent='…';btn.disabled=true;}
   try{
-    const r=await fetch(SCRIPT_URL+'?action=parts&'+companyParam());
-    const data=await r.json();
+    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=parts&'+companyParam(),{},45000);
     if(Array.isArray(data.parts)&&data.parts.length){
       _partsCodes=data.parts;
       const ts=Date.now();
@@ -2509,8 +2608,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage){
   _bpListEditingIndex=-1;
   try{
     const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize)});
-    const r=await fetch(getScriptUrl()+'?'+qs.toString());
-    const data=await r.json();
+    const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
     if(!data.success)throw new Error(data.message||'載入失敗');
     _bpListRecords=data.records||[];
     _bpListPage=data.page||1;_bpListTotalPages=data.totalPages||1;_bpListTotalMatches=data.totalMatches||0;
@@ -2539,33 +2637,28 @@ function updateBpListPager(){
   document.getElementById('bpListPrevBtn').disabled=_bpListPage<=1;
   document.getElementById('bpListNextBtn').disabled=_bpListPage>=_bpListTotalPages;
 }
-function brokenPartsQueryForPage(page,pageSize=50){
+async function fetchPagedRecords(queryForPage,pageSize=100,concurrency=4){
+  const first=await fetchJsonWithTimeout(getScriptUrl()+'?'+queryForPage(1,pageSize),{},60000);
+  if(!first.success)throw new Error(first.message||'載入失敗');
+  const pages=Array.from({length:Math.max(0,Number(first.totalPages||1)-1)},(_,index)=>index+2);
+  const records=[...(first.records||[])];
+  for(let index=0;index<pages.length;index+=concurrency){
+    const batch=await Promise.all(pages.slice(index,index+concurrency).map(page=>fetchJsonWithTimeout(getScriptUrl()+'?'+queryForPage(page,pageSize),{},60000)));
+    batch.forEach(data=>{if(!data.success)throw new Error(data.message||'載入失敗');records.push(...(data.records||[]));});
+  }
+  return records;
+}
+function brokenPartsQueryForPage(page,pageSize=100){
   return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:bpListFilterSerial(),casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(pageSize)});
 }
 async function fetchAllBrokenPartsRecords(){
-  const first=await (await fetch(getScriptUrl()+'?'+brokenPartsQueryForPage(1))).json();
-  if(!first.success)throw new Error(first.message||'匯出失敗');
-  const records=[...(first.records||[])];
-  for(let page=2;page<=first.totalPages;page++){
-    const data=await (await fetch(getScriptUrl()+'?'+brokenPartsQueryForPage(page))).json();
-    if(!data.success)throw new Error(data.message||'匯出失敗');
-    records.push(...(data.records||[]));
-  }
-  return records;
+  return fetchPagedRecords(brokenPartsQueryForPage);
 }
-function brokenPartsPageQueryForExport(page,pageSize=50){
+function brokenPartsPageQueryForExport(page,pageSize=100){
   return new URLSearchParams({action:'brokenPartsList',company:activeCompany,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(pageSize)});
 }
 async function fetchAllBrokenPartsPageRecords(){
-  const first=await (await fetch(getScriptUrl()+'?'+brokenPartsPageQueryForExport(1))).json();
-  if(!first.success)throw new Error(first.message||'匯出失敗');
-  const records=[...(first.records||[])];
-  for(let page=2;page<=first.totalPages;page++){
-    const data=await (await fetch(getScriptUrl()+'?'+brokenPartsPageQueryForExport(page))).json();
-    if(!data.success)throw new Error(data.message||'匯出失敗');
-    records.push(...(data.records||[]));
-  }
-  return records;
+  return fetchPagedRecords(brokenPartsPageQueryForExport);
 }
 function bpListDateValue(value){
   const match=String(value||'').trim().match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
@@ -2616,7 +2709,7 @@ async function saveBrokenPartsListRecord(index,btn){
   const card=document.getElementById(`bpListEditCard${index}`),record=collectBrokenPartsCardRecord(card,_bpListRecords[index]);
   btn.disabled=true;btn.textContent='儲存中...';
   try{
-    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records:[record],deletedRowNumbers:[]})})).json();
+    const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[record],deletedRowNumbers:[]});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     showToast('✓ 損壞零件記錄已更新');await loadBrokenPartsListEditor(_bpListPage);
   }catch(e){btn.disabled=false;btn.textContent='儲存';showToast(e.message||'儲存失敗','err');}
@@ -2627,7 +2720,7 @@ async function deleteBrokenPartsListRecord(index,btn){
   if(!confirm(`確定刪除 S/N ${record.serialNo||''} 的損壞零件記錄？`))return;
   btn.disabled=true;btn.textContent='刪除中...';
   try{
-    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records:[],deletedRowNumbers:[Number(record.rowNumber)]})})).json();
+    const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[],deletedRowNumbers:[Number(record.rowNumber)]});
     if(!data.success)throw new Error(data.message||'刪除失敗');
     showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsListEditor(_bpListPage);
   }catch(e){btn.disabled=false;btn.textContent='刪除';showToast(e.message||'刪除失敗','err');}
@@ -2709,7 +2802,7 @@ async function loadBrokenPartsPage(page=_bpPage){
   document.getElementById('bpPageSummary').textContent='正在載入資料...';
   const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize)});
   try{
-    const data=await (await fetch(SCRIPT_URL+'?'+qs.toString(),{signal:_bpPageRequest.signal})).json();
+    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:_bpPageRequest.signal},45000);
     if(!data.success)throw new Error(data.message||'載入失敗');
     _bpPageRecords=data.records||[];_bpPage=data.page||page;_bpPageTotalPages=data.totalPages||1;_bpPageTotalMatches=data.totalMatches||0;
     const order=data.sort==='oldest'?'最舊優先':'最新優先';
@@ -2753,7 +2846,7 @@ function collectBrokenPartsPageRecord(index){
 async function saveBrokenPartsPageRecord(index,btn){
   const record=collectBrokenPartsPageRecord(index);btn.disabled=true;btn.textContent='儲存中...';
   try{
-    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records:[record],deletedRowNumbers:[]})})).json();
+    const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[record],deletedRowNumbers:[]});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     showToast('✓ 損壞零件記錄已更新');await loadBrokenPartsPage(_bpPage);
   }catch(e){showToast(e.message||'儲存失敗','err');btn.disabled=false;btn.textContent='儲存';}
@@ -2762,7 +2855,7 @@ async function deleteBrokenPartsPageRecord(index,btn){
   const record=_bpPageRecords[index];if(!record?.rowNumber||!confirm(`確定刪除 S/N ${record.serialNo||''} 的損壞零件記錄？`))return;
   btn.disabled=true;btn.textContent='刪除中...';
   try{
-    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records:[],deletedRowNumbers:[Number(record.rowNumber)]})})).json();
+    const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[],deletedRowNumbers:[Number(record.rowNumber)]});
     if(!data.success)throw new Error(data.message||'刪除失敗');
     showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsPage(_bpPage);
   }catch(e){showToast(e.message||'刪除失敗','err');btn.disabled=false;btn.textContent='刪除';}
@@ -2902,6 +2995,7 @@ async function addBatchToQueue(){
 }
 
 function doAddBatchToQueue(items){
+  items=items.map(item=>withQueueContext(item));
   ensureSubmissionIds(items);
   queue.push(...items);saveQueue();renderQueue();
   scheduleQueueDuplicateCheck(items);
@@ -2912,9 +3006,10 @@ function doAddBatchToQueue(items){
 
 function sameDayDuplicateSerials(items){
   const casino=document.getElementById('casino').value;
+  const date=fmtDate(document.getElementById('date').value);
   const existing=new Set([
     ...todayRecords.map(record=>String(record.serialNo??'')),
-    ...queue.map(item=>String(item.sn??'')),
+    ...queue.filter(item=>(item.casino||casino)===casino&&(item.date||date)===date).map(item=>String(item.sn??'')),
     ..._getLocalLog().filter(record=>record.company===activeCompany&&record.casino===casino).map(record=>String(record.serialNo??''))
   ].filter(Boolean));
   const seen=new Set(),duplicates=new Set();
@@ -2935,18 +3030,17 @@ function requestSameDayDuplicateConfirmation(items,batch){
   return true;
 }
 
-async function fetchDuplicateFaults(serialNos,reason,throwOnError=false){
+async function fetchDuplicateFaults(serialNos,reason,throwOnError=false,date=''){
   if(!reason||reason.trim().toUpperCase()==='PM')return {};
   try{
-    const qs=new URLSearchParams({action:'duplicateFault',company:activeCompany,serialNos:[...new Set(serialNos)].join(','),reason,date:fmtDate(document.getElementById('date').value)});
-    const r=await fetch(getScriptUrl()+'?'+qs.toString());
-    const data=await r.json();
+    const qs=new URLSearchParams({action:'duplicateFault',company:activeCompany,serialNos:[...new Set(serialNos)].join(','),reason,date:date||fmtDate(document.getElementById('date').value)});
+    const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},30000);
     return data.duplicates||{};
   }catch(e){if(throwOnError)throw e;return {};}
 }
 
 function isDuplicateCheckItem(item){return String(item?.reason||'').trim().toUpperCase()!=='PM';}
-function duplicateItemKey(item){return `${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}`;}
+function duplicateItemKey(item){return `${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}\u0000${String(item?.date||'')}`;}
 function scheduleQueueDuplicateCheck(addedItems){
   const items=Array.isArray(addedItems)?addedItems:[addedItems];
   if(items.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);
@@ -2971,30 +3065,32 @@ async function refreshQueueDuplicateChecks(force){
   if(!candidates.length){renderQueueDuplicateNotice();return;}
   const groups=new Map();
   candidates.forEach(item=>{
-    const reason=String(item.reason||'').trim();
-    if(!groups.has(reason))groups.set(reason,new Set());
-    groups.get(reason).add(String(item.sn||''));
+    const reason=String(item.reason||'').trim(),date=String(item.date||'');
+    const groupKey=`${reason}\u0000${date}`;
+    if(!groups.has(groupKey))groups.set(groupKey,new Set());
+    groups.get(groupKey).add(String(item.sn||''));
   });
   const checkVersion=_duplicateCheckContextVersion;
   _duplicateCheckRunning=true;renderQueueDuplicateNotice();syncSubmitButtonState();
   _duplicateCheckPromise=(async()=>{
     const found=[],checkedKeys=new Set();
-    for(const [reason,snSet] of groups){
+    for(const [groupKey,snSet] of groups){
+      const [reason,date]=groupKey.split('\u0000');
       const serialNos=[...snSet];
       for(let i=0;i<serialNos.length;i+=50){
         const chunk=serialNos.slice(i,i+50);
         try{
-          const duplicates=await fetchDuplicateFaults(chunk,reason,true);
-          chunk.forEach(sn=>checkedKeys.add(`${sn}\u0000${reason}`));
+          const duplicates=await fetchDuplicateFaults(chunk,reason,true,date);
+          chunk.forEach(sn=>checkedKeys.add(`${sn}\u0000${reason}\u0000${date}`));
           Object.entries(duplicates).forEach(([sn,records])=>{
-            if(records?.length)found.push({sn:String(sn),reason,count:records.length});
+            if(records?.length)found.push({sn:String(sn),reason,date,count:records.length});
           });
         }catch(e){}
       }
     }
     if(checkVersion===_duplicateCheckContextVersion){
       checkedKeys.forEach(key=>_duplicateCheckedKeys.add(key));
-      _queueDuplicateResults=_queueDuplicateResults.filter(result=>!checkedKeys.has(`${result.sn}\u0000${result.reason}`)).concat(found);
+      _queueDuplicateResults=_queueDuplicateResults.filter(result=>!checkedKeys.has(`${result.sn}\u0000${result.reason}\u0000${result.date||''}`)).concat(found);
     }
   })();
   try{await _duplicateCheckPromise;}
@@ -3006,7 +3102,7 @@ function collectQueueDuplicateWarnings(){
   const counts=new Map();
   faultItems.forEach(item=>{const key=duplicateItemKey(item);counts.set(key,(counts.get(key)||0)+1);});
   const warnings=[];
-  counts.forEach((count,key)=>{if(count>1){const [sn,reason]=key.split('\u0000');warnings.push(`待提交內 S/N ${sn} 有 ${count} 筆「${reason}」`);}});
+  counts.forEach((count,key)=>{if(count>1){const [sn,reason,date]=key.split('\u0000');warnings.push(`待提交內 S/N ${sn} 在 ${date} 有 ${count} 筆「${reason}」`);}});
   const todayKeys=new Set();
   faultItems.forEach(item=>{
     const exists=todayRecords.some(record=>String(record.serialNo)===String(item.sn)&&(!record.reason||String(record.reason).trim()===String(item.reason).trim()));
@@ -3014,7 +3110,7 @@ function collectQueueDuplicateWarnings(){
   });
   todayKeys.forEach(key=>{const [sn,reason]=key.split('\u0000');warnings.push(`S/N ${sn} 今日已提交「${reason}」`);});
   _queueDuplicateResults.forEach(result=>{
-    if(activeKeys.has(`${result.sn}\u0000${result.reason}`))warnings.push(`S/N ${result.sn} 最近 30 日已有 ${result.count} 次「${result.reason}」`);
+    if(activeKeys.has(`${result.sn}\u0000${result.reason}\u0000${result.date||''}`))warnings.push(`S/N ${result.sn} 在 ${result.date} 前 30 日已有 ${result.count} 次「${result.reason}」`);
   });
   return [...new Set(warnings)];
 }
@@ -3068,7 +3164,7 @@ async function loadPoRepairRecords(){
   document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">載入損壞零件中...</div>';
   try{
     const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:sn,sort:'newest',page:'1',pageSize:'50'});
-    const data=await (await fetch(getScriptUrl()+'?'+qs.toString())).json();
+    const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
     if(token!==_poRepairToken||!_poRepairMode)return;
     if(!data.success)throw new Error(data.message||'載入失敗');
     _poRepairRecords=(data.records||[]).filter(record=>!String(record.bpRepairDay||'').trim()||/^waiting$/i.test(String(record.bpRepairDay||'').trim()));
@@ -3156,6 +3252,7 @@ function confirmDupAdd(){
   pendingAdd=null;pendingBatchAdd=null;document.getElementById('dupModal').classList.remove('show');
 }
 function doAddToQueue(item){
+  item=withQueueContext(item);
   ensureSubmissionIds([item]);
   queue.push(item);saveQueue();renderQueue();
   scheduleQueueDuplicateCheck(item);
@@ -3304,10 +3401,11 @@ function renderQueue(){
       <div class="q-info">
         <div class="q-reason">${esc(item.model||'SAE')} · ${esc(item.reason)}</div>
         <div class="q-action">${esc(item.action)}</div>
-        ${activeCompany==='GEG'&&(item.voidSeal||item.newVoidSeal)?`<div class="q-extra">Void：${esc(item.voidSeal||'-')}${item.newVoidSeal?' → '+esc(item.newVoidSeal):''}</div>`:''}
-        ${activeCompany==='MGM'&&item.aaTag?`<div class="q-extra">AA Tag：${esc(item.aaTag)}</div>`:''}
-        ${activeCompany==='MGM'&&item.location?`<div class="q-extra">場所：${item.location==='Floor'?'場上':'場下'}</div>`:''}
-        ${activeCompany==='Wynn'&&item.inspector?`<div class="q-extra">Inspector：${esc(item.inspector)}</div>`:''}
+        <div class="q-extra">${esc(item.company||activeCompany)} · ${esc(item.casino||'')} · ${esc(item.date||'')}${item.poNumber?' · PO '+esc(item.poNumber):''}</div>
+        ${item.company==='GEG'&&(item.voidSeal||item.newVoidSeal)?`<div class="q-extra">Void：${esc(item.voidSeal||'-')}${item.newVoidSeal?' → '+esc(item.newVoidSeal):''}</div>`:''}
+        ${item.company==='MGM'&&item.aaTag?`<div class="q-extra">AA Tag：${esc(item.aaTag)}</div>`:''}
+        ${item.company==='MGM'&&item.location?`<div class="q-extra">場所：${item.location==='Floor'?'場上':'場下'}</div>`:''}
+        ${item.company==='Wynn'&&item.inspector?`<div class="q-extra">Inspector：${esc(item.inspector)}</div>`:''}
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
         ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
         ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
@@ -3325,8 +3423,7 @@ function renderQueue(){
 function loadTodayRecords(){
   const SCRIPT_URL=getScriptUrl();
   const casino=document.getElementById('casino').value;
-  fetch(SCRIPT_URL+'?action=today&'+companyParam()+'&casino='+encodeURIComponent(casino))
-    .then(r=>r.json())
+  fetchJsonWithTimeout(SCRIPT_URL+'?action=today&'+companyParam()+'&casino='+encodeURIComponent(casino),{},30000)
     .then(data=>{
       todayRecords=data.records||[];
       if(data.lastPO&&!document.getElementById('poNumber').value){document.getElementById('poNumber').value=data.lastPO;localStorage.setItem('poNumber',data.lastPO);}
@@ -3337,8 +3434,8 @@ function loadTodayRecords(){
 function renderTodayPanel(){}
 function toggleToday(){}
 document.getElementById('casino').addEventListener('change',function(){localStorage.setItem(_casinoKey(activeCompany),this.value);localStorage.setItem('casino',this.value);});
-document.getElementById('casino').addEventListener('change',()=>{if(queue.length>0)showToast('⚠ 待提交記錄會改用新場地','warn');loadTodayRecords();});
-document.getElementById('date').addEventListener('change',()=>{_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;renderQueueDuplicateNotice();if(queue.length>0){showToast('⚠ 待提交記錄會改用新日期','warn');if(queue.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);}});
+document.getElementById('casino').addEventListener('change',()=>{if(queue.length>0)showToast('新加入記錄會使用新場地，已加入記錄不變','warn');loadTodayRecords();});
+document.getElementById('date').addEventListener('change',()=>{_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;renderQueueDuplicateNotice();if(queue.length>0){showToast('新加入記錄會使用新日期，已加入記錄不變','warn');if(queue.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);}});
 document.getElementById('dashCasino').addEventListener('change',updateDashboardSearchState);
 ['dashFrom','dashTo'].forEach(id=>{
   const input=document.getElementById(id);
@@ -3456,8 +3553,7 @@ async function loadDashboard(page=1){
   });
   dashboardLastQuery=Object.fromEntries(qs.entries());
   try{
-    const r=await fetch(SCRIPT_URL+'?'+qs.toString(),{signal:dashboardRequest.signal});
-    const data=await r.json();
+    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:dashboardRequest.signal},60000);
     if(!data.success){throw new Error(data.message||'載入失敗');}
     dashboardPage=data.page||Math.max(1,page);
     dashboardTotalPages=data.totalPages||1;
@@ -3648,7 +3744,7 @@ function renderRepeatRecords(){
 function startRepeatRecordEdit(index){_repeatRecordsEditingIdx=index;renderRepeatRecords();}
 function cancelRepeatRecordEdit(){_repeatRecordsEditingIdx=-1;renderRepeatRecords();}
 function readCardRecord(card,original){
-  const record={rowNumber:original.rowNumber,company:original.company||currentDashboardCompany||activeCompany};
+  const record={rowNumber:original.rowNumber,recordId:original.recordId||'',company:original.company||currentDashboardCompany||activeCompany};
   card.querySelectorAll('[data-card-field]').forEach(element=>{record[element.dataset.cardField]=element.dataset.cardField==='date'?dashInputToDate(element.value):element.value.trim();});
   return record;
 }
@@ -3656,7 +3752,7 @@ async function saveRepeatRecord(index,button){
   const card=document.getElementById(`repeatCardEdit${index}`),original=_repeatRecords[index];if(!card||!original)return;
   const record=readCardRecord(card,original);button.disabled=true;button.textContent='儲存中...';
   try{
-    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateRecord',record})})).json();
+    const data=await postGasJson({action:'updateRecord',record,original});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     const updated={...original,...record};_repeatRecords[index]=updated;_repeatRecordsEditingIdx=-1;
     const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0)dashboardRecords[outerIndex]=updated;
@@ -3669,7 +3765,7 @@ async function deleteRepeatRecord(index,button){
   button.disabled=true;button.textContent='刪除中...';
   try{
     const record={...original,company:original.company||currentDashboardCompany||activeCompany};
-    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'deleteRecord',record})})).json();
+    const data=await postGasJson({action:'deleteRecord',record});
     if(!data.success)throw new Error(data.message||'刪除失敗');
     _repeatRecords.splice(index,1);_repeatRecordsEditingIdx=-1;dashboardSelectedRecords.delete(String(original.rowNumber));
     const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0){dashboardRecords.splice(outerIndex,1);dashboardTotalMatches=Math.max(0,dashboardTotalMatches-1);}
@@ -3684,17 +3780,9 @@ async function openRepeatRecords(serialNo){
   const title=document.getElementById('repeatRecordsTitle');
   const rows=document.getElementById('repeatRecordsRows');
   title.textContent=`S/N ${sn} 重複維修記錄`;rows.innerHTML='<div class="dash-mobile-empty">載入中...</div>';modal.classList.add('show');
-  const params={...dashboardLastQuery,q:'',serialNo:sn,searchMode:'serial',page:'1',pageSize:'50'};
+  const params={...dashboardLastQuery,q:'',serialNo:sn,searchMode:'serial'};
   try{
-    const first=await (await fetch(getScriptUrl()+'?'+new URLSearchParams(params))).json();
-    if(!first.success)throw new Error(first.message||'載入失敗');
-    const records=[...(first.records||[])];
-    for(let page=2;page<=Number(first.totalPages||1);page++){
-      params.page=String(page);
-      const data=await (await fetch(getScriptUrl()+'?'+new URLSearchParams(params))).json();
-      if(!data.success)throw new Error(data.message||'載入失敗');
-      records.push(...(data.records||[]));
-    }
+    const records=await fetchPagedRecords((page,pageSize)=>new URLSearchParams({...params,page:String(page),pageSize:String(pageSize)}));
     if(token!==_repeatRecordsRequestToken)return;
     _repeatRecordsSerial=sn;_repeatRecords=records;_repeatRecordsEditingIdx=-1;renderRepeatRecords();
   }catch(e){
@@ -3737,10 +3825,9 @@ async function saveBulkDashboardEdit(){
   if(!Object.keys(changes).length){showToast('請至少選擇一項修改','err');return;}
   const btn=document.getElementById('bulkDashSaveBtn');btn.disabled=true;btn.textContent='儲存中...';
   try{
-    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'bulkUpdateRecords',company:currentDashboardCompany,rowNumbers:[...dashboardSelectedRecords.keys()],changes})});
-    const data=await r.json();if(!data.success)throw new Error(data.message||'修改失敗');
+    const data=await postGasJson({action:'bulkUpdateRecords',company:currentDashboardCompany,records:[...dashboardSelectedRecords.values()],changes});if(!data.success)throw new Error(data.message||'修改失敗');
     closeBulkEdit();dashboardSelectedRecords.clear();showToast(`✓ 已修改 ${data.saved} 筆記錄`);await loadDashboard(dashboardPage);
-  }catch(e){showToast('批量修改失敗','err');}
+  }catch(e){showToast(e.message||'批量修改失敗','err');}
   finally{btn.disabled=false;btn.textContent='套用修改';}
 }
 async function deleteBulkDashboardRecords(){
@@ -3752,9 +3839,7 @@ async function deleteBulkDashboardRecords(){
   deleteBtn.disabled=true;saveBtn.disabled=true;
   try{
     deleteBtn.textContent='刪除中...';
-    const payload=records.map(record=>({rowNumber:record.rowNumber,serialNo:record.serialNo,date:record.date}));
-    const response=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'bulkDeleteRecords',company:currentDashboardCompany||activeCompany,records:payload})});
-    const data=await response.json();
+    const data=await postGasJson({action:'bulkDeleteRecords',company:currentDashboardCompany||activeCompany,records});
     if(!data.success)throw new Error(data.message||'刪除失敗');
     closeBulkEdit();dashboardSelectedRecords.clear();showToast(`✓ 已刪除 ${data.deleted||records.length} 筆記錄`);await loadDashboard(dashboardPage);
   }catch(e){
@@ -3764,18 +3849,12 @@ async function deleteBulkDashboardRecords(){
     deleteBtn.disabled=false;saveBtn.disabled=false;deleteBtn.textContent='刪除已選記錄';
   }
 }
-function dashboardQueryForPage(page,pageSize=50){
+function dashboardQueryForPage(page,pageSize=100){
   const params={...(dashboardLastQuery||{})};params.page=String(page);params.pageSize=String(pageSize);return new URLSearchParams(params);
 }
 async function fetchAllDashboardRecords(){
   if(!dashboardLastQuery)throw new Error('請先搜尋');
-  const first=await (await fetch(getScriptUrl()+'?'+dashboardQueryForPage(1,50))).json();
-  if(!first.success)throw new Error(first.message||'匯出失敗');
-  const records=[...(first.records||[])];
-  for(let page=2;page<=first.totalPages;page++){
-    const data=await (await fetch(getScriptUrl()+'?'+dashboardQueryForPage(page,50))).json();records.push(...(data.records||[]));
-  }
-  return records;
+  return fetchPagedRecords(dashboardQueryForPage);
 }
 function exportColumns(){
   const cols=[['company','Company'],['casino','CASINO'],['date','DATE'],['poNumber','PO Number'],['model','Model'],['serialNo','Serial No.']];
@@ -3862,8 +3941,7 @@ async function deleteDashboardCard(index,btn){
   btn.disabled=true;btn.textContent='刪除中...';
   try{
     const record={...original,company:original.company||currentDashboardCompany||activeCompany};
-    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'deleteRecord',record})});
-    const data=await r.json();
+    const data=await postGasJson({action:'deleteRecord',record});
     if(!data.success)throw new Error(data.message||'刪除失敗');
     dashboardSelectedRecords.delete(String(original.rowNumber));dashboardEditingIdx=-1;
     dashboardRecords.splice(index,1);dashboardTotalMatches=Math.max(0,dashboardTotalMatches-1);renderDashboardPage();
@@ -3875,14 +3953,13 @@ async function saveDashboardCard(index,btn){
   const card=document.getElementById(`dashCardEdit${index}`);
   const original=dashboardRecords[index];
   if(!card||!original)return;
-  const record={rowNumber:original.rowNumber,company:original.company||currentDashboardCompany||activeCompany};
+  const record={rowNumber:original.rowNumber,recordId:original.recordId||'',company:original.company||currentDashboardCompany||activeCompany};
   card.querySelectorAll('[data-card-field]').forEach(el=>{
     record[el.dataset.cardField]=el.dataset.cardField==='date'?dashInputToDate(el.value):el.value.trim();
   });
   btn.disabled=true;btn.textContent='儲存中...';
   try{
-    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateRecord',record})});
-    const data=await r.json();
+    const data=await postGasJson({action:'updateRecord',record,original});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     dashboardRecords[index]={...original,...record};
     dashboardEditingIdx=-1;
@@ -3890,25 +3967,25 @@ async function saveDashboardCard(index,btn){
     showToast('✓ 記錄已更新');
   }catch(e){
     btn.disabled=false;btn.textContent='儲存';
-    showToast('儲存失敗','err');
+    showToast(e.message||'儲存失敗','err');
   }
 }
 async function saveDashboardRow(rowNumber,btn){
   const tr=document.querySelector(`#dashRows tr[data-row="${rowNumber}"]`);
   if(!tr)return;
-  const record={rowNumber,company:tr.dataset.company||currentDashboardCompany||activeCompany};
+  const original=dashboardRecords.find(item=>String(item.rowNumber)===String(rowNumber));
+  const record={rowNumber,recordId:original?.recordId||'',company:tr.dataset.company||currentDashboardCompany||activeCompany};
   tr.querySelectorAll('[data-field]').forEach(el=>{record[el.dataset.field]=el.dataset.field==='date'?dashInputToDate(el.value):el.value.trim();});
   btn.disabled=true;btn.textContent='儲存中...';
   try{
-    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateRecord',record})});
-    const data=await r.json();
+    const data=await postGasJson({action:'updateRecord',record,original});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     btn.textContent='已儲存';
     showToast('✓ 記錄已更新');
     setTimeout(()=>{btn.disabled=false;btn.textContent='儲存';},900);
   }catch(e){
     btn.disabled=false;btn.textContent='儲存';
-    showToast('儲存失敗','err');
+    showToast(e.message||'儲存失敗','err');
   }
 }
 async function submitAll(){
@@ -3931,12 +4008,15 @@ async function submitAll(){
   if(!queue.length){showToast('待提交清單是空的','err');return;}
   warnings.push(...collectQueueDuplicateWarnings());
   const seals=queue.map(item=>item.voidSeal).filter(Boolean);const repeatedSeals=[...new Set(seals.filter((seal,i)=>seals.indexOf(seal)!==i))];if(repeatedSeals.length)warnings.push(`Void Seal 重複：${repeatedSeals.join('、')}`);
-  const today=new Date();today.setHours(0,0,0,0);if(new Date(date+'T00:00:00')>today)warnings.push('所選日期是未來日期');
+  const queueCasinos=[...new Set(queue.map(item=>item.casino||casino))];
+  const queueDates=[...new Set(queue.map(item=>item.date||fmtDate(date)))];
+  const queuePoNumbers=[...new Set(queue.map(item=>item.poNumber??poNumber).filter(Boolean))];
+  const today=new Date();today.setHours(0,0,0,0);if(queueDates.some(value=>new Date(value.replace(/\//g,'-')+'T00:00:00')>today))warnings.push('所選日期包含未來日期');
   const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
   document.getElementById('confirmInfo').innerHTML=`
-    <div><span>場地</span><span>${esc(casino)}</span></div>
-    <div><span>日期</span><span>${fmtDate(date)}</span></div>
-    ${poNumber?`<div><span>PO 號碼</span><span>${esc(poNumber)}</span></div>`:''}
+    <div><span>場地</span><span>${esc(queueCasinos.join('、'))}</span></div>
+    <div><span>日期</span><span>${esc(queueDates.join('、'))}</span></div>
+    ${queuePoNumbers.length?`<div><span>PO 號碼</span><span>${esc(queuePoNumbers.join('、'))}</span></div>`:''}
     <div><span>機型</span><span>${esc(models)}</span></div>
     ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(esc).join('<br>')}</div>`:''}`;
   document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length?'（有提示，請確認）':''}`;
@@ -3968,13 +4048,13 @@ async function doSubmit(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   if(ensureSubmissionIds(queue))saveQueue();
-  const records=queue.map(item=>({submissionId:item.submissionId,company:activeCompany,casino,date:fmtDate(date),poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
-  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem('_ml_queue');localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);renderQueue();loadTodayRecords();};
+  const records=queue.map(item=>({submissionId:item.submissionId,company:item.company||activeCompany,casino:item.casino||casino,date:item.date||fmtDate(date),poNumber:item.poNumber??poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
+  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem(queueStorageKey(activeCompany));localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
   for(let i=0;i<records.length;i+=CHUNK_SIZE){
     const chunkItems=queue.slice(i,i+CHUNK_SIZE);
-    const repairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>({company:activeCompany,record:{...item.poRepair.record,bpRepairDay:fmtDate(date)}}));
+    const repairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>({company:item.company||activeCompany,record:{...item.poRepair.record,bpRepairDay:item.date||fmtDate(date)}}));
     chunks.push({records:records.slice(i,i+CHUNK_SIZE),repairs});
   }
   let savedCount=0,skippedCount=0,completedChunks=0;
@@ -3984,9 +4064,7 @@ async function doSubmit(){
       const chunk=chunks[ci];
       btn.textContent=chunks.length>1?`儲存中... (${completedChunks}/${chunks.length})`:'儲存中...';
       const payload=chunk.repairs.length?{action:'submitRecords',records:chunk.records,brokenPartsRepairs:chunk.repairs}:chunk.records;
-      const body=JSON.stringify(payload);
-      const r=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body});
-      const data=await r.json();
+      const data=await postGasJson(payload,90000);
       if(data.success){
         savedCount+=Number.isFinite(Number(data.inserted))?Number(data.inserted):chunk.records.length;
         skippedCount+=Number(data.skipped)||0;
@@ -4007,8 +4085,8 @@ async function doSubmit(){
     clearQueue();
   }catch(e){
     chunks.slice(completedChunks).forEach(chunk=>_retryQueue.push({records:chunk.records,repairs:chunk.repairs}));
-    if(chunks.length>completedChunks){_saveRetry();_updateRetryNotice();}
-    showToast('離線：已暫存在本機，連線後會自動同步','warn');
+    if(chunks.length>completedChunks){_saveRetry();_retryLastError=e.message||'提交結果未確認';_updateRetryNotice();_scheduleRetry(3000);}
+    showToast('提交結果未確認，剩餘資料已安全暫存並會自動核對重試','warn');
     clearQueue();
   }finally{
     hideSubmitProgress();
@@ -4069,7 +4147,7 @@ if(localStorage.getItem('_ml_auth')===_PH){
   document.getElementById('pinScreen').style.display='none';
   if(!hasAnyDeployId()){openGasSettings();}
   else{
-    if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);renderCompanyMenu();syncCompanySpecificFields();}
+    if(!getDeployId()){switchQueueCompany(firstConfiguredCompany());renderCompanyMenu();syncCompanySpecificFields();}
     unlockApp();loadTodayRecords();
   }
 }
