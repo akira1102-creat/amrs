@@ -199,7 +199,7 @@
     .bp-list-waiting.repaired{background:#238636;border-color:#3fb950;color:#fff}
     .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer;margin:4px}
     .bp-list-empty{padding:14px;color:#8b949e;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .bp-list-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
+    .bp-list-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
     .bp-list-filters input,.bp-list-filters select{font-size:12px;padding:9px 10px;border-radius:10px}
     .bp-list-filters button{padding:8px 13px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     .bp-list-head-actions{display:flex;align-items:center;gap:8px}
@@ -523,7 +523,7 @@
     .list-page-size select{width:auto;min-width:72px;padding:7px 9px;border-radius:9px;font-size:12px}
     .card-column-size{display:inline-flex;align-items:center;gap:7px;color:#8b949e;font-size:12px;font-weight:700;white-space:nowrap}
     .card-column-size select{width:auto;min-width:64px;padding:7px 9px;border-radius:9px;font-size:12px}
-    .broken-parts-page-controls{display:grid;grid-template-columns:minmax(130px,1fr) minmax(130px,1fr) minmax(120px,.7fr) auto;gap:8px;margin-bottom:10px}
+    .broken-parts-page-controls{display:grid;grid-template-columns:minmax(130px,1fr) minmax(130px,1fr) minmax(110px,.7fr) minmax(120px,.7fr) auto;gap:8px;margin-bottom:10px}
     .broken-parts-page-controls input,.broken-parts-page-controls select,.broken-parts-page-controls button{font-size:12px;padding:9px 10px;border-radius:10px}
     .broken-parts-page-controls button{border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     .broken-parts-page-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
@@ -763,6 +763,7 @@
     <div class="bp-list-filters">
       <input id="bpFilterCasino" type="text" placeholder="場地">
       <input id="bpFilterParts" type="text" placeholder="零件編號">
+      <select id="bpFilterStatus" onchange="loadBrokenPartsListEditor(1)"><option value="">全部狀態</option><option value="waiting">等待中</option><option value="repaired">已完成</option></select>
       <select id="bpFilterSort" onchange="loadBrokenPartsListEditor(1)"><option value="newest">最新優先</option><option value="oldest">最舊優先</option></select>
       <select id="bpListPageSize" onchange="setBpListPageSize(this.value)"><option>10</option><option>30</option><option>50</option><option>80</option><option>100</option></select>
       <button onclick="loadBrokenPartsListEditor(1)" type="button">篩選</button>
@@ -1192,6 +1193,7 @@
     <div class="broken-parts-page-controls">
       <select id="bpPageCasino" onchange="loadBrokenPartsPage(1)"><option value="">全部場地</option></select>
       <input id="bpPageParts" type="text" placeholder="零件編號">
+      <select id="bpPageStatus" onchange="loadBrokenPartsPage(1)"><option value="">全部狀態</option><option value="waiting">等待中</option><option value="repaired">已完成</option></select>
       <select id="bpPageSort" onchange="loadBrokenPartsPage(1)"><option value="newest">最新優先</option><option value="oldest">最舊優先</option></select>
       <button onclick="loadBrokenPartsPage(1)" type="button">篩選</button>
     </div>
@@ -1257,8 +1259,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-04';
-const _APP_VERSION='v0.993';
+const _APP_BUMP='2026.07.15-05';
+const _APP_VERSION='v0.994';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2460,6 +2462,7 @@ async function openBrokenPartsListEditor(){
   modal.classList.add('show');
   document.getElementById('bpFilterCasino').value='';
   document.getElementById('bpFilterParts').value='';
+  document.getElementById('bpFilterStatus').value='';
   document.getElementById('bpFilterSort').value='newest';
   await loadBrokenPartsListEditor(1);
 }
@@ -2468,7 +2471,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage){
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
   _bpListDeleted=[];
   try{
-    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize)});
+    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize)});
     const r=await fetch(getScriptUrl()+'?'+qs.toString());
     const data=await r.json();
     if(!data.success)throw new Error(data.message||'載入失敗');
@@ -2500,7 +2503,7 @@ function updateBpListPager(){
   document.getElementById('bpListNextBtn').disabled=_bpListPage>=_bpListTotalPages;
 }
 function brokenPartsQueryForPage(page,pageSize=50){
-  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:bpListFilterSerial(),casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(pageSize)});
+  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:bpListFilterSerial(),casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(pageSize)});
 }
 async function fetchAllBrokenPartsRecords(){
   const first=await (await fetch(getScriptUrl()+'?'+brokenPartsQueryForPage(1))).json();
@@ -2676,7 +2679,7 @@ async function loadBrokenPartsPage(page=_bpPage){
   document.getElementById('brokenPartsPageTitle').textContent=`${activeCompany} 損壞零件列表`;
   document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
   document.getElementById('bpPageSummary').textContent='正在載入資料...';
-  const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize)});
+  const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize)});
   try{
     const data=await (await fetch(SCRIPT_URL+'?'+qs.toString(),{signal:_bpPageRequest.signal})).json();
     if(!data.success)throw new Error(data.message||'載入失敗');
