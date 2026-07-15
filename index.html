@@ -203,6 +203,7 @@
     .bp-list-filters input,.bp-list-filters select{font-size:12px;padding:9px 10px;border-radius:10px}
     .bp-list-filters button{padding:8px 13px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     .bp-list-head-actions{display:flex;align-items:center;gap:8px}
+    #bpListRows{--card-columns:1}
     #appTop{max-width:1100px;margin:0 auto 10px;display:flex;align-items:center;gap:10px}
     #menuBtn{width:38px;height:34px;background:#161b22;border:1px solid #30363d;border-radius:10px;color:#e6edf3;font-size:20px;cursor:pointer}
     #appTitle{flex:1;text-align:center;font-size:11px;font-weight:600;color:#484f58;letter-spacing:1.5px;text-transform:uppercase;padding:4px 0}
@@ -754,8 +755,8 @@
     <div class="template-head">
       <div class="template-title">損壞零件列表</div>
       <div class="bp-list-head-actions">
-        <button class="dash-tool-btn" onclick="exportBrokenPartsList('xls')" type="button">Excel</button>
-        <button class="dash-tool-btn" onclick="exportBrokenPartsList('pdf')" type="button">PDF</button>
+        <button class="dash-tool-btn" onclick="openBrokenPartsExportDialog('xls','editor')" type="button">Excel</button>
+        <button class="dash-tool-btn" onclick="openBrokenPartsExportDialog('pdf','editor')" type="button">PDF</button>
         <button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeBrokenPartsListEditor()" type="button">關閉</button>
       </div>
     </div>
@@ -768,7 +769,7 @@
       <select id="bpListPageSize" onchange="setBpListPageSize(this.value)"><option>10</option><option>30</option><option>50</option><option>80</option><option>100</option></select>
       <button onclick="loadBrokenPartsListEditor(1)" type="button">篩選</button>
     </div>
-    <div id="bpListRows"></div>
+    <div class="dash-mobile-list" id="bpListRows"></div>
     <div class="dash-pager show" id="bpListPager">
       <button class="dash-page-btn" id="bpListPrevBtn" onclick="changeBpListPage(-1)" type="button">上一頁</button>
       <span class="dash-page-info" id="bpListPageInfo">第 1 / 1 頁</span>
@@ -776,7 +777,6 @@
     </div>
     <div class="template-actions">
       <button class="template-add" onclick="addBrokenPartsListRow()" type="button">＋ 新增一行</button>
-      <button class="template-save" id="bpListSaveBtn" onclick="saveBrokenPartsListEditor()" type="button">儲存</button>
     </div>
   </div>
 </div>
@@ -820,7 +820,7 @@
     <div class="template-note">未勾選的欄位不會出現在匯出檔案。</div>
     <label class="export-select-all"><input id="exportSelectAll" type="checkbox" onchange="toggleAllExportFields(this.checked)" checked> 全選</label>
     <div class="export-fields" id="exportFields"></div>
-    <div class="template-actions"><button class="template-save" id="exportConfirmBtn" onclick="confirmDashboardExport()" type="button">開始匯出</button></div>
+    <div class="template-actions"><button class="template-save" id="exportConfirmBtn" onclick="confirmExport()" type="button">開始匯出</button></div>
   </div>
 </div>
 
@@ -1199,6 +1199,7 @@
     </div>
     <div class="broken-parts-page-toolbar">
       <div class="broken-parts-page-summary" id="bpPageSummary">請從左側選擇公司。</div>
+      <div class="bp-list-head-actions"><button class="dash-tool-btn" onclick="openBrokenPartsExportDialog('xls','page')" type="button">Excel</button><button class="dash-tool-btn" onclick="openBrokenPartsExportDialog('pdf','page')" type="button">PDF</button></div>
       <details class="bp-field-picker">
         <summary>顯示欄位</summary>
         <div class="bp-field-options" id="bpPageFieldOptions"></div>
@@ -1259,8 +1260,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-05';
-const _APP_VERSION='v0.994';
+const _APP_BUMP='2026.07.15-06';
+const _APP_VERSION='v0.995';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2316,8 +2317,7 @@ let _partsLanguage=localStorage.getItem('_ml_parts_language')==='en'?'en':'jp';
 let _bpRepairDayMode='waiting';
 let _bpRemarkVisible=false;
 let _bpListRecords=[];
-let _bpListDeleted=[];
-let _bpListPage=1,_bpListTotalPages=1,_bpListTotalMatches=0,_bpListPageSize=10;
+let _bpListPage=1,_bpListTotalPages=1,_bpListTotalMatches=0,_bpListPageSize=10,_bpListEditingIndex=-1;
 const _PARTS_KEY='_ml_parts';
 (function(){const sel=document.getElementById('bpQty');for(let i=1;i<=20;i++){const o=document.createElement('option');o.value=i;o.textContent=i;sel.appendChild(o);}})();
 (function(){const t=new Date();document.getElementById('bpRepairDayDate').value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;})();
@@ -2469,7 +2469,7 @@ async function openBrokenPartsListEditor(){
 async function loadBrokenPartsListEditor(page=_bpListPage){
   const serialNo=bpListFilterSerial();
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
-  _bpListDeleted=[];
+  _bpListEditingIndex=-1;
   try{
     const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize)});
     const r=await fetch(getScriptUrl()+'?'+qs.toString());
@@ -2516,30 +2516,26 @@ async function fetchAllBrokenPartsRecords(){
   }
   return records;
 }
-async function exportBrokenPartsList(type){
-  let printWindow=null;if(type==='pdf')printWindow=window.open('','_blank');
-  try{
-    showToast('正在準備匯出...');
-    const records=await fetchAllBrokenPartsRecords();
-    if(!records.length)throw new Error('沒有資料');
-    const allColumns=[['casino','CASINO'],['model','Model'],['serialNo','Serial No.'],['brokenParts','Parts No.'],['bpDesc','Required Parts(JP)'],['bpColC','Required Parts(EN)'],['bpQty','Qty'],['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark']];
-    const columns=allColumns.filter(([key])=>records.some(record=>cleanDashValue(record[key])!==''));
-    const table=`<table border="1"><thead><tr>${columns.map(([,label])=>`<th>${esc(label)}</th>`).join('')}</tr></thead><tbody>${records.map(record=>`<tr>${columns.map(([key])=>`<td>${esc(record[key]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-    const title='AE Maintenance Record';
-    if(type==='xls')downloadBlob(new Blob([`<html><head><meta charset="utf-8"><title>${title}</title></head><body><h2>${title}</h2>${table}</body></html>`],{type:'application/vnd.ms-excel'}),title+'.xls');
-    else if(printWindow){printWindow.document.write(`<html><head><title>${title}</title><style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;font-size:9px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left;word-break:break-word}th{background:#eee}</style></head><body><h2>${title}</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
-    showToast(`✓ 已準備 ${records.length} 筆記錄`);
-  }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
+function brokenPartsPageQueryForExport(page,pageSize=50){
+  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(pageSize)});
 }
-function bpListField(label,field,value){
-  return `<input data-bp-field="${esc(field)}" value="${esc(value??'')}" placeholder="${esc(label)}">`;
+async function fetchAllBrokenPartsPageRecords(){
+  const first=await (await fetch(getScriptUrl()+'?'+brokenPartsPageQueryForExport(1))).json();
+  if(!first.success)throw new Error(first.message||'匯出失敗');
+  const records=[...(first.records||[])];
+  for(let page=2;page<=first.totalPages;page++){
+    const data=await (await fetch(getScriptUrl()+'?'+brokenPartsPageQueryForExport(page))).json();
+    if(!data.success)throw new Error(data.message||'匯出失敗');
+    records.push(...(data.records||[]));
+  }
+  return records;
 }
 function bpListDateValue(value){
   const match=String(value||'').trim().match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
   return match?`${match[1]}-${match[2].padStart(2,'0')}-${match[3].padStart(2,'0')}`:'';
 }
 function bpListDateField(field,value,allowWaiting=false){
-  const waiting=allowWaiting&&/^waiting$/i.test(String(value||'').trim());
+  const waiting=allowWaiting&&(!String(value||'').trim()||/^waiting$/i.test(String(value||'').trim()));
   const repaired=allowWaiting&&!waiting&&!!bpListDateValue(value);
   return `<div class="bp-list-date" data-waiting="${waiting}">
     <input type="date" data-bp-field="${esc(field)}" value="${waiting?'':esc(bpListDateValue(value))}" onclick="openDatePicker(this)" onchange="setBpListEditorDate(this)">
@@ -2561,64 +2557,43 @@ function toggleBpListEditorWaiting(btn){
   else wrap.querySelector('input').showPicker?.();
 }
 function renderBrokenPartsListRows(){
-  const rows=_bpListRecords.length?_bpListRecords:[bpListBlankRecord()];
-  const head='<div class="bp-list-head"><div>CASINO</div><div>Model</div><div>Serial No.</div><div>Parts No.</div><div>Required Parts(JP)</div><div>Required Parts(EN)</div><div>Qty</div><div>Repair Day</div><div>Found Day</div><div>Remark</div><div></div></div>';
-  const body=rows.length?rows.map((r,i)=>`
-    <div class="bp-list-row" data-row-number="${esc(r.rowNumber||'')}">
-      ${bpListField('CASINO','casino',r.casino)}
-      ${bpListField('Model','model',r.model)}
-      ${bpListField('Serial No.','serialNo',r.serialNo)}
-      ${bpListField('Parts No.','brokenParts',r.brokenParts)}
-      ${bpListField('Required Parts(JP)','bpDesc',r.bpDesc)}
-      ${bpListField('Required Parts(EN)','bpColC',r.bpColC)}
-      ${bpListField('Qty','bpQty',r.bpQty)}
-      ${bpListDateField('bpRepairDay',r.bpRepairDay,true)}
-      ${bpListDateField('date',r.date)}
-      ${bpListField('Remark','bpRemark',r.bpRemark)}
-      <button class="bp-list-del" onclick="deleteBrokenPartsListRow(${i})" type="button">×</button>
-    </div>`).join(''):'<div class="bp-list-empty">沒有項目</div>';
-  document.getElementById('bpListRows').innerHTML=`<div class="bp-list-table">${head}${body}</div>`;
-}
-function collectBrokenPartsListRows(){
-  return Array.from(document.querySelectorAll('#bpListRows .bp-list-row')).map(row=>{
-    const rec={rowNumber:row.dataset.rowNumber||''};
-    row.querySelectorAll('[data-bp-field]').forEach(input=>{
-      const field=input.dataset.bpField;
-      if(field==='bpRepairDay')rec[field]=input.closest('.bp-list-date')?.dataset.waiting==='true'?'Waiting':input.value.replace(/-/g,'/');
-      else if(field==='date')rec[field]=input.value.replace(/-/g,'/');
-      else rec[field]=input.value.trim();
-    });
-    return rec;
-  }).filter(r=>Object.keys(r).some(k=>k!=='rowNumber'&&r[k]));
+  const root=document.getElementById('bpListRows');if(!root)return;
+  root.innerHTML=_bpListRecords.length?_bpListRecords.map(renderBrokenPartsListCard).join(''):'<div class="dash-mobile-empty">沒有項目。</div>';
 }
 function addBrokenPartsListRow(){
-  _bpListRecords=collectBrokenPartsListRows();
   _bpListRecords.push(bpListBlankRecord());
-  renderBrokenPartsListRows();
+  _bpListEditingIndex=_bpListRecords.length-1;renderBrokenPartsListRows();
 }
-function deleteBrokenPartsListRow(index){
-  const rows=collectBrokenPartsListRows();
-  const rec=rows[index];
-  if(rec&&rec.rowNumber)_bpListDeleted.push(Number(rec.rowNumber));
-  rows.splice(index,1);
-  _bpListRecords=rows;
-  renderBrokenPartsListRows();
+function renderBrokenPartsListCard(record,index){
+  if(index===_bpListEditingIndex)return renderBrokenPartsListEditCard(record,index);
+  const number=(_bpListPage-1)*_bpListPageSize+index+1;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><button class="dash-card-btn" onclick="startBrokenPartsListEdit(${index})" type="button">編輯</button></div>${brokenPartsRowsHtml(record)}</section>`;
 }
-async function saveBrokenPartsListEditor(){
-  const btn=document.getElementById('bpListSaveBtn');
-  const records=collectBrokenPartsListRows();
+function renderBrokenPartsListEditCard(record,index){
+  const number=(_bpListPage-1)*_bpListPageSize+index+1;
+  return `<section class="dash-mobile-card is-editing" id="bpListEditCard${index}"><div class="dash-mobile-title"><span>── 編輯記錄 ${number} ──</span></div><div class="dash-card-form">${brokenPartsEditFieldsHtml(record)}</div><div class="dash-card-actions"><button class="dash-card-btn danger" onclick="deleteBrokenPartsListRecord(${index},this)" type="button">刪除</button><button class="dash-card-btn" onclick="cancelBrokenPartsListEdit(${index})" type="button">取消</button><button class="dash-card-btn primary" onclick="saveBrokenPartsListRecord(${index},this)" type="button">儲存</button></div></section>`;
+}
+function startBrokenPartsListEdit(index){_bpListEditingIndex=index;renderBrokenPartsListRows();}
+function cancelBrokenPartsListEdit(index){if(!_bpListRecords[index]?.rowNumber)_bpListRecords.splice(index,1);_bpListEditingIndex=-1;renderBrokenPartsListRows();}
+async function saveBrokenPartsListRecord(index,btn){
+  const card=document.getElementById(`bpListEditCard${index}`),record=collectBrokenPartsCardRecord(card,_bpListRecords[index]);
   btn.disabled=true;btn.textContent='儲存中...';
   try{
-    const r=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records,deletedRowNumbers:_bpListDeleted})});
-    const data=await r.json();
+    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records:[record],deletedRowNumbers:[]})})).json();
     if(!data.success)throw new Error(data.message||'儲存失敗');
-    closeBrokenPartsListEditor();
-    showToast('✓ 損壞零件列表已更新');
-  }catch(e){
-    showToast('損壞零件列表儲存失敗','err');
-  }finally{
-    btn.disabled=false;btn.textContent='儲存';
-  }
+    showToast('✓ 損壞零件記錄已更新');await loadBrokenPartsListEditor(_bpListPage);
+  }catch(e){btn.disabled=false;btn.textContent='儲存';showToast(e.message||'儲存失敗','err');}
+}
+async function deleteBrokenPartsListRecord(index,btn){
+  const record=_bpListRecords[index];
+  if(!record?.rowNumber){_bpListRecords.splice(index,1);_bpListEditingIndex=-1;renderBrokenPartsListRows();return;}
+  if(!confirm(`確定刪除 S/N ${record.serialNo||''} 的損壞零件記錄？`))return;
+  btn.disabled=true;btn.textContent='刪除中...';
+  try{
+    const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'updateBrokenPartsList',company:activeCompany,records:[],deletedRowNumbers:[Number(record.rowNumber)]})})).json();
+    if(!data.success)throw new Error(data.message||'刪除失敗');
+    showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsListEditor(_bpListPage);
+  }catch(e){btn.disabled=false;btn.textContent='刪除';showToast(e.message||'刪除失敗','err');}
 }
 
 const BP_PAGE_FIELDS=[
@@ -2626,6 +2601,19 @@ const BP_PAGE_FIELDS=[
   ['bpDesc','Required Parts(JP)'],['bpColC','Required Parts(EN)'],['bpQty','Qty'],
   ['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark']
 ];
+function brokenPartsRowsHtml(record,visibleFields=null){
+  return BP_PAGE_FIELDS.filter(([key])=>!visibleFields||visibleFields.has(key)).map(([key,label])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(label)}</div><div class="dash-mobile-val">${brokenPartsPageValueHtml(key,record[key])}</div></div>`).join('');
+}
+function brokenPartsEditInput(label,key,value){return `<div><label>${esc(label)}</label><input data-bp-card-field="${esc(key)}" value="${esc(value??'')}"></div>`;}
+function brokenPartsEditFieldsHtml(record){
+  return `${brokenPartsEditInput('CASINO','casino',record.casino)}${brokenPartsEditInput('Model','model',record.model)}${brokenPartsEditInput('Serial No.','serialNo',record.serialNo)}${brokenPartsEditInput('Parts No.','brokenParts',record.brokenParts)}${brokenPartsEditInput('Required Parts(JP)','bpDesc',record.bpDesc)}${brokenPartsEditInput('Required Parts(EN)','bpColC',record.bpColC)}${brokenPartsEditInput('Qty','bpQty',record.bpQty)}<div><label>Repair Day</label>${bpListDateField('bpRepairDay',record.bpRepairDay,true)}</div><div><label>Found Day</label>${bpListDateField('date',record.date)}</div>${brokenPartsEditInput('Remark','bpRemark',record.bpRemark)}`;
+}
+function collectBrokenPartsCardRecord(card,original){
+  const record={...original};
+  card.querySelectorAll('[data-bp-card-field]').forEach(input=>{record[input.dataset.bpCardField]=input.value.trim();});
+  card.querySelectorAll('[data-bp-field]').forEach(input=>{const field=input.dataset.bpField;record[field]=field==='bpRepairDay'&&input.closest('.bp-list-date')?.dataset.waiting==='true'?'Waiting':input.value.replace(/-/g,'/');});
+  return record;
+}
 let _bpPageRecords=[],_bpPage=1,_bpPageTotalPages=1,_bpPageTotalMatches=0,_bpPageSize=10,_bpPageEditingIndex=-1,_bpPageRequest=null,_bpPageCardColumns=1;
 let _bpPageVisibleFields=new Set(BP_PAGE_FIELDS.map(([key])=>key));
 const LIST_PREFERENCES_KEY='_amrs_list_preferences_v1';
@@ -2703,33 +2691,24 @@ function brokenPartsPageValueHtml(key,value){
 function renderBrokenPartsPageCard(record,index){
   if(index===_bpPageEditingIndex)return renderBrokenPartsPageEditCard(record,index);
   const number=(_bpPage-1)*_bpPageSize+index+1;
-  const rows=BP_PAGE_FIELDS.filter(([key])=>_bpPageVisibleFields.has(key)).map(([key,label])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(label)}</div><div class="dash-mobile-val">${brokenPartsPageValueHtml(key,record[key])}</div></div>`).join('');
-  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><button class="dash-card-btn" onclick="startBrokenPartsPageEdit(${index})" type="button">編輯</button></div>${rows}</section>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><button class="dash-card-btn" onclick="startBrokenPartsPageEdit(${index})" type="button">編輯</button></div>${brokenPartsRowsHtml(record,_bpPageVisibleFields)}</section>`;
 }
 function renderBrokenPartsPageRows(){
   const root=document.getElementById('bpPageRows');if(!root)return;
   root.innerHTML=_bpPageRecords.length?_bpPageRecords.map(renderBrokenPartsPageCard).join(''):'<div class="dash-mobile-empty">沒有項目。</div>';
 }
-function bpPageEditInput(label,key,value){return `<div><label>${esc(label)}</label><input data-bp-page-field="${esc(key)}" value="${esc(value??'')}"></div>`;}
 function renderBrokenPartsPageEditCard(record,index){
   const number=(_bpPage-1)*_bpPageSize+index+1;
   return `<section class="dash-mobile-card is-editing" id="bpPageEditCard${index}">
     <div class="dash-mobile-title"><span>── 編輯記錄 ${number} ──</span></div>
-    <div class="dash-card-form">
-      ${bpPageEditInput('CASINO','casino',record.casino)}${bpPageEditInput('Model','model',record.model)}${bpPageEditInput('Serial No.','serialNo',record.serialNo)}${bpPageEditInput('Parts No.','brokenParts',record.brokenParts)}
-      ${bpPageEditInput('Required Parts(JP)','bpDesc',record.bpDesc)}${bpPageEditInput('Required Parts(EN)','bpColC',record.bpColC)}${bpPageEditInput('Qty','bpQty',record.bpQty)}
-      <div><label>Repair Day</label>${bpListDateField('bpRepairDay',record.bpRepairDay,true)}</div><div><label>Found Day</label>${bpListDateField('date',record.date)}</div>${bpPageEditInput('Remark','bpRemark',record.bpRemark)}
-    </div>
+    <div class="dash-card-form">${brokenPartsEditFieldsHtml(record)}</div>
     <div class="dash-card-actions"><button class="dash-card-btn danger" onclick="deleteBrokenPartsPageRecord(${index},this)" type="button">刪除</button><button class="dash-card-btn" onclick="cancelBrokenPartsPageEdit()" type="button">取消</button><button class="dash-card-btn primary" onclick="saveBrokenPartsPageRecord(${index},this)" type="button">儲存</button></div>
   </section>`;
 }
 function startBrokenPartsPageEdit(index){_bpPageEditingIndex=index;renderBrokenPartsPageRows();}
 function cancelBrokenPartsPageEdit(){_bpPageEditingIndex=-1;renderBrokenPartsPageRows();}
 function collectBrokenPartsPageRecord(index){
-  const card=document.getElementById(`bpPageEditCard${index}`),record={..._bpPageRecords[index]};
-  card.querySelectorAll('[data-bp-page-field]').forEach(input=>{record[input.dataset.bpPageField]=input.value.trim();});
-  card.querySelectorAll('[data-bp-field]').forEach(input=>{const field=input.dataset.bpField;record[field]=field==='bpRepairDay'&&input.closest('.bp-list-date')?.dataset.waiting==='true'?'Waiting':input.value.replace(/-/g,'/');});
-  return record;
+  return collectBrokenPartsCardRecord(document.getElementById(`bpPageEditCard${index}`),_bpPageRecords[index]);
 }
 async function saveBrokenPartsPageRecord(index,btn){
   const record=collectBrokenPartsPageRecord(index);btn.disabled=true;btn.textContent='儲存中...';
@@ -3767,14 +3746,21 @@ function exportColumns(){
   if(currentDashboardCompany==='Wynn')cols.push(['inspector','Inspector']);
   return cols.concat([['reason','Reason'],['actionTaken','Action Taken'],['errorDescription','Error Description'],['boxId','Box ID']]);
 }
-let _pendingExportType='';
+let _pendingExportType='',_pendingExportScope='dashboard';
 function openExportDialog(type){
   if(!dashboardLastQuery){showToast('請先搜尋資料','err');return;}
-  _pendingExportType=type==='pdf'?'pdf':'xls';
+  _pendingExportType=type==='pdf'?'pdf':'xls';_pendingExportScope='dashboard';
   document.getElementById('exportModalTitle').textContent=`選擇 ${_pendingExportType==='pdf'?'PDF':'Excel'} 匯出欄位`;
   document.getElementById('exportFields').innerHTML=exportColumns().map(([key,label])=>`<label class="export-field"><input type="checkbox" value="${esc(key)}" onchange="syncExportSelectAll()" checked><span>${esc(label)}</span></label>`).join('');
   document.getElementById('exportSelectAll').checked=true;
   document.getElementById('exportSelectAll').indeterminate=false;
+  document.getElementById('exportModal').classList.add('show');
+}
+function openBrokenPartsExportDialog(type,scope){
+  _pendingExportType=type==='pdf'?'pdf':'xls';_pendingExportScope=scope==='editor'?'brokenPartsEditor':'brokenPartsPage';
+  document.getElementById('exportModalTitle').textContent=`選擇 ${_pendingExportType==='pdf'?'PDF':'Excel'} 匯出欄位`;
+  document.getElementById('exportFields').innerHTML=BP_PAGE_FIELDS.map(([key,label])=>`<label class="export-field"><input type="checkbox" value="${esc(key)}" onchange="syncExportSelectAll()" checked><span>${esc(label)}</span></label>`).join('');
+  document.getElementById('exportSelectAll').checked=true;document.getElementById('exportSelectAll').indeterminate=false;
   document.getElementById('exportModal').classList.add('show');
 }
 function closeExportDialog(){document.getElementById('exportModal').classList.remove('show');}
@@ -3785,10 +3771,11 @@ function syncExportSelectAll(){
 }
 function showExportProgress(){document.getElementById('exportProgress').classList.add('show');}
 function hideExportProgress(){document.getElementById('exportProgress').classList.remove('show');}
-function confirmDashboardExport(){
+function confirmExport(){
   const selected=[...document.querySelectorAll('#exportFields input:checked')].map(input=>input.value);
   if(!selected.length){showToast('請至少選擇一個匯出欄位','err');return;}
-  const type=_pendingExportType;closeExportDialog();exportDashboard(type,selected);
+  const type=_pendingExportType;closeExportDialog();
+  if(_pendingExportScope==='dashboard')exportDashboard(type,selected);else exportBrokenParts(type,selected,_pendingExportScope);
 }
 function downloadBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 async function exportDashboard(type,selectedKeys){
@@ -3803,6 +3790,22 @@ async function exportDashboard(type,selectedKeys){
     const table=`<table border="1"><thead><tr>${cols.map(c=>`<th>${esc(c[1])}</th>`).join('')}</tr></thead><tbody>${records.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     if(type==='xls')downloadBlob(new Blob([`<html><head><meta charset="utf-8"><title>${title}</title></head><body><h2>${title}</h2>${table}</body></html>`],{type:'application/vnd.ms-excel'}),title+'.xls');
     else if(printWindow){printWindow.document.write(`<html><head><title>${title}</title><style>body{font-family:Arial;font-size:10px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left}</style></head><body><h2>${title}</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
+    showToast(`✓ 已準備 ${records.length} 筆記錄`);
+  }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
+  finally{await new Promise(resolve=>setTimeout(resolve,150));hideExportProgress();}
+}
+async function exportBrokenParts(type,selectedKeys,scope){
+  let printWindow=null;if(type==='pdf')printWindow=window.open('','_blank');
+  showExportProgress();
+  try{
+    const records=scope==='brokenPartsEditor'?await fetchAllBrokenPartsRecords():await fetchAllBrokenPartsPageRecords();
+    if(!records.length)throw new Error('沒有資料');
+    const columns=BP_PAGE_FIELDS.filter(([key])=>selectedKeys.includes(key)&&records.some(record=>cleanDashValue(record[key])!==''));
+    if(!columns.length)throw new Error('所選欄位沒有資料');
+    const title='AE Maintenance Record';
+    const table=`<table border="1"><thead><tr>${columns.map(([,label])=>`<th>${esc(label)}</th>`).join('')}</tr></thead><tbody>${records.map(record=>`<tr>${columns.map(([key])=>`<td>${esc(record[key]??'')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if(type==='xls')downloadBlob(new Blob([`<html><head><meta charset="utf-8"><title>${title}</title></head><body><h2>${title}</h2>${table}</body></html>`],{type:'application/vnd.ms-excel'}),title+'.xls');
+    else if(printWindow){printWindow.document.write(`<html><head><title>${title}</title><style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;font-size:9px}table{border-collapse:collapse;width:100%}th,td{padding:4px;text-align:left;word-break:break-word}th{background:#eee}</style></head><body><h2>${title}</h2>${table}</body></html>`);printWindow.document.close();printWindow.focus();printWindow.print();}
     showToast(`✓ 已準備 ${records.length} 筆記錄`);
   }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
   finally{await new Promise(resolve=>setTimeout(resolve,150));hideExportProgress();}
