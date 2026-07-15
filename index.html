@@ -610,6 +610,12 @@
     .schedule-focus{padding:18px 0 22px;border-top:1px solid #21262d;border-bottom:1px solid #30363d}
     .schedule-kicker{font-size:12px;font-weight:900;color:#58a6ff}
     .schedule-focus-date{margin-top:5px;font-size:17px;font-weight:800;color:#e6edf3}
+    .schedule-periods{min-width:0}
+    .schedule-period{margin-top:15px}
+    .schedule-period+.schedule-period{margin-top:20px}
+    .schedule-period-head{display:flex;align-items:center;gap:8px;color:#c9d1d9;font-size:13px;font-weight:900}
+    .schedule-period-head::after{content:"";height:1px;flex:1;background:#30363d}
+    .schedule-period .schedule-items{margin-top:9px}
     .schedule-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:14px}
     .schedule-assignment{min-width:0;border:1px solid #30363d;border-radius:9px;background:#161b22;overflow:hidden}
     .schedule-assignment[open]{border-color:#484f58}
@@ -623,6 +629,7 @@
     .schedule-assignment-chevron{transition:transform .18s ease}
     .schedule-assignment[open] .schedule-assignment-chevron{transform:rotate(180deg)}
     .schedule-assignment-details{padding:0 14px 13px;border-top:1px solid #21262d}
+    .schedule-assignment-people{padding-top:11px}
     .schedule-shift{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;padding-top:11px}
     .schedule-shift-label{font-size:11px;font-weight:900;color:#8b949e}
     .schedule-person-list{display:flex;flex-wrap:wrap;gap:6px}
@@ -640,6 +647,7 @@
     .schedule-day-date span{display:block;color:#8b949e;font-size:11px;font-weight:700}
     .schedule-day.today .schedule-day-date{color:#58a6ff}
     .schedule-day .schedule-items{margin-top:0}
+    .schedule-day .schedule-period .schedule-items{margin-top:9px}
     .schedule-empty{padding:14px 0;color:#484f58;font-size:12px}
     .schedule-error{padding:18px;border:1px solid #f85149;border-radius:9px;color:#ff7b72;font-size:12px}
     .scl-monthly-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
@@ -1272,7 +1280,7 @@
     <section class="schedule-focus">
       <div class="schedule-kicker" id="scheduleFocusLabel">今日工作</div>
       <div class="schedule-focus-date" id="scheduleFocusDate">正在載入...</div>
-      <div class="schedule-items" id="scheduleFocusItems"></div>
+      <div class="schedule-periods" id="scheduleFocusItems"></div>
     </section>
     <section class="schedule-week">
       <div class="schedule-week-head">
@@ -1387,8 +1395,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-19';
-const _APP_VERSION='v1.009';
+const _APP_BUMP='2026.07.15-20';
+const _APP_VERSION='v1.010';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1665,22 +1673,22 @@ async function requestScheduleRange(from,days,force,signal){
   if(!data.success||!Array.isArray(data.days))throw new Error(data.message||'工作安排載入失敗');
   saveScheduleCache(from,days,data);return data;
 }
-function scheduleStaffCount(item){
-  return new Set([...(item.am||[]),...(item.pm||[])].map(person=>person.name).filter(Boolean)).size;
-}
-function renderScheduleShift(label,people,item){
-  if(!people?.length)return '';
-  return `<div class="schedule-shift"><div class="schedule-shift-label">${label}</div><div class="schedule-person-list">${people.map(person=>`<span class="schedule-person">${esc(person.name)}${item.linked&&person.assignment?`<small>${esc(person.assignment)}</small>`:''}</span>`).join('')}</div></div>`;
-}
-function renderScheduleAssignment(item,date){
-  const count=scheduleStaffCount(item),company=item.linked?item.company:'其他安排';
+function renderScheduleAssignment(item,date,shift){
+  const people=item[shift]||[];
+  const count=new Set(people.map(person=>person.name).filter(Boolean)).size,company=item.linked?item.company:'其他安排';
   return `<details class="schedule-assignment ${item.linked?'linked':'unlinked'}">
     <summary><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(item.title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span><span class="schedule-assignment-chevron">▼</span></div></summary>
-    <div class="schedule-assignment-details">${renderScheduleShift('上午',item.am,item)}${renderScheduleShift('下午',item.pm,item)}${item.linked?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">開始輸入</button>`:''}</div>
+    <div class="schedule-assignment-details"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}${item.linked&&person.assignment?`<small>${esc(person.assignment)}</small>`:''}</span>`).join('')}</div>${item.linked?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">開始輸入</button>`:''}</div>
   </details>`;
 }
+function renderSchedulePeriod(label,shift,items,date){
+  const shiftItems=(items||[]).filter(item=>item[shift]?.length);
+  if(!shiftItems.length)return '';
+  return `<section class="schedule-period"><div class="schedule-period-head">${label}</div><div class="schedule-items">${shiftItems.map(item=>renderScheduleAssignment(item,date,shift)).join('')}</div></section>`;
+}
 function renderScheduleItems(items,date){
-  return items?.length?items.map(item=>renderScheduleAssignment(item,date)).join(''):'<div class="schedule-empty">沒有安排</div>';
+  const periods=renderSchedulePeriod('上午','am',items,date)+renderSchedulePeriod('下午','pm',items,date);
+  return periods||'<div class="schedule-empty">沒有安排</div>';
 }
 function renderScheduleFocus(){
   const label=document.getElementById('scheduleFocusLabel'),dateEl=document.getElementById('scheduleFocusDate'),itemsEl=document.getElementById('scheduleFocusItems');
@@ -1692,10 +1700,10 @@ function renderScheduleFocus(){
   itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date);
 }
 function renderScheduleWeek(){
-  const days=scheduleVisibleDays(_scheduleWeekDays),today=scheduleLocalIso();
+  const today=scheduleLocalIso(),days=scheduleVisibleDays(_scheduleWeekDays).filter(day=>day.date!==today);
   if(days.length){document.getElementById('scheduleWeekRange').textContent=`${scheduleDateLabel(days[0].date)} 至 ${scheduleDateLabel(days[days.length-1].date)}`;}
   else document.getElementById('scheduleWeekRange').textContent='';
-  document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day ${day.date===today?'today':''}"><div class="schedule-day-date">${scheduleDateLabel(day.date)}${day.date===today?'<span>今日</span>':''}</div><div class="schedule-items">${renderScheduleItems(day.items,day.date)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
+  document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day"><div class="schedule-day-date">${scheduleDateLabel(day.date)}</div><div class="schedule-periods">${renderScheduleItems(day.items,day.date)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
 }
 function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();}
 async function loadScheduleOverview(force=false,weekOnly=false){
