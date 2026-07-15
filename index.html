@@ -1393,8 +1393,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-22';
-const _APP_VERSION='v1.012';
+const _APP_BUMP='2026.07.15-23';
+const _APP_VERSION='v1.013';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3701,15 +3701,13 @@ function renderQueue(){
 function loadTodayRecords(){
   const SCRIPT_URL=getScriptUrl();
   const casino=document.getElementById('casino').value;
-  const loadingToken=showLoadingProgress('當日記錄載入中，請稍等...');
   fetchJsonWithTimeout(SCRIPT_URL+'?action=today&'+companyParam()+'&casino='+encodeURIComponent(casino),{},30000)
     .then(data=>{
       todayRecords=data.records||[];
       if(data.lastPO&&!document.getElementById('poNumber').value){document.getElementById('poNumber').value=data.lastPO;localStorage.setItem('poNumber',data.lastPO);}
       renderTodayPanel();renderQueueDuplicateNotice();
     })
-    .catch(()=>{})
-    .finally(()=>hideLoadingProgress(loadingToken));
+    .catch(()=>{});
 }
 function renderTodayPanel(){}
 function toggleToday(){}
