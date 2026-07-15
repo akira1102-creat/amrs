@@ -10,7 +10,7 @@
   <link rel="manifest" href="manifest.json?v=20260709b">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <title>Akira 維修記錄系統</title>
+  <title>AMRS</title>
   <script>
     (function(){
       var ua = navigator.userAgent;
@@ -602,8 +602,8 @@
     .parts-list-jp{color:#e6edf3;margin-top:4px}
     .parts-list-en{color:#8b949e;margin-top:2px}
     .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
-    #bulkEditModal,#auditModal,#repeatRecordsModal,#exportModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
-    #bulkEditModal.show,#auditModal.show,#repeatRecordsModal.show,#exportModal.show{display:flex}
+    #bulkEditModal,#repeatRecordsModal,#exportModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #bulkEditModal.show,#repeatRecordsModal.show,#exportModal.show{display:flex}
     .work-modal-box{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
     .export-modal-box{width:min(520px,96vw)}
     .export-select-all{display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#e6edf3;font-size:13px;font-weight:800;cursor:pointer}
@@ -612,9 +612,6 @@
     .export-field{display:flex;align-items:center;gap:8px;min-width:0;padding:8px 9px;border-bottom:1px solid #21262d;color:#c9d1d9;font-size:12px;cursor:pointer}
     .bulk-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
     .bulk-edit-grid label{display:block;font-size:12px;color:#8b949e;margin-bottom:5px}
-    .audit-item{border:1px solid #21262d;background:#0d1117;border-radius:12px;padding:11px;margin-bottom:8px}
-    .audit-top{display:flex;justify-content:space-between;gap:8px;color:#e6edf3;font-size:12px;font-weight:800}
-    .audit-detail{font-size:11px;color:#8b949e;margin-top:5px;line-height:1.5}
     .geg-only{display:none}
     body.company-geg .geg-only{display:block}
     .mob #dashboardCard{max-width:none}
@@ -809,14 +806,6 @@
       <button class="template-delete" id="bulkDashDeleteBtn" onclick="deleteBulkDashboardRecords()" type="button">刪除已選記錄</button>
       <button class="template-save" id="bulkDashSaveBtn" onclick="saveBulkDashboardEdit()" type="button">套用修改</button>
     </div>
-  </div>
-</div>
-
-<div id="auditModal">
-  <div class="work-modal-box">
-    <div class="template-head"><div class="template-title">操作記錄</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeAuditLog()" type="button">關閉</button></div>
-    <div class="template-note">顯示目前公司最近 30 次新增或修改。只有修改記錄可以復原。</div>
-    <div id="auditRows"><div class="dash-mobile-empty">載入中...</div></div>
   </div>
 </div>
 
@@ -1274,7 +1263,7 @@ const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
 const _APP_BUMP='2026.07.15-13';
-const _APP_VERSION='v1.002';
+const _APP_VERSION='v1.003';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3761,20 +3750,16 @@ async function deleteBulkDashboardRecords(){
   const deleteBtn=document.getElementById('bulkDashDeleteBtn');
   const saveBtn=document.getElementById('bulkDashSaveBtn');
   deleteBtn.disabled=true;saveBtn.disabled=true;
-  let deleted=0;
   try{
-    for(const original of records){
-      deleteBtn.textContent=`刪除中 ${deleted+1}/${records.length}`;
-      const record={...original,company:original.company||currentDashboardCompany||activeCompany};
-      const response=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'deleteRecord',record})});
-      const data=await response.json();
-      if(!data.success)throw new Error(data.message||'刪除失敗');
-      dashboardSelectedRecords.delete(String(original.rowNumber));deleted++;
-    }
-    closeBulkEdit();dashboardSelectedRecords.clear();showToast(`✓ 已刪除 ${deleted} 筆記錄`);await loadDashboard(dashboardPage);
+    deleteBtn.textContent='刪除中...';
+    const payload=records.map(record=>({rowNumber:record.rowNumber,serialNo:record.serialNo,date:record.date}));
+    const response=await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'bulkDeleteRecords',company:currentDashboardCompany||activeCompany,records:payload})});
+    const data=await response.json();
+    if(!data.success)throw new Error(data.message||'刪除失敗');
+    closeBulkEdit();dashboardSelectedRecords.clear();showToast(`✓ 已刪除 ${data.deleted||records.length} 筆記錄`);await loadDashboard(dashboardPage);
   }catch(e){
     closeBulkEdit();dashboardSelectedRecords.clear();await loadDashboard(dashboardPage);
-    showToast(deleted?`已刪除 ${deleted} 筆，其餘記錄刪除失敗`:(e.message||'批量刪除失敗'),'err');
+    showToast(e.message||'批量刪除失敗','err');
   }finally{
     deleteBtn.disabled=false;saveBtn.disabled=false;deleteBtn.textContent='刪除已選記錄';
   }
@@ -3862,21 +3847,6 @@ async function exportBrokenParts(type,selectedKeys,scope){
     showToast(`✓ 已準備 ${records.length} 筆記錄`);
   }catch(e){if(printWindow)printWindow.close();showToast(e.message||'匯出失敗','err');}
   finally{await new Promise(resolve=>setTimeout(resolve,150));hideExportProgress();}
-}
-function closeAuditLog(){document.getElementById('auditModal').classList.remove('show');}
-async function openAuditLog(){
-  if(!currentDashboardCompany){showToast('請先搜尋一間公司','err');return;}
-  document.getElementById('auditModal').classList.add('show');document.getElementById('auditRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
-  try{
-    const data=await (await fetch(getScriptUrl()+`?action=auditLog&company=${encodeURIComponent(currentDashboardCompany)}&limit=30`)).json();
-    const rows=data.records||[];document.getElementById('auditRows').innerHTML=rows.length?rows.map(a=>{
-      const rec=a.after||a.before||{};return `<div class="audit-item"><div class="audit-top"><span>${esc(a.action)} · S/N ${esc(rec.serialNo||'')}</span><span>${esc(a.timestamp)}</span></div><div class="audit-detail">第 ${esc(a.rowNumber)} 行 · ${esc(rec.casino||'')} · ${esc(rec.reason||'')}</div>${a.undoable&&!a.undone?`<button class="dash-tool-btn" style="margin-top:8px" onclick="undoAudit(${a.auditRow},this)" type="button">復原修改</button>`:a.undone?'<div class="audit-detail">已復原</div>':''}</div>`;
-    }).join(''):'<div class="dash-mobile-empty">沒有操作記錄</div>';
-  }catch(e){document.getElementById('auditRows').innerHTML='<div class="dash-mobile-empty">載入失敗</div>';}
-}
-async function undoAudit(auditRow,btn){
-  btn.disabled=true;btn.textContent='復原中...';
-  try{const data=await (await fetch(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'undoAudit',company:currentDashboardCompany,auditRow})})).json();if(!data.success)throw new Error();showToast('✓ 修改已復原');await openAuditLog();await loadDashboard(dashboardPage);}catch(e){btn.disabled=false;btn.textContent='復原修改';showToast('復原失敗','err');}
 }
 function startDashboardCardEdit(index){
   dashboardEditingIdx=index;
