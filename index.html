@@ -341,6 +341,10 @@
     #retryNoticeMsg{flex:1}
     #retrySyncBtn{padding:6px 14px;font-size:12px;font-weight:700;background:#9a6700;color:#fff;border:none;border-radius:8px;cursor:pointer;white-space:nowrap}
     #batchArea{margin-bottom:14px}
+    .sn-mode-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+    .sn-mode-row label{min-width:0;margin:0}
+    .batch-mode-btn{flex:0 0 auto;padding:7px 11px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#8b949e;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    .batch-mode-btn.active{border-color:#2ea043;background:#238636;color:#fff;box-shadow:0 0 0 2px rgba(46,160,67,.18)}
     #batchSns{width:100%;font-size:18px;padding:10px 13px;border:1px solid #30363d;border-radius:14px;color:#58a6ff;background:#0d1117;resize:vertical;min-height:90px;font-family:monospace;letter-spacing:3px;font-weight:700}
     #batchSns:focus{outline:none;border-color:#388bfd}
     #batchPairArea{display:none}
@@ -882,10 +886,13 @@
 
 <div class="card">
   <div class="card-title">新增記錄</div>
+  <div class="sn-mode-row">
+    <label id="snLabel" for="serialNo">機身號碼（點擊開啟數字鍵盤）</label>
+    <button class="batch-mode-btn" id="batchToggleBtn" onclick="toggleBatch()" type="button" aria-pressed="false">批量模式</button>
+  </div>
   <form id="snSingleArea" onsubmit="addToQueue(); return false;" style="margin-bottom:14px">
     <div class="sn-seal-row">
     <div>
-      <label id="snLabel">機身號碼（點擊開啟數字鍵盤）</label>
       <div class="sn-entry-line">
         <input type="text" id="serialNo" class="sn-input" style="flex:1"
                placeholder="0000" inputmode="none" autocomplete="off"
@@ -1046,7 +1053,6 @@
       <input type="text" id="inspector" placeholder="選填">
     </div>
   </div>
-  <button class="opt-toggle" id="batchToggleBtn" onclick="toggleBatch()" type="button" style="margin-top:10px">⊞ 批量模式</button>
   <button class="add-btn" id="addQueueBtn" onclick="addToQueue()" type="button">＋ 加入待提交</button>
 </div>
 </div><!-- /mainLeft -->
@@ -1251,8 +1257,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-03';
-const _APP_VERSION='v0.992';
+const _APP_BUMP='2026.07.15-04';
+const _APP_VERSION='v0.993';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2835,7 +2841,8 @@ function toggleBatch(){
   document.getElementById('batchArea').style.display=_batchMode?'block':'none';
   document.getElementById('snSingleArea').style.display=_batchMode?'none':'block';
   document.getElementById('addQueueBtn').style.display=_batchMode?'none':'block';
-  document.getElementById('batchToggleBtn').textContent=_batchMode?'✕ 單筆模式':'⊞ 批量模式';
+  const toggle=document.getElementById('batchToggleBtn');
+  toggle.classList.toggle('active',_batchMode);toggle.setAttribute('aria-pressed',String(_batchMode));
   updateBatchModeLayout();
   if(_batchMode)hideSnPad();else clearBatchInputs();
   onReasonChange();
