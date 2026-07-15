@@ -1393,8 +1393,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-23';
-const _APP_VERSION='v1.013';
+const _APP_BUMP='2026.07.16-01';
+const _APP_VERSION='v1.014';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2470,12 +2470,10 @@ function applyTemplateMappings(mappings){
 async function loadTemplateMappings(){
   const SCRIPT_URL=getScriptUrl();
   if(!SCRIPT_URL)return;
-  const loadingToken=showLoadingProgress('原因及處理方法載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=template&'+companyParam(),{},30000);
     if(data.success)applyTemplateMappings(data.mappings||[]);
   }catch(e){}
-  finally{hideLoadingProgress(loadingToken);}
 }
 function closeTemplateEditor(){document.getElementById('templateModal').classList.remove('show');}
 function renderTemplateEditorRows(){
