@@ -1251,8 +1251,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-02';
-const _APP_VERSION='v0.991';
+const _APP_BUMP='2026.07.15-03';
+const _APP_VERSION='v0.992';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1608,7 +1608,9 @@ function selectBrokenPartsCompany(company){
   showPage('brokenParts');
 }
 function animateSortableMove(container,item,target,itemSelector){
-  const before=new Map(Array.from(container.querySelectorAll(itemSelector)).map(el=>[el,el.getBoundingClientRect()]));
+  const elements=Array.from(container.querySelectorAll(itemSelector));
+  elements.forEach(el=>el.getAnimations().forEach(animation=>animation.cancel()));
+  const before=new Map(elements.map(el=>[el,el.getBoundingClientRect()]));
   const items=Array.from(container.querySelectorAll(itemSelector)),from=items.indexOf(item),to=items.indexOf(target);
   if(from<0||to<0||from===to)return false;
   if(from<to)container.insertBefore(item,target.nextSibling);else container.insertBefore(item,target);
@@ -1624,16 +1626,24 @@ function animateSortableMove(container,item,target,itemSelector){
 function bindAnimatedSortable(container,itemSelector,handleSelector,onCommit){
   if(!container)return;
   let dragged=null,moved=false,activeHandle=null,activePointerId=null;
+  const layoutRect=item=>{
+    const rect=item.getBoundingClientRect(),transform=getComputedStyle(item).transform;
+    if(!transform||transform==='none')return rect;
+    try{
+      const matrix=new DOMMatrixReadOnly(transform);
+      return {left:rect.left-matrix.m41,right:rect.right-matrix.m41,top:rect.top-matrix.m42,bottom:rect.bottom-matrix.m42,width:rect.width,height:rect.height};
+    }catch(e){return rect;}
+  };
   const findTarget=(x,y)=>{
-    const candidates=Array.from(container.querySelectorAll(itemSelector)).filter(item=>item!==dragged);
+    const candidates=Array.from(container.querySelectorAll(itemSelector));
     if(!candidates.length)return null;
     const direct=candidates.find(item=>{
-      const rect=item.getBoundingClientRect();
+      const rect=layoutRect(item);
       return x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom;
     });
     if(direct)return direct;
     return candidates.reduce((nearest,item)=>{
-      const rect=item.getBoundingClientRect(),dx=x-(rect.left+rect.width/2),dy=y-(rect.top+rect.height/2);
+      const rect=layoutRect(item),dx=x-(rect.left+rect.width/2),dy=y-(rect.top+rect.height/2);
       const distance=dx*dx+dy*dy;
       return !nearest||distance<nearest.distance?{item,distance}:nearest;
     },null)?.item||null;
@@ -1652,7 +1662,7 @@ function bindAnimatedSortable(container,itemSelector,handleSelector,onCommit){
     if(!dragged||activePointerId!==e.pointerId)return;
     e.preventDefault();
     const target=findTarget(e.clientX,e.clientY);
-    if(!target||!container.contains(target))return;
+    if(!target||target===dragged||!container.contains(target))return;
     moved=animateSortableMove(container,dragged,target,itemSelector)||moved;
   };
   container.querySelectorAll(itemSelector).forEach(item=>{
