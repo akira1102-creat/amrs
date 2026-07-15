@@ -542,6 +542,10 @@
     .monthly-page-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
     .monthly-page-title{font-size:18px;font-weight:800;color:#e6edf3}
     .monthly-refresh{flex:0 0 auto;padding:9px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    .monthly-view-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
+    .monthly-view-switch{display:inline-grid;grid-template-columns:repeat(2,minmax(72px,1fr));padding:3px;border:1px solid #30363d;border-radius:9px;background:#0d1117}
+    .monthly-view-btn{height:32px;padding:0 12px;border:none;border-radius:6px;background:transparent;color:#8b949e;font-size:11px;font-weight:800;cursor:pointer}
+    .monthly-view-btn.active{background:#1f6feb;color:#fff}
     .monthly-company-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .monthly-company-grid>.dash-mobile-empty{grid-column:1/-1}
     .monthly-company-card{border:1px solid #30363d;border-radius:14px;background:#161b22;padding:15px;min-width:0}
@@ -566,6 +570,15 @@
     .monthly-visit-summary{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:10px;color:#8b949e}
     .monthly-visit-summary strong{color:#58a6ff;font-size:11px}
     .monthly-machines-per-visit{margin-top:6px;padding:5px 7px;border:1px solid #1f6feb;border-radius:7px;background:#0d203d;color:#79c0ff;font-size:10px;font-weight:800;text-align:center}
+    .monthly-venue.compact{padding:11px 0}
+    .monthly-compact-stats{display:grid;gap:6px;margin-top:8px}
+    .monthly-compact-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#c9d1d9}
+    .monthly-compact-main{min-width:0}
+    .monthly-compact-label{display:inline-block;min-width:34px;margin-right:5px;font-size:10px;font-weight:900}
+    .monthly-compact-label.maintenance{color:#3fb950}
+    .monthly-compact-label.visits{color:#58a6ff}
+    .monthly-compact-remain{flex:0 0 auto;color:#8b949e;white-space:nowrap}
+    .monthly-venue.compact .monthly-machines-per-visit{text-align:left}
     .scl-monthly-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     .scl-monthly-head .card-title{margin-bottom:0}
     .scl-monthly-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:none;background:none;color:#8b949e;font-size:12px;font-weight:800;text-align:left;cursor:pointer}
@@ -634,6 +647,8 @@
     .mob .bp-field-options{position:fixed;left:16px;right:16px;top:auto;width:auto}
     .mob .monthly-company-grid{grid-template-columns:1fr}
     .mob .monthly-page-title{font-size:16px}
+    .mob .monthly-view-toolbar{justify-content:stretch}
+    .mob .monthly-view-switch{width:100%}
     .mob .scl-monthly-grid{grid-template-columns:1fr}
     .mob .scl-monthly-po{grid-column:auto}
     .mob .parts-list-toolbar{align-items:flex-start}
@@ -1172,6 +1187,12 @@
       <div class="monthly-page-title">每月統計</div>
       <button class="monthly-refresh" id="monthlyStatsRefreshBtn" onclick="loadMonthlyStats(true)" type="button">重新整理</button>
     </div>
+    <div class="monthly-view-toolbar">
+      <div class="monthly-view-switch" aria-label="統計顯示方式">
+        <button class="monthly-view-btn active" id="monthlyDetailedBtn" onclick="setMonthlyDisplayMode('detailed')" type="button" aria-pressed="true">詳細</button>
+        <button class="monthly-view-btn" id="monthlyCompactBtn" onclick="setMonthlyDisplayMode('compact')" type="button" aria-pressed="false">簡潔</button>
+      </div>
+    </div>
     <div class="monthly-company-grid" id="monthlyStatsGrid"><div class="dash-mobile-empty">正在載入資料...</div></div>
   </div>
 </div><!-- /monthlyStatsPage -->
@@ -1265,8 +1286,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-08';
-const _APP_VERSION='v0.997';
+const _APP_BUMP='2026.07.15-09';
+const _APP_VERSION='v0.998';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1483,8 +1504,22 @@ function showPage(page){
   if(page==='brokenParts')loadBrokenPartsPage(1);
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
-const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v2',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
-let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null;
+const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v3',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1',MONTHLY_DISPLAY_MODE_KEY='_amrs_monthly_display_mode_v1';
+let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null,_monthlyStatsData=null;
+let _monthlyDisplayMode=localStorage.getItem(MONTHLY_DISPLAY_MODE_KEY)==='compact'?'compact':'detailed';
+function syncMonthlyDisplayModeButtons(){
+  const detailed=_monthlyDisplayMode==='detailed';
+  document.getElementById('monthlyDetailedBtn').classList.toggle('active',detailed);
+  document.getElementById('monthlyCompactBtn').classList.toggle('active',!detailed);
+  document.getElementById('monthlyDetailedBtn').setAttribute('aria-pressed',String(detailed));
+  document.getElementById('monthlyCompactBtn').setAttribute('aria-pressed',String(!detailed));
+}
+function setMonthlyDisplayMode(mode){
+  _monthlyDisplayMode=mode==='compact'?'compact':'detailed';
+  localStorage.setItem(MONTHLY_DISPLAY_MODE_KEY,_monthlyDisplayMode);
+  syncMonthlyDisplayModeButtons();
+  if(_monthlyStatsData)renderMonthlyStatsData(_monthlyStatsData);
+}
 function toggleSclMonthlySettings(){
   const content=document.getElementById('sclMonthlySettingsContent'),toggle=document.getElementById('sclMonthlyToggle');
   const open=!content.classList.contains('show');content.classList.toggle('show',open);toggle.setAttribute('aria-expanded',String(open));
@@ -1530,16 +1565,31 @@ async function saveSclMonthlySettings(){
   }catch(e){status.textContent=e.message||'儲存失敗';status.style.color='#ff7b72';showToast(e.message||'儲存失敗','err');}
   finally{btn.disabled=false;btn.textContent='儲存設定';}
 }
-function renderMonthlyVenue(venue){
+function renderMonthlyVenue(venue,mode){
   const done=Number(venue.done)||0;
   const scheduledVisits=Number(venue.scheduledVisits)||0,completedVisits=Number(venue.completedVisits)||0,remainingVisits=Number(venue.remainingVisits)||0;
   const visitPercent=Math.max(0,Number(venue.visitPercent)||0),visitBarWidth=Math.min(visitPercent,100);
+  const hasTarget=venue.target!=null,target=Math.max(0,Number(venue.target)||0),remaining=Math.max(0,Number(venue.remaining)||0);
+  const machinesPerVisit=venue.machinesPerRemainingVisit!=null?Math.max(0,Number(venue.machinesPerRemainingVisit)||0):null;
+  if(mode==='compact'){
+    const maintenanceText=hasTarget?`${done} / ${target} 台`:`${done} 台已完成`;
+    const maintenanceRemain=hasTarget?`剩餘 ${remaining} 台`:'';
+    const visitRow=scheduledVisits>0?`<div class="monthly-compact-row"><span class="monthly-compact-main"><span class="monthly-compact-label visits">到訪</span>${completedVisits} / ${scheduledVisits} 次</span><span class="monthly-compact-remain">剩餘 ${remainingVisits} 次</span></div>`:'';
+    return `<div class="monthly-venue compact">
+      <div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span></div>
+      <div class="monthly-compact-stats">
+        <div class="monthly-compact-row"><span class="monthly-compact-main"><span class="monthly-compact-label maintenance">維護</span>${maintenanceText}</span><span class="monthly-compact-remain">${maintenanceRemain}</span></div>
+        ${visitRow}
+      </div>
+      ${machinesPerVisit!=null?`<div class="monthly-machines-per-visit">餘下每次需做 ${machinesPerVisit} 台</div>`:''}
+    </div>`;
+  }
   const visitBlock=scheduledVisits>0?`<div class="monthly-visit-summary"><span>到訪已完成 <strong>${completedVisits}</strong> 次</span><span>剩餘 <strong>${remainingVisits}</strong> 次</span></div>
     <div class="monthly-progress"><div class="monthly-progress-bar visits" style="width:${visitBarWidth}%"></div></div>
     <div class="monthly-progress-label"><span>到訪進度 ${visitPercent}%</span><span>共 ${scheduledVisits} 次</span></div>
-    ${venue.machinesPerRemainingVisit!=null?`<div class="monthly-machines-per-visit">餘下每次需做 ${Math.max(0,Number(venue.machinesPerRemainingVisit)||0)} 台</div>`:''}`:'';
-  if(venue.target==null)return `<div class="monthly-venue"><div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> 已完成</span></div>${visitBlock}</div>`;
-  const target=Math.max(0,Number(venue.target)||0),remaining=Math.max(0,Number(venue.remaining)||0),percent=Math.max(0,Number(venue.percent)||0),barWidth=Math.min(percent,100);
+    ${machinesPerVisit!=null?`<div class="monthly-machines-per-visit">餘下每次需做 ${machinesPerVisit} 台</div>`:''}`:'';
+  if(!hasTarget)return `<div class="monthly-venue"><div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> 已完成</span></div>${visitBlock}</div>`;
+  const percent=Math.max(0,Number(venue.percent)||0),barWidth=Math.min(percent,100);
   return `<div class="monthly-venue">
     <div class="monthly-venue-line"><span class="monthly-venue-name">${esc(venue.venue)}</span><span class="monthly-venue-count"><strong>${done}</strong> / ${target}</span></div>
     <div class="monthly-progress"><div class="monthly-progress-bar" style="width:${barWidth}%"></div></div>
@@ -1554,7 +1604,7 @@ function renderMonthlyCompany(company){
   const totalText=targeted.length?`本月完成 ${totalDone} / ${totalTarget}`:`本月完成 ${totalDone}`;
   return `<section class="monthly-company-card" data-monthly-company="${esc(company.company)}">
     <div class="monthly-company-head"><div><div class="monthly-company-name">${esc(company.company)}</div><div class="monthly-company-total">${totalText}</div></div><div class="monthly-company-tools"><span class="monthly-po">PO ${esc(company.poNumber||'—')}</span><button class="monthly-drag" type="button" title="拖拉更改順序" aria-label="拖拉更改 ${esc(company.company)} 順序">☰</button></div></div>
-    ${venues.map(renderMonthlyVenue).join('')}
+    ${venues.map(venue=>renderMonthlyVenue(venue,_monthlyDisplayMode)).join('')}
   </section>`;
 }
 function monthlyCompanyOrder(companies){
@@ -1565,6 +1615,7 @@ function monthlyCompanyOrder(companies){
   }catch(e){return names;}
 }
 function renderMonthlyStatsData(data){
+  _monthlyStatsData=data;syncMonthlyDisplayModeButtons();
   const grid=document.getElementById('monthlyStatsGrid'),byCompany=new Map(data.companies.map(company=>[company.company,company]));
   const companies=monthlyCompanyOrder(data.companies).map(name=>byCompany.get(name)).filter(Boolean);
   grid.innerHTML=companies.map(renderMonthlyCompany).join('')||'<div class="dash-mobile-empty">沒有統計資料。</div>';
