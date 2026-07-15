@@ -1273,8 +1273,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.15-12';
-const _APP_VERSION='v1.001';
+const _APP_BUMP='2026.07.15-13';
+const _APP_VERSION='v1.002';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2650,7 +2650,10 @@ const BP_PAGE_FIELDS=[
   ['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark']
 ];
 function brokenPartsRowsHtml(record,visibleFields=null){
-  return BP_PAGE_FIELDS.filter(([key])=>!visibleFields||visibleFields.has(key)).map(([key,label])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(label)}</div><div class="dash-mobile-val">${brokenPartsPageValueHtml(key,record[key])}</div></div>`).join('');
+  return BP_PAGE_FIELDS
+    .filter(([key])=>(!visibleFields||visibleFields.has(key))&&cleanDashValue(record[key])!=='')
+    .map(([key,label])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(label)}</div><div class="dash-mobile-val">${brokenPartsPageValueHtml(key,record[key])}</div></div>`)
+    .join('');
 }
 function brokenPartsEditInput(label,key,value){return `<div><label>${esc(label)}</label><input data-bp-card-field="${esc(key)}" value="${esc(value??'')}"></div>`;}
 function brokenPartsEditFieldsHtml(record){
