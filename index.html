@@ -620,6 +620,7 @@
     .schedule-assignment{width:fit-content;max-width:100%;min-width:150px;border:1px solid #30363d;border-radius:9px;background:#161b22;overflow:hidden}
     .schedule-assignment-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px}
     .schedule-assignment-main{min-width:0}
+    .schedule-assignment-actions{display:flex;flex-shrink:0;align-items:center;gap:8px}
     .schedule-company{display:inline-block;margin-bottom:5px;padding:3px 6px;border:1px solid #1f6feb;border-radius:6px;background:#0d203d;color:#79c0ff;font-size:10px;font-weight:900}
     .schedule-assignment.unlinked .schedule-company{border-color:#484f58;background:#21262d;color:#8b949e}
     .schedule-assignment-title{font-size:14px;font-weight:850;color:#e6edf3;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
@@ -631,7 +632,7 @@
     .schedule-shift-label{font-size:11px;font-weight:900;color:#8b949e}
     .schedule-person-list{display:flex;flex-wrap:wrap;gap:6px}
     .schedule-person{padding:4px 7px;border-radius:6px;background:#21262d;color:#c9d1d9;font-size:11px;line-height:1.35}
-    .schedule-input-btn{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;margin-left:auto;padding:4px 7px;border:1px solid #2f81f7;border-radius:6px;background:#0d203d;color:#79c0ff;font-size:11px;font-weight:800;line-height:1.35;white-space:nowrap;cursor:pointer}
+    .schedule-input-btn{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;padding:4px 7px;border:1px solid #2f81f7;border-radius:6px;background:#0d203d;color:#79c0ff;font-size:11px;font-weight:800;line-height:1.35;white-space:nowrap;cursor:pointer}
     .schedule-input-btn:hover,.schedule-input-btn:active{background:#1f6feb;color:#fff}
     .schedule-week{margin-top:24px}
     .schedule-week-title{font-size:16px;font-weight:900;color:#e6edf3}
@@ -1393,8 +1394,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.16-02';
-const _APP_VERSION='v1.015';
+const _APP_BUMP='2026.07.16-03';
+const _APP_VERSION='v1.016';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1652,7 +1653,8 @@ function showPage(page){
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
 }
-const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_';
+const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v1';
+const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
 let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null;
 function scheduleLocalIso(date=new Date()){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
@@ -1677,11 +1679,25 @@ function scheduleWeekRange(days,anchor){
   return (days||[]).filter(day=>day.date>=anchor&&day.date<=end);
 }
 function scheduleCacheKey(from,days){return `${SCHEDULE_CACHE_PREFIX}${from}_${days}`;}
+function readScheduleCacheEntry(from,days){
+  try{return JSON.parse(localStorage.getItem(scheduleCacheKey(from,days))||'null');}catch(e){return null;}
+}
 function readScheduleCache(from,days){
-  try{return JSON.parse(localStorage.getItem(scheduleCacheKey(from,days))||'null')?.data||null;}catch(e){return null;}
+  return readScheduleCacheEntry(from,days)?.data||null;
+}
+function readLatestScheduleCache(today){
+  try{
+    const cached=JSON.parse(localStorage.getItem(SCHEDULE_LATEST_CACHE_KEY)||'null');
+    if(!cached?.savedAt||Date.now()-cached.savedAt>SCHEDULE_FALLBACK_MS||!Array.isArray(cached.data?.days))return null;
+    return cached.data.days.some(day=>day.date>=today)?cached.data:null;
+  }catch(e){return null;}
 }
 function saveScheduleCache(from,days,data){
-  try{localStorage.setItem(scheduleCacheKey(from,days),JSON.stringify({savedAt:Date.now(),data}));}catch(e){}
+  try{
+    const cached={savedAt:Date.now(),data};
+    localStorage.setItem(scheduleCacheKey(from,days),JSON.stringify(cached));
+    if(days>=35)localStorage.setItem(SCHEDULE_LATEST_CACHE_KEY,JSON.stringify(cached));
+  }catch(e){}
 }
 async function requestScheduleRange(from,days,force,signal){
   const params=new URLSearchParams({action:'scheduleOverview',from,days:String(days)});if(force)params.set('refresh','1');
@@ -1698,8 +1714,8 @@ function renderScheduleAssignment(item,date,shift){
   const title=leaveLabel||item.title;
   const canInput=item.linked&&date<=scheduleLocalIso();
   return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
-    <div class="schedule-assignment-head"><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span></div></div>
-    <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div>${canInput?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">輸入資料</button>`:''}</div></div>
+    <div class="schedule-assignment-head"><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span><div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-actions"><div class="schedule-assignment-meta"><span>${count} 人</span></div>${canInput?`<button class="schedule-input-btn" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">輸入資料</button>`:''}</div></div>
+    <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div></div></div>
   </article>`;
 }
 function renderSchedulePeriod(label,shift,items,date){
@@ -1713,7 +1729,7 @@ function renderScheduleItems(items,date){
 }
 function renderScheduleFocus(){
   const label=document.getElementById('scheduleFocusLabel'),dateEl=document.getElementById('scheduleFocusDate'),itemsEl=document.getElementById('scheduleFocusItems');
-  const days=scheduleVisibleDays(_scheduleTodayData?.days);
+  const today=scheduleLocalIso(),days=scheduleVisibleDays(_scheduleTodayData?.days).filter(day=>day.date>=today);
   let focus=days[0]?.items?.length?days[0]:days.slice(1).find(day=>day.items?.length);
   if(!focus){label.textContent='工作安排';dateEl.textContent='未來 35 日沒有安排';itemsEl.innerHTML='';return;}
   const isToday=focus.date===scheduleLocalIso();
@@ -1729,15 +1745,23 @@ function renderScheduleWeek(){
 function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();}
 async function loadScheduleOverview(force=false,weekOnly=false){
   const today=scheduleLocalIso();if(!_scheduleAnchor)_scheduleAnchor=today;
-  const cachedToday=readScheduleCache(today,35),cachedWeek=_scheduleAnchor===today?cachedToday:readScheduleCache(_scheduleAnchor,7);
-  if(cachedToday&&!_scheduleTodayData)_scheduleTodayData=cachedToday;
+  const todayEntry=readScheduleCacheEntry(today,35),weekEntry=_scheduleAnchor===today?todayEntry:readScheduleCacheEntry(_scheduleAnchor,7);
+  const cachedToday=todayEntry?.data||readLatestScheduleCache(today),cachedWeek=_scheduleAnchor===today?cachedToday:weekEntry?.data;
+  if(cachedToday)_scheduleTodayData=cachedToday;
   if(cachedWeek)_scheduleWeekDays=scheduleWeekRange(cachedWeek.days,_scheduleAnchor);
   else if(_scheduleAnchor===today&&_scheduleTodayData)_scheduleWeekDays=scheduleWeekRange(_scheduleTodayData.days,_scheduleAnchor);
   renderSchedulePage();
+  const todayFresh=!!todayEntry?.savedAt&&Date.now()-todayEntry.savedAt<SCHEDULE_FRESH_MS;
+  const weekFresh=_scheduleAnchor===today?todayFresh:(!!weekEntry?.savedAt&&Date.now()-weekEntry.savedAt<SCHEDULE_FRESH_MS);
+  if(!force&&todayFresh&&weekFresh){
+    const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=false;btn.textContent='重新整理';return;
+  }
   _scheduleRequest?.abort();
   const controller=new AbortController();_scheduleRequest=controller;
-  const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=true;btn.textContent='載入中...';
-  const loadingToken=showLoadingProgress('工作安排載入中，請稍等...');
+  const hasImmediateToday=Array.isArray(_scheduleTodayData?.days),hasImmediateWeek=_scheduleAnchor===today?hasImmediateToday:!!cachedWeek;
+  const showLoading=force||!hasImmediateToday||!hasImmediateWeek;
+  const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=showLoading;btn.textContent=showLoading?'載入中...':'重新整理';
+  const loadingToken=showLoading?showLoadingProgress('工作安排載入中，請稍等...'):null;
   try{
     const needToday=force||!weekOnly||!_scheduleTodayData;
     const todayPromise=needToday?requestScheduleRange(today,35,force,controller.signal):Promise.resolve(_scheduleTodayData);
@@ -1752,7 +1776,7 @@ async function loadScheduleOverview(force=false,weekOnly=false){
     if(!_scheduleTodayData)document.getElementById('scheduleFocusItems').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
     if(!_scheduleWeekDays.length)document.getElementById('scheduleTimeline').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
   }finally{
-    hideLoadingProgress(loadingToken);
+    if(loadingToken)hideLoadingProgress(loadingToken);
     if(_scheduleRequest===controller){btn.disabled=false;btn.textContent='重新整理';}
   }
 }
