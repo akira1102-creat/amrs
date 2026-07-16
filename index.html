@@ -621,10 +621,10 @@
     .schedule-assignment-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px}
     .schedule-assignment-main{min-width:0}
     .schedule-company{display:inline-block;margin-bottom:5px;padding:3px 6px;border:1px solid #1f6feb;border-radius:6px;background:#0d203d;color:#79c0ff;font-size:10px;font-weight:900}
+    .schedule-company-link{font-family:inherit;line-height:inherit;cursor:pointer}
+    .schedule-company-link:hover,.schedule-company-link:active{background:#1f6feb;color:#fff}
     .schedule-assignment.unlinked .schedule-company{border-color:#484f58;background:#21262d;color:#8b949e}
     .schedule-assignment-title{font-size:14px;font-weight:850;color:#e6edf3;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
-    .schedule-assignment-link{display:block;max-width:100%;padding:0;border:0;background:transparent;color:#58a6ff;font-family:inherit;text-align:left;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
-    .schedule-assignment-link:hover,.schedule-assignment-link:active{color:#79c0ff}
     .schedule-assignment-meta{display:flex;align-items:center;gap:7px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
     .schedule-assignment-details{padding:9px 10px;border-top:1px solid #21262d}
     .schedule-assignment-people-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -1393,8 +1393,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.16-04';
-const _APP_VERSION='v1.017';
+const _APP_BUMP='2026.07.16-05';
+const _APP_VERSION='v1.018';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1711,10 +1711,9 @@ function renderScheduleAssignment(item,date,shift){
   const leaveLabel=!item.linked&&code==='SL'?'病假':!item.linked&&code==='AL'?'年假':'';
   const company=item.linked?item.company:(leaveLabel?code:'其他安排');
   const title=leaveLabel||item.title;
-  const canInput=item.linked&&date<=scheduleLocalIso();
-  const titleHtml=canInput?`<button class="schedule-assignment-title schedule-assignment-link" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(title)}</button>`:`<div class="schedule-assignment-title">${esc(title)}</div>`;
+  const companyHtml=item.linked?`<button class="schedule-company schedule-company-link" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
   return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
-    <div class="schedule-assignment-head"><div class="schedule-assignment-main"><span class="schedule-company">${esc(company)}</span>${titleHtml}</div><div class="schedule-assignment-meta"><span>${count} 人</span></div></div>
+    <div class="schedule-assignment-head"><div class="schedule-assignment-main">${companyHtml}<div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span></div></div>
     <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div></div></div>
   </article>`;
 }
