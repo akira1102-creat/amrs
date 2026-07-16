@@ -1039,9 +1039,9 @@
     </div>
     <div id="batchPairArea">
       <div id="batchAaPasteArea">
-        <label>貼上 AA Tag（可直接從 Excel 複製單欄）</label>
+        <label>貼上機身號碼 / AA Tag（可直接從 Excel 複製單欄）</label>
         <div class="batch-aa-paste-row">
-          <textarea id="batchAaPaste" rows="3" placeholder="TAE0051&#10;TAE0123&#10;TAE0456" autocomplete="off" spellcheck="false"></textarea>
+          <textarea id="batchAaPaste" rows="3" placeholder="1234&#10;5678&#10;9012 或 TAE0051&#10;TAE0123" autocomplete="off" spellcheck="false"></textarea>
           <button class="batch-aa-apply" onclick="applyBatchAaTags()" type="button">套用</button>
         </div>
         <div id="batchAaPasteStatus"></div>
@@ -1393,8 +1393,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.16-05';
-const _APP_VERSION='v1.018';
+const _APP_BUMP='2026.07.16-06';
+const _APP_VERSION='v1.019';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3218,25 +3218,39 @@ function refreshBatchAaTags(){
   document.querySelectorAll('#batchPairRows .batch-pair-sn').forEach(updateBatchPairRow);
   if(document.getElementById('batchAaPaste')?.value.trim())applyBatchAaTags(false);
 }
-function parseBatchAaTags(value){
-  return String(value||'').split(/[\s,;]+/).map(canonicalAaTag).filter(Boolean);
-}
+function parseBatchColumn(value){return String(value||'').split(/[\s,;]+/).map(item=>item.trim()).filter(Boolean);}
+function isBatchAaTagColumn(values){return values.length>0&&values.every(value=>/^TAE/i.test(value));}
 function applyBatchAaTags(showErrors=true){
   if(activeCompany!=='MGM')return;
   const input=document.getElementById('batchAaPaste');
   const status=document.getElementById('batchAaPasteStatus');
-  const tags=parseBatchAaTags(input.value);
-  if(!tags.length){status.className='warn';status.textContent='請貼上最少一個有效 AA Tag。';return;}
-  if(!_aaTags.length){status.className='warn';status.textContent='請先載入 AA Tag 號碼。';if(showErrors)showToast('請先載入 AA Tag 號碼','err');return;}
+  const values=parseBatchColumn(input.value);
+  if(!values.length){status.className='warn';status.textContent='請貼上最少一個機身號碼或 AA Tag。';return;}
+  const aaTagMode=isBatchAaTagColumn(values);
+  if(aaTagMode&&!_aaTags.length){status.className='warn';status.textContent='請先載入 AA Tag 號碼。';if(showErrors)showToast('請先載入 AA Tag 號碼','err');return;}
+  if(!aaTagMode){
+    const invalid=values.filter(value=>!/^\d{1,4}$/.test(value));
+    if(invalid.length){status.className='warn';status.textContent=`機身號碼格式錯誤：${invalid.slice(0,3).join('、')}${invalid.length>3?'…':''}`;if(showErrors)showToast('機身號碼必須是 1–4 位數字','err');return;}
+  }
   const rows=document.getElementById('batchPairRows');rows.innerHTML='';
   let matched=0;const missing=[];
-  tags.forEach(tag=>{
-    const sn=_serialByAaTag[tag]||'';
-    if(sn)matched++;else missing.push(tag);
+  if(aaTagMode){
+    values.map(canonicalAaTag).forEach(tag=>{
+      const sn=_serialByAaTag[tag]||'';
+      if(sn)matched++;else missing.push(tag);
+      addBatchPairRow(false,{sn,detail:tag});
+    });
+    status.className=missing.length?'warn':'ok';
+    status.textContent=missing.length?`AA Tag 已配對 ${matched}/${values.length} 個；未找到：${missing.join('、')}`:`已配對全部 ${values.length} 個 AA Tag。`;
+    return;
+  }
+  values.forEach(sn=>{
+    const tag=_aaBySerial[sn]||'';
+    if(tag)matched++;
     addBatchPairRow(false,{sn,detail:tag});
   });
-  status.className=missing.length?'warn':'ok';
-  status.textContent=missing.length?`已配對 ${matched}/${tags.length} 個；未找到：${missing.join('、')}`:`已配對全部 ${tags.length} 個 AA Tag。`;
+  status.className='ok';
+  status.textContent=_aaTags.length?`已填入 ${values.length} 個機身號碼，已配對 ${matched}/${values.length} 個 AA Tag。`:`已填入 ${values.length} 個機身號碼；載入 AA Tag 後可自動補上。`;
 }
 function normalizeBatchVoidSeal(input){
   const digits=input.value.replace(/\D/g,'').slice(0,5);input.value=digits?digits.padStart(5,'0'):'';return input.value;
@@ -3982,8 +3996,8 @@ function dashboardEditFields(record){
     ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
     ${rowCompany==='MGM'?`<div><label>Location</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
     ${rowCompany==='Wynn'?dashEditField('Inspector','inspector',record.inspector):''}
-    ${dashEditField('Reason','reason',record.reason)}
-    ${dashEditField('Action Taken','actionTaken',record.actionTaken)}
+    ${dashEditSelect('Reason','reason',_reasonOptions(),record.reason)}
+    ${dashEditSelect('Action Taken','actionTaken',ALL_ACTIONS,record.actionTaken)}
     ${dashEditField('Error Description','errorDescription',record.errorDescription)}
     ${dashEditField('Box ID','boxId',record.boxId)}`;
 }
@@ -4003,6 +4017,12 @@ function renderDashboardEditCard(record,index){
 }
 function dashEditField(label,field,value,type='text'){
   return `<div><label>${esc(label)}</label><input type="${type}" data-card-field="${esc(field)}" value="${esc(value||'')}"></div>`;
+}
+function dashEditSelect(label,field,options,value){
+  const current=String(value||'').trim();
+  const values=[...new Set((options||[]).map(option=>String(option||'').trim()).filter(Boolean))];
+  if(current&&!values.includes(current))values.unshift(current);
+  return `<div><label>${esc(label)}</label><select data-card-field="${esc(field)}"><option value=""${current?'':' selected'}>請選擇</option>${values.map(option=>`<option value="${esc(option)}"${option===current?' selected':''}>${esc(option)}</option>`).join('')}</select></div>`;
 }
 function renderDashboardPage(){
   const mobileEl=document.getElementById('dashMobileRows');
