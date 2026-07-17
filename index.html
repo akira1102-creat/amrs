@@ -1393,8 +1393,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.16-06';
-const _APP_VERSION='v1.019';
+const _APP_BUMP='2026.07.17-01';
+const _APP_VERSION='v1.020';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3981,7 +3981,7 @@ function renderDashboardMobileCard(record,index){
     ${rows}
   </section>`;
 }
-function dashboardEditFields(record){
+function dashboardEditFields(record,comboPrefix){
   const rowCompany=record.company||currentDashboardCompany||activeCompany;
   const casinoValue=record.casino||'';
   const casinoChoices=casinoOptionsForCompany(rowCompany);
@@ -3996,8 +3996,8 @@ function dashboardEditFields(record){
     ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
     ${rowCompany==='MGM'?`<div><label>Location</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
     ${rowCompany==='Wynn'?dashEditField('Inspector','inspector',record.inspector):''}
-    ${dashEditSelect('Reason','reason',_reasonOptions(),record.reason)}
-    ${dashEditSelect('Action Taken','actionTaken',ALL_ACTIONS,record.actionTaken)}
+    ${dashEditCombo('Reason','reason',record.reason,comboPrefix)}
+    ${dashEditCombo('Action Taken','actionTaken',record.actionTaken,comboPrefix)}
     ${dashEditField('Error Description','errorDescription',record.errorDescription)}
     ${dashEditField('Box ID','boxId',record.boxId)}`;
 }
@@ -4006,7 +4006,7 @@ function renderDashboardEditCard(record,index){
   return `<section class="dash-mobile-card is-editing" id="dashCardEdit${index}">
     <div class="dash-mobile-title"><span>── 編輯記錄 ${displayNumber} ──</span></div>
     <div class="dash-card-form">
-      ${dashboardEditFields(record)}
+      ${dashboardEditFields(record,`dash-card-${index}`)}
     </div>
     <div class="dash-card-actions">
       <button class="dash-card-btn danger" onclick="deleteDashboardCard(${index},this)" type="button">刪除</button>
@@ -4018,11 +4018,19 @@ function renderDashboardEditCard(record,index){
 function dashEditField(label,field,value,type='text'){
   return `<div><label>${esc(label)}</label><input type="${type}" data-card-field="${esc(field)}" value="${esc(value||'')}"></div>`;
 }
-function dashEditSelect(label,field,options,value){
-  const current=String(value||'').trim();
+function dashEditCombo(label,field,value,prefix){
+  const id=`${prefix}-${field}`;
+  return `<div><label>${esc(label)}</label><div class="combo"><input id="${esc(id)}" type="text" data-card-field="${esc(field)}" value="${esc(value||'')}" placeholder="${field==='reason'?'搜尋原因...':'搜尋處理方法...'}" autocomplete="off"><div class="combo-menu" id="${esc(id)}-menu"></div></div></div>`;
+}
+function dashboardEditComboOptions(options,current){
   const values=[...new Set((options||[]).map(option=>String(option||'').trim()).filter(Boolean))];
-  if(current&&!values.includes(current))values.unshift(current);
-  return `<div><label>${esc(label)}</label><select data-card-field="${esc(field)}"><option value=""${current?'':' selected'}>請選擇</option>${values.map(option=>`<option value="${esc(option)}"${option===current?' selected':''}>${esc(option)}</option>`).join('')}</select></div>`;
+  const value=String(current||'').trim();
+  if(value&&!values.includes(value))values.unshift(value);
+  return values;
+}
+function setupDashboardEditCombos(prefix,record){
+  _setupSearchCombo(`${prefix}-reason`,`${prefix}-reason-menu`,()=>dashboardEditComboOptions(_reasonOptions(),record.reason),{keepAll:true,usageType:'reason',maxOptions:Infinity});
+  _setupSearchCombo(`${prefix}-actionTaken`,`${prefix}-actionTaken-menu`,()=>dashboardEditComboOptions(ALL_ACTIONS,record.actionTaken),{keepAll:true,usageType:'action',maxOptions:Infinity});
 }
 function renderDashboardPage(){
   const mobileEl=document.getElementById('dashMobileRows');
@@ -4032,6 +4040,7 @@ function renderDashboardPage(){
     return;
   }
   mobileEl.innerHTML=dashboardRecords.map((r,i)=>renderDashboardMobileCard(r,i)).join('');
+  if(dashboardEditingIdx>=0&&dashboardRecords[dashboardEditingIdx])setupDashboardEditCombos(`dash-card-${dashboardEditingIdx}`,dashboardRecords[dashboardEditingIdx]);
   updateDashboardSelectionTools();
   updateDashboardPager();
 }
@@ -4091,7 +4100,7 @@ function renderRepeatRecord(record,index){
 function renderRepeatRecordEdit(record,index){
   return `<section class="dash-mobile-card" id="repeatCardEdit${index}">
     <div class="dash-mobile-title"><span>── 編輯記錄 ${index+1} ──</span></div>
-    <div class="dash-card-form">${dashboardEditFields(record)}</div>
+    <div class="dash-card-form">${dashboardEditFields(record,`repeat-card-${index}`)}</div>
     <div class="dash-card-actions">
       <button class="dash-card-btn danger" onclick="deleteRepeatRecord(${index},this)" type="button">刪除</button>
       <button class="dash-card-btn" onclick="cancelRepeatRecordEdit()" type="button">取消</button>
@@ -4102,6 +4111,7 @@ function renderRepeatRecordEdit(record,index){
 function renderRepeatRecords(){
   document.getElementById('repeatRecordsTitle').textContent=`S/N ${_repeatRecordsSerial} · ${_repeatRecords.length} 筆記錄`;
   document.getElementById('repeatRecordsRows').innerHTML=_repeatRecords.length?_repeatRecords.map(renderRepeatRecord).join(''):'<div class="dash-mobile-empty">沒有相符記錄。</div>';
+  if(_repeatRecordsEditingIdx>=0&&_repeatRecords[_repeatRecordsEditingIdx])setupDashboardEditCombos(`repeat-card-${_repeatRecordsEditingIdx}`,_repeatRecords[_repeatRecordsEditingIdx]);
 }
 function startRepeatRecordEdit(index){_repeatRecordsEditingIdx=index;renderRepeatRecords();}
 function cancelRepeatRecordEdit(){_repeatRecordsEditingIdx=-1;renderRepeatRecords();}
