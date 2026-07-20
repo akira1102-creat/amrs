@@ -75,6 +75,11 @@
     .card{background:#161b22;border-radius:20px;padding:20px;margin-bottom:16px;border:1px solid #30363d;max-width:640px;margin-left:auto;margin-right:auto}
     .card-title{font-size:12px;font-weight:700;color:#8b949e;text-transform:uppercase;letter-spacing:.07em;margin-bottom:14px}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .po-number-row{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px;align-items:stretch}
+    .po-quick-fill{min-width:86px;padding:0 12px;border:1px solid #30363d;border-radius:14px;background:#21262d;color:#c9d1d9;font-family:inherit;font-size:13px;font-weight:850;white-space:nowrap;cursor:pointer}
+    .po-quick-fill:hover:not(:disabled){border-color:#3fb950;color:#7ee787}
+    .po-quick-fill.active{border-color:#238636;background:#0d3d20;color:#7ee787;box-shadow:0 0 0 1px rgba(46,160,67,.2)}
+    .po-quick-fill:disabled{color:#484f58;cursor:wait}
     label{display:block;font-size:13px;font-weight:600;color:#8b949e;margin-bottom:8px}
     select,input{width:100%;font-size:15px;padding:11px 13px;border:1px solid #30363d;border-radius:14px;color:#e6edf3;background:#0d1117;-webkit-appearance:none}
     select:focus,input:focus{outline:none;border-color:#388bfd}
@@ -289,6 +294,8 @@
     .mob .add-btn{padding:11px;font-size:15px;margin-top:10px}
     .mob .opt-toggle{font-size:11px;padding:7px 11px;margin-top:10px}
     .mob .grid2{grid-template-columns:1fr 1fr;gap:10px}
+    .mob .po-number-row{gap:8px}
+    .mob .po-quick-fill{min-width:76px;padding:0 9px;font-size:12px}
     .mob .q-item{padding:10px 14px;gap:10px}
     .mob .q-sn{font-size:20px;min-width:52px}
     .mob .q-reason{font-size:14px}
@@ -975,7 +982,10 @@
   </div>
   <div style="margin-top:14px">
     <label>PO 號碼 / 月份號碼（如 2026 年 7 月請填寫 2607）</label>
-    <input type="text" id="poNumber" placeholder="e.g. 7242395 / 2607">
+    <div class="po-number-row">
+      <button class="po-quick-fill" id="poQuickFillBtn" onclick="fillPoQuickValue()" type="button" aria-pressed="false">本月</button>
+      <input type="text" id="poNumber" placeholder="e.g. 7242395 / 2607">
+    </div>
   </div>
 </div>
 
@@ -1396,8 +1406,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.20-04';
-const _APP_VERSION='v1.024';
+const _APP_BUMP='2026.07.20-05';
+const _APP_VERSION='v1.025';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1446,6 +1456,40 @@ let setupVerifiedId='';
 let setupReturnState=null;
 function _companyKey(c){return `_ml_gas_${c}`;}
 function _casinoKey(c){return `_ml_casino_${c}`;}
+function _poNumberKey(c){return `_ml_po_number_${c}`;}
+function saveCompanyPoNumber(company,value){localStorage.setItem(_poNumberKey(company),String(value||'').trim());}
+function loadCompanyPoNumber(company){
+  const input=document.getElementById('poNumber');if(!input)return;
+  let value=localStorage.getItem(_poNumberKey(company));
+  if(value===null){
+    value=localStorage.getItem('poNumber')||'';
+    if(value)saveCompanyPoNumber(company,value);
+    localStorage.removeItem('poNumber');
+  }
+  input.value=value||'';
+  syncPoQuickFillButton();
+}
+function currentMonthCode(){const now=new Date();return String(now.getFullYear()).slice(-2)+String(now.getMonth()+1).padStart(2,'0');}
+function currentPoQuickValue(){
+  if(activeCompany!=='SCL')return currentMonthCode();
+  if(!_sclMonthlySettingsLoaded)return '';
+  return document.getElementById('sclMonthlyPo')?.value.trim()||'';
+}
+function syncPoQuickFillButton(loadScl=true){
+  const btn=document.getElementById('poQuickFillBtn'),input=document.getElementById('poNumber');if(!btn||!input)return;
+  if(activeCompany==='SCL'&&!_sclMonthlySettingsLoaded){
+    btn.textContent=getScriptUrl()?'載入中...':'未載入';btn.disabled=true;btn.classList.remove('active');btn.setAttribute('aria-pressed','false');
+    if(loadScl&&getScriptUrl())void loadSclMonthlySettings(false,true);
+    return;
+  }
+  const value=currentPoQuickValue();
+  btn.textContent=value||'未設定';btn.disabled=!value;btn.title=value?`快速填入 ${value}`:'未設定本月 PO 號碼';
+  const active=!!value&&input.value.trim()===value;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));
+}
+function fillPoQuickValue(){
+  const value=currentPoQuickValue();if(!value)return;
+  const input=document.getElementById('poNumber');input.value=value;saveCompanyPoNumber(activeCompany,value);syncPoQuickFillButton(false);
+}
 function casinoOptionsForCompany(company){return COMPANY_CASINOS[company]||COMPANY_CASINOS.SCL;}
 function _setCasinoSelectOptions(select,options,includeAll=false,extraValue=''){
   if(!select)return;
@@ -1553,6 +1597,7 @@ function syncCompanySpecificFields(){
   updateAaTagLoadStatus();
   updateMgmLocationButtons();
   updateBatchModeLayout();
+  syncPoQuickFillButton();
 }
 function resetSetupVerification(){
   setupVerifiedId='';
@@ -1858,21 +1903,25 @@ function applySclMonthlySettings(settings){
   document.getElementById('sclMonthlyPo').value=settings?.poNumber||'';
   Object.entries(SCL_MONTHLY_INPUTS).forEach(([venue,id])=>{document.getElementById(id).value=String(settings?.targets?.[venue]??0);});
 }
-async function loadSclMonthlySettings(force=false){
+async function loadSclMonthlySettings(force=false,quiet=false){
   if(activeCompany!=='SCL'||(_sclMonthlySettingsLoaded&&!force))return;
   const url=getScriptUrl();if(!url)return;
-  _sclMonthlySettingsRequest?.abort();_sclMonthlySettingsRequest=new AbortController();
+  if(_sclMonthlySettingsRequest&&!force)return;
+  _sclMonthlySettingsRequest?.abort();
+  const controller=new AbortController();_sclMonthlySettingsRequest=controller;
   const status=document.getElementById('sclMonthlyStatus');status.textContent='載入中...';status.style.color='#8b949e';
-  const loadingToken=showLoadingProgress('本月設定載入中，請稍等...');
+  const loadingToken=quiet?null:showLoadingProgress('本月設定載入中，請稍等...');
   try{
-    const data=await fetchJsonWithTimeout(`${url}?action=monthlySettings&company=SCL`,{signal:_sclMonthlySettingsRequest.signal},30000);
+    const data=await fetchJsonWithTimeout(`${url}?action=monthlySettings&company=SCL`,{signal:controller.signal},30000);
     if(!data.success||!data.settings)throw new Error(data.message||'載入失敗');
     applySclMonthlySettings(data.settings);_sclMonthlySettingsLoaded=true;
+    syncPoQuickFillButton(false);
     status.textContent='已從 Monthly 工作表載入';status.style.color='#3fb950';
   }catch(e){
     if(e.name==='AbortError')return;
     status.textContent='載入失敗';status.style.color='#ff7b72';
-  }finally{hideLoadingProgress(loadingToken);}
+    const btn=document.getElementById('poQuickFillBtn');if(activeCompany==='SCL'&&btn){btn.textContent='載入失敗';btn.disabled=true;btn.classList.remove('active');}
+  }finally{if(loadingToken)hideLoadingProgress(loadingToken);if(_sclMonthlySettingsRequest===controller)_sclMonthlySettingsRequest=null;}
 }
 async function saveSclMonthlySettings(){
   const poNumber=document.getElementById('sclMonthlyPo').value.trim();
@@ -1888,7 +1937,7 @@ async function saveSclMonthlySettings(){
   try{
     const data=await postGasJson({action:'updateMonthlySettings',company:'SCL',settings:{poNumber,targets}});
     if(!data.success)throw new Error(data.message||'儲存失敗');
-    applySclMonthlySettings(data.settings||{poNumber,targets});_sclMonthlySettingsLoaded=true;
+    applySclMonthlySettings(data.settings||{poNumber,targets});_sclMonthlySettingsLoaded=true;syncPoQuickFillButton(false);
     localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);
     status.textContent='已更新 Monthly 工作表';status.style.color='#3fb950';showToast('✓ SCL 本月設定已更新');
     if(activePage==='monthlyStats')loadMonthlyStats(true);
@@ -2665,12 +2714,13 @@ document.getElementById('actionDrop').value='Preventive Maintenance';
 const _t=new Date();
 document.getElementById('date').value=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
 function openDatePicker(input){try{input.showPicker?.();}catch(e){input.focus();}}
-['casino','poNumber'].forEach(k=>{const v=localStorage.getItem(k);if(v)document.getElementById(k).value=v;});
+{const v=localStorage.getItem('casino');if(v)document.getElementById('casino').value=v;}
+loadCompanyPoNumber(activeCompany);
 syncCompanySpecificFields();
 syncCasinoOptions();
 const _savedModel=localStorage.getItem('model');if(_savedModel)document.getElementById('model').value=_savedModel;
 document.getElementById('model').addEventListener('change',function(){localStorage.setItem('model',this.value);});
-document.getElementById('poNumber').addEventListener('change',function(){localStorage.setItem('poNumber',this.value.trim());});
+document.getElementById('poNumber').addEventListener('input',function(){saveCompanyPoNumber(activeCompany,this.value);syncPoQuickFillButton(false);});
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='',_batchMode=false;
 let _queueAddBusy=false;
 let _queueDuplicateResults=[],_duplicateCheckedKeys=new Set(),_duplicateCheckPromise=null,_duplicateCheckRerun=false,_duplicateCheckRunning=false,_duplicateCheckContextVersion=0,_submitCheckBusy=false;
@@ -2710,7 +2760,9 @@ function switchQueueCompany(company){
   company=COMPANIES.includes(company)?company:'SCL';
   if(company===activeCompany)return;
   saveQueue();
+  const poInput=document.getElementById('poNumber');if(poInput)saveCompanyPoNumber(activeCompany,poInput.value);
   activeCompany=company;localStorage.setItem('_ml_company',company);
+  loadCompanyPoNumber(company);
   queue=loadCompanyQueue(company);selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;
   if(document.getElementById('queueList'))renderQueue();
 }
@@ -3790,11 +3842,13 @@ function renderQueue(){
 }
 function loadTodayRecords(){
   const SCRIPT_URL=getScriptUrl();
+  const company=activeCompany;
   const casino=document.getElementById('casino').value;
   fetchJsonWithTimeout(SCRIPT_URL+'?action=today&'+companyParam()+'&casino='+encodeURIComponent(casino),{},30000)
     .then(data=>{
+      if(company!==activeCompany)return;
       todayRecords=data.records||[];
-      if(data.lastPO&&!document.getElementById('poNumber').value){document.getElementById('poNumber').value=data.lastPO;localStorage.setItem('poNumber',data.lastPO);}
+      if(data.lastPO&&!document.getElementById('poNumber').value){document.getElementById('poNumber').value=data.lastPO;saveCompanyPoNumber(company,data.lastPO);syncPoQuickFillButton(false);}
       renderTodayPanel();renderQueueDuplicateNotice();
     })
     .catch(()=>{});
@@ -4472,7 +4526,7 @@ async function doSubmit(){
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
-  localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);localStorage.setItem('poNumber',poNumber);
+  localStorage.setItem(_casinoKey(activeCompany),casino);localStorage.setItem('casino',casino);saveCompanyPoNumber(activeCompany,poNumber);
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   if(ensureSubmissionIds(queue))saveQueue();
