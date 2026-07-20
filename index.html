@@ -626,8 +626,9 @@
     .schedule-assignment.unlinked .schedule-company{border-color:#484f58;background:#21262d;color:#8b949e}
     .schedule-assignment-title{font-size:14px;font-weight:850;color:#e6edf3;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
     .schedule-assignment-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
-    .schedule-machine-count{color:#79c0ff;font-size:11px;line-height:1}
+    .schedule-machine-count{padding:5px 8px;border:1px solid #1f6feb;border-radius:6px;background:#0d203d;color:#79c0ff;font-family:inherit;font-size:11px;font-weight:800;line-height:1;cursor:pointer}
     .schedule-machine-count strong{color:#e6edf3;font-size:19px;font-weight:950}
+    .schedule-machine-count:hover,.schedule-machine-count:active{background:#1f6feb;color:#fff}
     .schedule-assignment-details{padding:9px 10px;border-top:1px solid #21262d}
     .schedule-assignment-people-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
     .schedule-assignment-people{min-width:0}
@@ -1395,8 +1396,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.20-01';
-const _APP_VERSION='v1.021';
+const _APP_BUMP='2026.07.20-02';
+const _APP_VERSION='v1.022';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1756,7 +1757,7 @@ function renderScheduleAssignment(item,date,shift,showMachineCount=false){
   const company=item.linked?item.company:(leaveLabel?code:'其他安排');
   const title=leaveLabel||item.title;
   const machines=showMachineCount&&item.linked?_scheduleMachineCounts[scheduleMachineCountKey(item.company,item.venue)]:null;
-  const machinesHtml=machines!=null?`<span class="schedule-machine-count"><strong>${machines}</strong> 台</span>`:'';
+  const machinesHtml=machines!=null?`<button class="schedule-machine-count" type="button" onclick="showPage('monthlyStats')" aria-label="查看每月統計，餘下每次需做 ${machines} 台"><strong>${machines}</strong> 台</button>`:'';
   const companyHtml=item.linked?`<button class="schedule-company schedule-company-link" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
   return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
     <div class="schedule-assignment-head"><div class="schedule-assignment-main">${companyHtml}<div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta">${machinesHtml}<span>${count} 人</span></div></div>
