@@ -1396,8 +1396,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.20-03';
-const _APP_VERSION='v1.023';
+const _APP_BUMP='2026.07.20-04';
+const _APP_VERSION='v1.024';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1659,7 +1659,7 @@ const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_',SCHEDULE_LATEST_CACHE_
 const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
 let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null;
 const SCHEDULE_MACHINE_COUNTS_FRESH_MS=5*60*1000;
-let _scheduleMachineCounts={},_scheduleMachineCountsMonth='',_scheduleMachineCountsLoadedAt=0,_scheduleMachineCountsRequest=null;
+let _scheduleMachineCounts={},_scheduleMachineCountsMonth='',_scheduleMachineCountCompanies=new Set(),_scheduleMachineCountsLoadedAt=0,_scheduleMachineCountsRequest=null;
 function scheduleLocalIso(date=new Date()){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
@@ -1712,11 +1712,15 @@ async function requestScheduleRange(from,days,force,signal){
 function scheduleMachineCountKey(company,venue){return `${company}\u0000${venue}`;}
 function applyScheduleMachineCounts(data,monthCode){
   if(!data||data.monthCode!==monthCode||!Array.isArray(data.companies))return false;
-  const counts={};
-  data.companies.forEach(company=>(company.venues||[]).forEach(venue=>{
-    if(venue.machinesPerRemainingVisit==null)return;
-    counts[scheduleMachineCountKey(company.company,venue.venue)]=Math.max(0,Number(venue.machinesPerRemainingVisit)||0);
-  }));
+  const counts=_scheduleMachineCountsMonth===monthCode?{..._scheduleMachineCounts}:{};
+  if(_scheduleMachineCountsMonth!==monthCode){_scheduleMachineCountCompanies=new Set();_scheduleMachineCountsLoadedAt=0;}
+  data.companies.forEach(company=>{
+    _scheduleMachineCountCompanies.add(company.company);
+    (company.venues||[]).forEach(venue=>{
+      if(venue.machinesPerRemainingVisit==null)return;
+      counts[scheduleMachineCountKey(company.company,venue.venue)]=Math.max(0,Number(venue.machinesPerRemainingVisit)||0);
+    });
+  });
   _scheduleMachineCounts=counts;_scheduleMachineCountsMonth=monthCode;return true;
 }
 function hydrateScheduleMachineCountsFromCache(monthCode){
@@ -1725,13 +1729,13 @@ function hydrateScheduleMachineCountsFromCache(monthCode){
     return applyScheduleMachineCounts(cached?.data,monthCode);
   }catch(e){return false;}
 }
-async function loadScheduleTodayMachineCounts(day,force=false){
+async function loadScheduleVisibleMachineCounts(days,force=false){
   const today=scheduleLocalIso();
-  if(!day||day.date!==today)return;
-  const companies=[...new Set((day.items||[]).filter(item=>item.linked&&(item.company==='SCL'||item.company==='GEG')).map(item=>item.company))];
+  const monthCode=today.slice(2,4)+today.slice(5,7),monthPrefix=today.slice(0,7);
+  const companies=[...new Set((days||[]).filter(day=>day?.date?.startsWith(monthPrefix)).flatMap(day=>day.items||[]).filter(item=>item.linked&&(item.company==='SCL'||item.company==='GEG')).map(item=>item.company))];
   if(!companies.length)return;
-  const monthCode=today.slice(2,4)+today.slice(5,7),now=Date.now();
-  if(!force&&_scheduleMachineCountsMonth===monthCode&&now-_scheduleMachineCountsLoadedAt<SCHEDULE_MACHINE_COUNTS_FRESH_MS)return;
+  const now=Date.now(),hasAllCompanies=companies.every(company=>_scheduleMachineCountCompanies.has(company));
+  if(!force&&_scheduleMachineCountsMonth===monthCode&&hasAllCompanies&&now-_scheduleMachineCountsLoadedAt<SCHEDULE_MACHINE_COUNTS_FRESH_MS)return;
   if(_scheduleMachineCountsRequest?.monthCode===monthCode)return;
   if(_scheduleMachineCountsRequest)_scheduleMachineCountsRequest.controller.abort();
   const url=getScriptUrl();if(!url)return;
@@ -1745,7 +1749,7 @@ async function loadScheduleTodayMachineCounts(day,force=false){
     if(!base.success||companyResults.some(result=>!result.success))return;
     applyScheduleMachineCounts(assembleMonthlyStats(base,companyResults),monthCode);
     _scheduleMachineCountsLoadedAt=Date.now();
-    if(activePage==='schedule')renderScheduleFocus();
+    if(activePage==='schedule')renderSchedulePage();
   }catch(error){if(error.name!=='AbortError')console.warn('Schedule machine count unavailable',error);}
   finally{if(_scheduleMachineCountsRequest===request)_scheduleMachineCountsRequest=null;}
 }
@@ -1756,7 +1760,8 @@ function renderScheduleAssignment(item,date,shift,showMachineCount=false){
   const leaveLabel=!item.linked&&code==='SL'?'病假':!item.linked&&code==='AL'?'年假':'';
   const company=item.linked?item.company:(leaveLabel?code:'其他安排');
   const title=leaveLabel||item.title;
-  const machines=showMachineCount&&item.linked?_scheduleMachineCounts[scheduleMachineCountKey(item.company,item.venue)]:null;
+  const itemMonthCode=date.slice(2,4)+date.slice(5,7);
+  const machines=showMachineCount&&item.linked&&itemMonthCode===_scheduleMachineCountsMonth?_scheduleMachineCounts[scheduleMachineCountKey(item.company,item.venue)]:null;
   const machinesHtml=machines!=null?`<button class="schedule-machine-count" type="button" onclick="showPage('monthlyStats')" aria-label="查看每月統計，餘下每次需做 ${machines} 台"><strong>${machines}</strong> 台</button>`:'';
   const companyHtml=item.linked?`<button class="schedule-company schedule-company-link" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
   return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
@@ -1780,15 +1785,16 @@ function renderScheduleFocus(){
   if(!focus){label.textContent='工作安排';dateEl.textContent='未來 35 日沒有安排';itemsEl.innerHTML='';return;}
   const isToday=focus.date===scheduleLocalIso();
   label.textContent=isToday?'今日工作':'下一個工作日';dateEl.textContent=scheduleDateLabel(focus.date);
-  if(isToday){const monthCode=focus.date.slice(2,4)+focus.date.slice(5,7);if(_scheduleMachineCountsMonth!==monthCode)hydrateScheduleMachineCountsFromCache(monthCode);}
-  itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date,isToday);
-  if(isToday)void loadScheduleTodayMachineCounts(focus);
+  const currentMonth=scheduleLocalIso().slice(0,7),showMachineCount=focus.date.startsWith(currentMonth);
+  if(showMachineCount){const monthCode=focus.date.slice(2,4)+focus.date.slice(5,7);if(_scheduleMachineCountsMonth!==monthCode)hydrateScheduleMachineCountsFromCache(monthCode);}
+  itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date,showMachineCount);
+  void loadScheduleVisibleMachineCounts([focus,..._scheduleWeekDays]);
 }
 function renderScheduleWeek(){
   const today=scheduleLocalIso(),days=scheduleVisibleDays(_scheduleWeekDays).filter(day=>day.date!==today);
   if(days.length){document.getElementById('scheduleWeekRange').textContent=`${scheduleDateLabel(days[0].date)} 至 ${scheduleDateLabel(days[days.length-1].date)}`;}
   else document.getElementById('scheduleWeekRange').textContent='';
-  document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day"><div class="schedule-day-date">${scheduleDateLabel(day.date)}</div><div class="schedule-periods">${renderScheduleItems(day.items,day.date)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
+  document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day"><div class="schedule-day-date">${scheduleDateLabel(day.date)}</div><div class="schedule-periods">${renderScheduleItems(day.items,day.date,true)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
 }
 function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();}
 async function loadScheduleOverview(force=false,weekOnly=false){
