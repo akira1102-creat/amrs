@@ -625,7 +625,9 @@
     .schedule-company-link:hover,.schedule-company-link:active{background:#1f6feb;color:#fff}
     .schedule-assignment.unlinked .schedule-company{border-color:#484f58;background:#21262d;color:#8b949e}
     .schedule-assignment-title{font-size:14px;font-weight:850;color:#e6edf3;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
-    .schedule-assignment-meta{display:flex;align-items:center;gap:7px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
+    .schedule-assignment-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;color:#8b949e;font-size:11px;font-weight:800;white-space:nowrap}
+    .schedule-machine-count{color:#79c0ff;font-size:11px;line-height:1}
+    .schedule-machine-count strong{color:#e6edf3;font-size:19px;font-weight:950}
     .schedule-assignment-details{padding:9px 10px;border-top:1px solid #21262d}
     .schedule-assignment-people-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
     .schedule-assignment-people{min-width:0}
@@ -1393,8 +1395,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.17-01';
-const _APP_VERSION='v1.020';
+const _APP_BUMP='2026.07.20-01';
+const _APP_VERSION='v1.021';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1655,6 +1657,8 @@ function showPage(page){
 const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v1';
 const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
 let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null;
+const SCHEDULE_MACHINE_COUNTS_FRESH_MS=5*60*1000;
+let _scheduleMachineCounts={},_scheduleMachineCountsMonth='',_scheduleMachineCountsLoadedAt=0,_scheduleMachineCountsRequest=null;
 function scheduleLocalIso(date=new Date()){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 }
@@ -1704,26 +1708,68 @@ async function requestScheduleRange(from,days,force,signal){
   if(!data.success||!Array.isArray(data.days))throw new Error(data.message||'工作安排載入失敗');
   saveScheduleCache(from,days,data);return data;
 }
-function renderScheduleAssignment(item,date,shift){
+function scheduleMachineCountKey(company,venue){return `${company}\u0000${venue}`;}
+function applyScheduleMachineCounts(data,monthCode){
+  if(!data||data.monthCode!==monthCode||!Array.isArray(data.companies))return false;
+  const counts={};
+  data.companies.forEach(company=>(company.venues||[]).forEach(venue=>{
+    if(venue.machinesPerRemainingVisit==null)return;
+    counts[scheduleMachineCountKey(company.company,venue.venue)]=Math.max(0,Number(venue.machinesPerRemainingVisit)||0);
+  }));
+  _scheduleMachineCounts=counts;_scheduleMachineCountsMonth=monthCode;return true;
+}
+function hydrateScheduleMachineCountsFromCache(monthCode){
+  try{
+    const cached=JSON.parse(localStorage.getItem('_amrs_monthly_stats_v3')||'null');
+    return applyScheduleMachineCounts(cached?.data,monthCode);
+  }catch(e){return false;}
+}
+async function loadScheduleTodayMachineCounts(day,force=false){
+  const today=scheduleLocalIso();
+  if(!day||day.date!==today)return;
+  const companies=[...new Set((day.items||[]).filter(item=>item.linked&&(item.company==='SCL'||item.company==='GEG')).map(item=>item.company))];
+  if(!companies.length)return;
+  const monthCode=today.slice(2,4)+today.slice(5,7),now=Date.now();
+  if(!force&&_scheduleMachineCountsMonth===monthCode&&now-_scheduleMachineCountsLoadedAt<SCHEDULE_MACHINE_COUNTS_FRESH_MS)return;
+  if(_scheduleMachineCountsRequest?.monthCode===monthCode)return;
+  if(_scheduleMachineCountsRequest)_scheduleMachineCountsRequest.controller.abort();
+  const url=getScriptUrl();if(!url)return;
+  const controller=new AbortController(),request={monthCode,controller};_scheduleMachineCountsRequest=request;
+  try{
+    const suffix=force?'&refresh=1':'';
+    const [base,companyResults]=await Promise.all([
+      fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:controller.signal},45000),
+      Promise.all(companies.map(company=>fetchJsonWithTimeout(`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`,{signal:controller.signal},45000)))
+    ]);
+    if(!base.success||companyResults.some(result=>!result.success))return;
+    applyScheduleMachineCounts(assembleMonthlyStats(base,companyResults),monthCode);
+    _scheduleMachineCountsLoadedAt=Date.now();
+    if(activePage==='schedule')renderScheduleFocus();
+  }catch(error){if(error.name!=='AbortError')console.warn('Schedule machine count unavailable',error);}
+  finally{if(_scheduleMachineCountsRequest===request)_scheduleMachineCountsRequest=null;}
+}
+function renderScheduleAssignment(item,date,shift,showMachineCount=false){
   const people=item[shift]||[];
   const count=new Set(people.map(person=>person.name).filter(Boolean)).size;
   const code=String(item.title||'').trim().toUpperCase();
   const leaveLabel=!item.linked&&code==='SL'?'病假':!item.linked&&code==='AL'?'年假':'';
   const company=item.linked?item.company:(leaveLabel?code:'其他安排');
   const title=leaveLabel||item.title;
+  const machines=showMachineCount&&item.linked?_scheduleMachineCounts[scheduleMachineCountKey(item.company,item.venue)]:null;
+  const machinesHtml=machines!=null?`<span class="schedule-machine-count"><strong>${machines}</strong> 台</span>`:'';
   const companyHtml=item.linked?`<button class="schedule-company schedule-company-link" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
   return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
-    <div class="schedule-assignment-head"><div class="schedule-assignment-main">${companyHtml}<div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta"><span>${count} 人</span></div></div>
+    <div class="schedule-assignment-head"><div class="schedule-assignment-main">${companyHtml}<div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta">${machinesHtml}<span>${count} 人</span></div></div>
     <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div></div></div>
   </article>`;
 }
-function renderSchedulePeriod(label,shift,items,date){
+function renderSchedulePeriod(label,shift,items,date,showMachineCount=false){
   const shiftItems=(items||[]).filter(item=>item[shift]?.length);
   if(!shiftItems.length)return '';
-  return `<section class="schedule-period"><div class="schedule-period-head">${label}</div><div class="schedule-items">${shiftItems.map(item=>renderScheduleAssignment(item,date,shift)).join('')}</div></section>`;
+  return `<section class="schedule-period"><div class="schedule-period-head">${label}</div><div class="schedule-items">${shiftItems.map(item=>renderScheduleAssignment(item,date,shift,showMachineCount)).join('')}</div></section>`;
 }
-function renderScheduleItems(items,date){
-  const periods=renderSchedulePeriod('上午','am',items,date)+renderSchedulePeriod('下午','pm',items,date);
+function renderScheduleItems(items,date,showMachineCount=false){
+  const periods=renderSchedulePeriod('上午','am',items,date,showMachineCount)+renderSchedulePeriod('下午','pm',items,date,showMachineCount);
   return periods||'<div class="schedule-empty">沒有安排</div>';
 }
 function renderScheduleFocus(){
@@ -1733,7 +1779,9 @@ function renderScheduleFocus(){
   if(!focus){label.textContent='工作安排';dateEl.textContent='未來 35 日沒有安排';itemsEl.innerHTML='';return;}
   const isToday=focus.date===scheduleLocalIso();
   label.textContent=isToday?'今日工作':'下一個工作日';dateEl.textContent=scheduleDateLabel(focus.date);
-  itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date);
+  if(isToday){const monthCode=focus.date.slice(2,4)+focus.date.slice(5,7);if(_scheduleMachineCountsMonth!==monthCode)hydrateScheduleMachineCountsFromCache(monthCode);}
+  itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date,isToday);
+  if(isToday)void loadScheduleTodayMachineCounts(focus);
 }
 function renderScheduleWeek(){
   const today=scheduleLocalIso(),days=scheduleVisibleDays(_scheduleWeekDays).filter(day=>day.date!==today);
