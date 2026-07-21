@@ -1432,8 +1432,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.22-01';
-const _APP_VERSION='v1.032';
+const _APP_BUMP='2026.07.22-02';
+const _APP_VERSION='v1.033';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3205,9 +3205,10 @@ const BP_PAGE_FIELDS=[
   ['bpDesc','Required Parts(JP)'],['bpColC','Required Parts(EN)'],['bpQty','Qty'],
   ['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark'],['bpUodUnlockDay','UOD Unlock Day']
 ];
+const BP_ALWAYS_VISIBLE_FIELDS=new Set(['bpRemark']);
 function brokenPartsRowsHtml(record,visibleFields=null){
   return BP_PAGE_FIELDS
-    .filter(([key])=>(!visibleFields||visibleFields.has(key))&&cleanDashValue(record[key])!=='')
+    .filter(([key])=>(BP_ALWAYS_VISIBLE_FIELDS.has(key)||!visibleFields||visibleFields.has(key))&&cleanDashValue(record[key])!=='')
     .map(([key,label])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(label)}</div><div class="dash-mobile-val">${brokenPartsPageValueHtml(key,record[key])}</div></div>`)
     .join('');
 }
@@ -3231,7 +3232,7 @@ function saveListPreferences(){
       brokenPartsModalPageSize:_bpListPageSize,
       brokenPartsPageSize:_bpPageSize,
       brokenPartsCardColumns:_bpPageCardColumns,
-      brokenPartsFieldVersion:2,
+      brokenPartsFieldVersion:3,
       brokenPartsVisibleFields:[..._bpPageVisibleFields]
     }));
   }catch(e){}
@@ -3248,8 +3249,9 @@ function restoreListPreferences(){
   if(Array.isArray(saved.brokenPartsVisibleFields)){
     const validFields=new Set(BP_PAGE_FIELDS.map(([key])=>key));
     _bpPageVisibleFields=new Set(saved.brokenPartsVisibleFields.filter(key=>validFields.has(key)));
-    if(saved.brokenPartsFieldVersion!==2)_bpPageVisibleFields.add('bpUodUnlockDay');
+    if(!saved.brokenPartsFieldVersion||saved.brokenPartsFieldVersion<2)_bpPageVisibleFields.add('bpUodUnlockDay');
   }
+  BP_ALWAYS_VISIBLE_FIELDS.forEach(key=>_bpPageVisibleFields.add(key));
   document.getElementById('dashPageSize').value=String(dashboardPageSize);
   document.getElementById('dashCardColumns').value=String(dashboardCardColumns);
   document.getElementById('dashMobileRows').style.setProperty('--card-columns',String(dashboardCardColumns));
@@ -3261,7 +3263,7 @@ function restoreListPreferences(){
 }
 function renderBrokenPartsPageFieldOptions(){
   const root=document.getElementById('bpPageFieldOptions');if(!root)return;
-  root.innerHTML=BP_PAGE_FIELDS.map(([key,label])=>`<label class="bp-field-option"><input type="checkbox" value="${esc(key)}" onchange="toggleBrokenPartsPageField(this.value,this.checked)"${_bpPageVisibleFields.has(key)?' checked':''}><span>${esc(label)}</span></label>`).join('');
+  root.innerHTML=BP_PAGE_FIELDS.map(([key,label])=>{const alwaysVisible=BP_ALWAYS_VISIBLE_FIELDS.has(key);return `<label class="bp-field-option"><input type="checkbox" value="${esc(key)}" onchange="toggleBrokenPartsPageField(this.value,this.checked)"${alwaysVisible||_bpPageVisibleFields.has(key)?' checked':''}${alwaysVisible?' disabled':''}><span>${esc(label)}</span></label>`;}).join('');
 }
 function toggleBrokenPartsPageField(key,checked){
   if(checked)_bpPageVisibleFields.add(key);else _bpPageVisibleFields.delete(key);
