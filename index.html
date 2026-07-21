@@ -105,8 +105,6 @@
     .opt-toggle:hover{color:#e6edf3;border-color:#484f58}
     #optionalFields{display:none;flex-direction:column;gap:14px;margin-top:14px}
     #optionalFields.vis{display:flex}
-    .wynn-only{display:none}
-    body.company-wynn .wynn-only{display:block}
     .scl-only{display:none}
     body.company-scl .scl-only{display:block}
     .q-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0d1117;border-radius:14px;margin-bottom:10px;border:1px solid #21262d}
@@ -1196,7 +1194,7 @@
       <label>Box ID</label>
       <input type="text" id="boxId" placeholder="選填">
     </div>
-    <div class="wynn-only">
+    <div>
       <label>調查人員</label>
       <input type="text" id="inspector" placeholder="選填">
     </div>
@@ -1434,8 +1432,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.21-03';
-const _APP_VERSION='v1.028';
+const _APP_BUMP='2026.07.21-04';
+const _APP_VERSION='v1.029';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1620,7 +1618,6 @@ function companyParam(){return 'company='+encodeURIComponent(activeCompany);}
 function syncCompanySpecificFields(){
   document.body.classList.toggle('company-geg',activeCompany==='GEG');
   document.body.classList.toggle('company-mgm',activeCompany==='MGM');
-  document.body.classList.toggle('company-wynn',activeCompany==='Wynn');
   document.body.classList.toggle('company-scl',activeCompany==='SCL');
   updateAaTagLoadStatus();
   updateMgmLocationButtons();
@@ -3486,7 +3483,7 @@ async function addBatchToQueue(){
   const bpData=_getBpData()||{};
   const sealData=activeCompany==='GEG'?{}:getGegSealData();
   const locationData=getMgmLocationData();
-  const inspectorData=getWynnInspectorData();
+  const inspectorData=getInspectorData();
   const items=lines.map((sn,index)=>{
     const paired=pairRows[index]||{};
     const rowSeal=activeCompany==='GEG'?normalizeBatchVoidSeal({value:paired.detail||''}):'';
@@ -3717,7 +3714,7 @@ function switchToDrop(){if(_poRepairMode){detachPoRepairMode(true);showCustomAct
 function switchToCustom(){if(_poRepairMode)detachPoRepairMode(true);showCustomAction();document.getElementById('actionCustom').focus();}
 function getAction(){return document.getElementById('actionDropRow').style.display!=='none'?document.getElementById('actionDrop').value:document.getElementById('actionCustom').value.trim();}
 function toggleOptional(){optionalVisible=!optionalVisible;document.getElementById('optionalFields').classList.toggle('vis',optionalVisible);document.getElementById('optToggleBtn').textContent=(optionalVisible?'▲ ':'▼ ')+'Check Request (錯誤描述 / Box ID)';}
-function getWynnInspectorData(){return activeCompany==='Wynn'?{inspector:optionalVisible?document.getElementById('inspector').value.trim():''}:{};}
+function getInspectorData(){return {inspector:optionalVisible?document.getElementById('inspector').value.trim():''};}
 function getGegSealData(){
   if(activeCompany!=='GEG')return {};
   return {
@@ -3742,7 +3739,7 @@ async function addToQueue(){
   const sealData=getGegSealData();
   const locationData=getMgmLocationData();
   const aaTagData=getMgmAaTagData();
-  const inspectorData=getWynnInspectorData();
+  const inspectorData=getInspectorData();
   const poRepairData=_poRepairMode&&_poRepairSelected?{poRepair:{record:{..._poRepairSelected},lockedAction:action}}:{};
   const item={sn,model,reason,action,errorDescription,boxId,...sealData,...locationData,...aaTagData,...inspectorData,...poRepairData,...bpData};
   if(!requestSameDayDuplicateConfirmation([item],false))doAddToQueue(item);
@@ -3878,7 +3875,7 @@ function renderQueue(){
         <div class="ef-row"><label>New Void Seal</label><input id="eq-new-void-seal" type="text" value="${esc(editTemp.newVoidSeal)}" placeholder="如有更換才填"></div>`:'';
       const aaTagEditHtml=activeCompany==='MGM'?`<div class="ef-row"><label>AA Tag</label><input id="eq-aa-tag" type="text" value="${esc(editTemp.aaTag)}" placeholder="TAE0000" inputmode="numeric"></div>`:'';
       const locationEditHtml=activeCompany==='MGM'?`<div class="ef-row"><label>場所</label><select id="eq-location"><option value="Floor"${editTemp.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${editTemp.location==='Workshop'?' selected':''}>場下</option></select></div>`:'';
-      const inspectorEditHtml=activeCompany==='Wynn'?`<div class="ef-row"><label>調查人員</label><input id="eq-inspector" type="text" value="${esc(editTemp.inspector)}" placeholder="選填"></div>`:'';
+      const inspectorEditHtml=`<div class="ef-row"><label>調查人員</label><input id="eq-inspector" type="text" value="${esc(editTemp.inspector)}" placeholder="選填"></div>`;
       return `<div class="q-item q-editing"><div class="q-edit-form">
         <div class="q-edit-top"><label class="q-select-label"><input class="q-select" type="checkbox" onchange="toggleQueueSelect(${i},this.checked)"${checked}> 選取</label></div>
         <div class="ef-row"><label>機身號碼</label><input id="eq-sn" class="sn-input" type="text" value="${esc(editTemp.sn)}" inputmode="numeric"></div>
@@ -3907,7 +3904,7 @@ function renderQueue(){
         ${item.company==='GEG'&&(item.voidSeal||item.newVoidSeal)?`<div class="q-extra">Void：${esc(item.voidSeal||'-')}${item.newVoidSeal?' → '+esc(item.newVoidSeal):''}</div>`:''}
         ${item.company==='MGM'&&item.aaTag?`<div class="q-extra">AA Tag：${esc(item.aaTag)}</div>`:''}
         ${item.company==='MGM'&&item.location?`<div class="q-extra">場所：${item.location==='Floor'?'場上':'場下'}</div>`:''}
-        ${item.company==='Wynn'&&item.inspector?`<div class="q-extra">Inspector：${esc(item.inspector)}</div>`:''}
+        ${item.inspector?`<div class="q-extra">Inspector：${esc(item.inspector)}</div>`:''}
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
         ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
         ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
@@ -4107,7 +4104,7 @@ function dashFieldRows(record, rowCompany){
     ['Serial No.',serialDisplay],
     ...(rowCompany==='GEG'?[['Void Seal',record.voidSeal],['New Void Seal',record.newVoidSeal]]:[]),
     ...(rowCompany==='MGM'?[['Location',record.location]]:[]),
-    ...(rowCompany==='Wynn'?[['Inspector',record.inspector]]:[]),
+    ['Inspector',record.inspector],
     ['Reason',record.reason],
     ['Action Taken',record.actionTaken],
     ['Error Description',record.errorDescription],
@@ -4187,7 +4184,7 @@ function dashboardEditFields(record,comboPrefix){
     ${dashEditField('Serial No.','serialNo',record.serialNo)}
     ${rowCompany==='GEG'?dashEditField('Void Seal','voidSeal',record.voidSeal)+dashEditField('New Void Seal','newVoidSeal',record.newVoidSeal):''}
     ${rowCompany==='MGM'?`<div><label>Location</label><select data-card-field="location"><option value=""${!record.location?' selected':''}>未設定</option><option value="Floor"${record.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${record.location==='Workshop'?' selected':''}>場下</option></select></div>`:''}
-    ${rowCompany==='Wynn'?dashEditField('Inspector','inspector',record.inspector):''}
+    ${dashEditField('Inspector','inspector',record.inspector)}
     ${dashEditCombo('Reason','reason',record.reason,comboPrefix)}
     ${dashEditCombo('Action Taken','actionTaken',record.actionTaken,comboPrefix)}
     ${dashEditField('Error Description','errorDescription',record.errorDescription)}
@@ -4425,7 +4422,7 @@ function exportColumns(){
   const cols=[['company','Company'],['casino','CASINO'],['date','DATE'],['poNumber','PO Number'],['model','Model'],['serialNo','Serial No.']];
   if(currentDashboardCompany==='GEG')cols.push(['voidSeal','Void Seal'],['newVoidSeal','New Void Seal']);
   if(currentDashboardCompany==='MGM')cols.push(['location','Location']);
-  if(currentDashboardCompany==='Wynn')cols.push(['inspector','Inspector']);
+  cols.push(['inspector','Inspector']);
   return cols.concat([['reason','Reason'],['actionTaken','Action Taken'],['errorDescription','Error Description'],['boxId','Box ID']]);
 }
 let _pendingExportType='',_pendingExportScope='dashboard';
