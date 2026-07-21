@@ -1432,8 +1432,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.21-05';
-const _APP_VERSION='v1.030';
+const _APP_BUMP='2026.07.21-06';
+const _APP_VERSION='v1.031';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3944,7 +3944,7 @@ document.getElementById('dashCasino').addEventListener('change',updateDashboardS
   input.addEventListener('input',syncDashDateButtons);
 });
 document.getElementById('dashSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loadDashboard();}});
-document.getElementById('dashSearch').addEventListener('input',function(){if(!isDashFuzzy())this.value=this.value.replace(/\D/g,'').slice(0,4);});
+document.getElementById('dashSearch').addEventListener('input',()=>validateDashSearchInput(true));
 function fmtDate(s){const[y,m,d]=s.split('-');return`${y}/${m.padStart(2,'0')}/${d.padStart(2,'0')}`;}
 function dashDateToInput(s){
   const parts=String(s||'').replace(/\//g,'-').split('-');
@@ -3965,6 +3965,15 @@ function syncDashDateButtons(){
 }
 function clearDashDate(id){document.getElementById(id).value='';syncDashDateButtons();}
 function isDashFuzzy(){return document.getElementById('dashFuzzy')?.classList.contains('active');}
+function validateDashSearchInput(notify=false){
+  const search=document.getElementById('dashSearch');
+  if(!search||isDashFuzzy()){search?.removeAttribute('aria-invalid');return true;}
+  const value=search.value.trim();
+  const message=/\D/.test(value)?'如要搜尋文字，請先打開模糊搜尋':value.length>4?'請輸入最多 4 位數字的準確 S/N':'';
+  search.setAttribute('aria-invalid',message?'true':'false');
+  if(message&&notify)showToast(message,'err');
+  return !message;
+}
 function setDashFuzzy(on){
   const btn=document.getElementById('dashFuzzy');
   if(!btn)return;
@@ -3979,7 +3988,8 @@ function syncDashboardSearchMode(){
   if(!search)return;
   search.placeholder=fuzzy?'機身號碼、PO、原因、處理...':'請輸入準確S/N';
   if(fuzzy){search.removeAttribute('maxlength');search.removeAttribute('inputmode');}
-  else{search.value=search.value.replace(/\D/g,'').slice(0,4);search.maxLength=4;search.inputMode='numeric';}
+  else{search.maxLength=4;search.inputMode='numeric';}
+  validateDashSearchInput(!fuzzy);
 }
 function clearDashboardResults(message='按「搜尋」載入資料。'){
   dashboardRecords=[];
@@ -4025,7 +4035,7 @@ async function loadDashboard(page=1){
   }
   const searchText=document.getElementById('dashSearch').value.trim();
   const fuzzy=isDashFuzzy();
-  if(!fuzzy&&searchText&&!/^\d{1,4}$/.test(searchText)){showToast('請輸入最多 4 位數字的準確 S/N','err');return;}
+  if(!validateDashSearchInput(true))return;
   const rowsEl=document.getElementById('dashRows');
   const summary=document.getElementById('dashSummary');
   currentDashboardCompany=venueFilter.company;
