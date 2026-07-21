@@ -1432,8 +1432,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.21-06';
-const _APP_VERSION='v1.031';
+const _APP_BUMP='2026.07.22-01';
+const _APP_VERSION='v1.032';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2756,7 +2756,7 @@ function setQueueAddBusy(busy,batch=false){
   if(singleBtn){singleBtn.disabled=busy;singleBtn.textContent=busy&&!batch?'檢查重複記錄中...':'＋ 加入待提交';}
   if(batchBtn){batchBtn.disabled=busy;batchBtn.textContent=busy&&batch?'檢查重複記錄中...':'＋ 全部加入待提交';}
 }
-let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0,_repeatRecords=[],_repeatRecordsEditingIdx=-1,_repeatRecordsSerial='';
+let dashboardRecords=[],dashboardPage=1,dashboardTotalPages=1,dashboardTotalMatches=0,dashboardEditingIdx=-1,dashboardRequest=null,dashboardLastQuery=null,_repeatRecordsRequestToken=0,_repeatRecords=[],_repeatRecordsEditingIdx=-1,_repeatRecordsSerial='',_repeatRecordsSource='dashboard';
 let dashboardSelectedRecords=new Map(),dashboardPageSize=10,dashboardCardColumns=1;
 let _schedulePeopleRequestToken=0,_schedulePeopleController=null;
 let selectedQueueIdxs=new Set();
@@ -3171,7 +3171,7 @@ function addBrokenPartsListRow(){
 function renderBrokenPartsListCard(record,index){
   if(index===_bpListEditingIndex)return renderBrokenPartsListEditCard(record,index);
   const number=(_bpListPage-1)*_bpListPageSize+index+1;
-  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><button class="dash-card-btn" onclick="startBrokenPartsListEdit(${index})" type="button">編輯</button></div>${brokenPartsRowsHtml(record)}</section>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openBrokenPartsRecordHistory('editor',${index})" type="button">查看記錄</button><button class="dash-card-btn" onclick="startBrokenPartsListEdit(${index})" type="button">編輯</button></div></div>${brokenPartsRowsHtml(record)}</section>`;
 }
 function renderBrokenPartsListEditCard(record,index){
   const number=(_bpListPage-1)*_bpListPageSize+index+1;
@@ -3308,7 +3308,7 @@ function brokenPartsPageValueHtml(key,value){
 function renderBrokenPartsPageCard(record,index){
   if(index===_bpPageEditingIndex)return renderBrokenPartsPageEditCard(record,index);
   const number=(_bpPage-1)*_bpPageSize+index+1;
-  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><button class="dash-card-btn" onclick="startBrokenPartsPageEdit(${index})" type="button">編輯</button></div>${brokenPartsRowsHtml(record,_bpPageVisibleFields)}</section>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openBrokenPartsRecordHistory('page',${index})" type="button">查看記錄</button><button class="dash-card-btn" onclick="startBrokenPartsPageEdit(${index})" type="button">編輯</button></div></div>${brokenPartsRowsHtml(record,_bpPageVisibleFields)}</section>`;
 }
 function renderBrokenPartsPageRows(){
   const root=document.getElementById('bpPageRows');if(!root)return;
@@ -4323,8 +4323,10 @@ async function saveRepeatRecord(index,button){
     const data=await postGasJson({action:'updateRecord',record,original});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     const updated={...original,...record};_repeatRecords[index]=updated;_repeatRecordsEditingIdx=-1;
-    const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0)dashboardRecords[outerIndex]=updated;
-    renderRepeatRecords();renderDashboardPage();showToast('✓ 記錄已更新');
+    if(_repeatRecordsSource==='dashboard'){
+      const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0)dashboardRecords[outerIndex]=updated;
+    }
+    renderRepeatRecords();if(_repeatRecordsSource==='dashboard')renderDashboardPage();showToast('✓ 記錄已更新');
   }catch(e){button.disabled=false;button.textContent='儲存';showToast(e.message||'儲存失敗','err');}
 }
 async function deleteRepeatRecord(index,button){
@@ -4335,25 +4337,42 @@ async function deleteRepeatRecord(index,button){
     const record={...original,company:original.company||currentDashboardCompany||activeCompany};
     const data=await postGasJson({action:'deleteRecord',record});
     if(!data.success)throw new Error(data.message||'刪除失敗');
-    _repeatRecords.splice(index,1);_repeatRecordsEditingIdx=-1;dashboardSelectedRecords.delete(String(original.rowNumber));
-    const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0){dashboardRecords.splice(outerIndex,1);dashboardTotalMatches=Math.max(0,dashboardTotalMatches-1);}
-    renderRepeatRecords();renderDashboardPage();showToast('✓ 記錄已刪除');
-    if(parseDashVenueFilter().company)await loadDashboard(dashboardPage);
+    _repeatRecords.splice(index,1);_repeatRecordsEditingIdx=-1;
+    if(_repeatRecordsSource==='dashboard'){
+      dashboardSelectedRecords.delete(String(original.rowNumber));
+      const outerIndex=dashboardRecords.findIndex(item=>String(item.rowNumber)===String(original.rowNumber));if(outerIndex>=0){dashboardRecords.splice(outerIndex,1);dashboardTotalMatches=Math.max(0,dashboardTotalMatches-1);}
+    }
+    renderRepeatRecords();if(_repeatRecordsSource==='dashboard')renderDashboardPage();showToast('✓ 記錄已刪除');
+    if(_repeatRecordsSource==='dashboard'&&parseDashVenueFilter().company)await loadDashboard(dashboardPage);
   }catch(e){button.disabled=false;button.textContent='刪除';showToast(e.message||'刪除失敗','err');}
 }
 async function openRepeatRecords(serialNo){
   const sn=String(serialNo||'').trim();if(!sn||!dashboardLastQuery)return;
+  const company=dashboardLastQuery.company||currentDashboardCompany||activeCompany;
+  const params={...dashboardLastQuery,q:'',serialNo:sn,searchMode:'serial'};
+  return openRecordHistoryModal(sn,company,params,'dashboard','重複維修記錄');
+}
+function openBrokenPartsRecordHistory(scope,index){
+  const record=scope==='page'?_bpPageRecords[index]:_bpListRecords[index];
+  const sn=cleanDashValue(record?.serialNo);
+  if(!sn){showToast('這筆壞件資料沒有機身號碼','err');return;}
+  const company=cleanDashValue(record?.company)||activeCompany;
+  const params={action:'dashboard',company,from:'',to:'',casino:'',model:'',q:'',serialNo:sn,searchMode:'serial'};
+  return openRecordHistoryModal(sn,company,params,'brokenParts','維修記錄');
+}
+async function openRecordHistoryModal(serialNo,company,params,source,titleLabel){
+  const sn=String(serialNo||'').trim();if(!sn||!company)return;
   const token=++_repeatRecordsRequestToken;
   const modal=document.getElementById('repeatRecordsModal');
   const title=document.getElementById('repeatRecordsTitle');
   const rows=document.getElementById('repeatRecordsRows');
-  title.textContent=`S/N ${sn} 重複維修記錄`;rows.innerHTML='<div class="dash-mobile-empty">載入中...</div>';modal.classList.add('show');
-  const params={...dashboardLastQuery,q:'',serialNo:sn,searchMode:'serial'};
-  const loadingToken=showLoadingProgress('重複維修記錄載入中，請稍等...');
+  _repeatRecordsSource=source;
+  title.textContent=`S/N ${sn} ${titleLabel}`;rows.innerHTML='<div class="dash-mobile-empty">載入中...</div>';modal.classList.add('show');
+  const loadingToken=showLoadingProgress(`${titleLabel}載入中，請稍等...`);
   try{
     const records=await fetchPagedRecords((page,pageSize)=>new URLSearchParams({...params,page:String(page),pageSize:String(pageSize)}));
     if(token!==_repeatRecordsRequestToken)return;
-    _repeatRecordsSerial=sn;_repeatRecords=records;_repeatRecordsEditingIdx=-1;renderRepeatRecords();
+    _repeatRecordsSerial=sn;_repeatRecords=records.map(record=>({...record,company:record.company||company}));_repeatRecordsEditingIdx=-1;renderRepeatRecords();
   }catch(e){
     if(token===_repeatRecordsRequestToken)rows.innerHTML='<div class="dash-mobile-empty">記錄載入失敗。</div>';
   }finally{hideLoadingProgress(loadingToken);}
