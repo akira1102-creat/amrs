@@ -202,6 +202,7 @@
     .bp-list-waiting{flex:0 0 auto;padding:7px 6px;border:1px solid #30363d;border-radius:8px;background:#21262d;color:#8b949e;font-size:10px;font-weight:800;cursor:pointer}
     .bp-list-waiting.active{background:#1f6feb;border-color:#58a6ff;color:#fff}
     .bp-list-waiting.repaired{background:#238636;border-color:#3fb950;color:#fff}
+    .bp-list-waiting.uod-waiting{background:#6e4b00;border-color:#d29922;color:#f2cc60}
     .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer;margin:4px}
     .bp-list-empty{padding:14px;color:#8b949e;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
     .bp-list-filters{display:grid;grid-template-columns:repeat(6,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
@@ -384,6 +385,11 @@
     #bpFields{margin-top:4px;padding:12px 14px;background:#0d1117;border-radius:14px;border:1px solid #21262d}
     .bp-day-btn{width:100%;padding:9px 12px;font-size:13px;font-weight:600;background:#21262d;border:1px solid #30363d;border-radius:10px;color:#e6edf3;cursor:pointer;text-align:center}
     .bp-day-btn.active{border-color:#388bfd;color:#58a6ff}
+    .bp-uod-block{margin-bottom:10px}
+    .bp-uod-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:stretch}
+    .bp-uod-entry input{min-width:0}
+    .bp-uod-wait-btn{padding:9px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#8b949e;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    .bp-uod-wait-btn.active{background:#6e4b00;border-color:#d29922;color:#f2cc60;box-shadow:0 0 0 2px rgba(210,153,34,.18)}
     .bp-update-btn{padding:3px 9px;font-size:13px;background:#21262d;border:1px solid #30363d;border-radius:8px;color:#8b949e;cursor:pointer;line-height:1.4}
     .bp-update-btn:not(:disabled):hover{color:#e6edf3;border-color:#484f58}
     .bp-update-btn:disabled{color:#484f58;cursor:not-allowed}
@@ -555,6 +561,8 @@
     .bp-page-status{display:inline-block;margin-left:8px;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800}
     .bp-page-status.waiting{background:#21262d;color:#8b949e}
     .bp-page-status.repaired{background:#0b3d20;color:#3fb950;border:1px solid #238636}
+    .bp-page-status.uod-waiting{background:#3d2d00;color:#f2cc60;border:1px solid #9e6a03}
+    .bp-page-status.uod-unlocked{background:#0b3d20;color:#3fb950;border:1px solid #238636}
     .monthly-page-shell{max-width:1100px;margin:0 auto}
     .monthly-page-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
     .monthly-page-title{font-size:18px;font-weight:800;color:#e6edf3}
@@ -881,7 +889,7 @@
       <input id="bpFilterCasino" type="text" placeholder="場地">
       <input id="bpFilterSerial" type="text" inputmode="numeric" enterkeyhint="search" placeholder="S/N" onkeydown="if(event.key==='Enter')loadBrokenPartsListEditor(1)">
       <input id="bpFilterParts" type="text" placeholder="零件編號">
-      <select id="bpFilterStatus" onchange="loadBrokenPartsListEditor(1)"><option value="">全部狀態</option><option value="waiting">等待中</option><option value="repaired">已完成</option></select>
+      <select id="bpFilterStatus" onchange="loadBrokenPartsListEditor(1)"><option value="">全部狀態</option><option value="waiting">等待零件</option><option value="repaired">已完成維修</option><option value="uod-waiting">待 UOD 解鎖</option><option value="uod-unlocked">已解鎖 UOD</option></select>
       <select id="bpFilterSort" onchange="loadBrokenPartsListEditor(1)"><option value="newest">最新優先</option><option value="oldest">最舊優先</option></select>
       <select id="bpListPageSize" onchange="setBpListPageSize(this.value)"><option>10</option><option>30</option><option>50</option><option>80</option><option>100</option></select>
       <button onclick="loadBrokenPartsListEditor(1)" type="button">篩選(搜尋)</button>
@@ -1121,7 +1129,7 @@
   </div>
   <div class="bp-row">
     <input type="checkbox" id="brokenPartsCheck" class="bp-check" onchange="onBrokenPartsChange()">
-    <label for="brokenPartsCheck" class="bp-label">🔧 損壞零件</label>
+    <label for="brokenPartsCheck" class="bp-label">🔧 損壞零件 / UOD 解鎖</label>
     <button class="mini-edit-btn" onclick="openBrokenPartsListEditor()" type="button">損壞零件列表</button>
   </div>
   <div id="bpFields" style="display:none">
@@ -1153,6 +1161,13 @@
         <label>維修日</label>
         <button class="bp-day-btn" id="bpRepairDayBtn" onclick="toggleBpRepairDay()" type="button">等待</button>
         <input type="date" id="bpRepairDayDate" style="display:none;margin-top:6px">
+      </div>
+    </div>
+    <div class="bp-uod-block">
+      <label>UOD 解鎖日期</label>
+      <div class="bp-uod-entry">
+        <input type="date" id="bpUodUnlockDate" onclick="openDatePicker(this)" onchange="setBpUodUnlockDate()">
+        <button class="bp-uod-wait-btn" id="bpUodWaitBtn" onclick="toggleBpUodWaiting()" type="button" aria-pressed="false">等待解鎖</button>
       </div>
     </div>
     <button class="opt-toggle" id="bpRemarkBtn" onclick="toggleBpRemark()" type="button" style="margin-top:0">▼ 備註</button>
@@ -1340,7 +1355,7 @@
       <select id="bpPageCasino" onchange="loadBrokenPartsPage(1)"><option value="">全部場地</option></select>
       <input id="bpPageSerial" type="text" inputmode="numeric" enterkeyhint="search" placeholder="S/N" onkeydown="if(event.key==='Enter')loadBrokenPartsPage(1)">
       <input id="bpPageParts" type="text" placeholder="零件編號">
-      <select id="bpPageStatus" onchange="loadBrokenPartsPage(1)"><option value="">全部狀態</option><option value="waiting">等待中</option><option value="repaired">已完成</option></select>
+      <select id="bpPageStatus" onchange="loadBrokenPartsPage(1)"><option value="">全部狀態</option><option value="waiting">等待零件</option><option value="repaired">已完成維修</option><option value="uod-waiting">待 UOD 解鎖</option><option value="uod-unlocked">已解鎖 UOD</option></select>
       <select id="bpPageSort" onchange="loadBrokenPartsPage(1)"><option value="newest">最新優先</option><option value="oldest">最舊優先</option></select>
       <button onclick="loadBrokenPartsPage(1)" type="button">篩選(搜尋)</button>
     </div>
@@ -1408,8 +1423,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.21-01';
-const _APP_VERSION='v1.026';
+const _APP_BUMP='2026.07.21-02';
+const _APP_VERSION='v1.027';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2856,6 +2871,7 @@ if(_retryQueue.length&&navigator.onLine)_scheduleRetry(1200);
 let _partsCodes=[];
 let _partsLanguage=localStorage.getItem('_ml_parts_language')==='en'?'en':'jp';
 let _bpRepairDayMode='waiting';
+let _bpUodUnlockMode='none';
 let _bpRemarkVisible=false;
 let _bpListRecords=[];
 let _bpListPage=1,_bpListTotalPages=1,_bpListTotalMatches=0,_bpListPageSize=10,_bpListEditingIndex=-1;
@@ -2965,6 +2981,20 @@ function toggleBpRepairDay(){
     inp.style.display='none';btn.textContent='等待';btn.classList.remove('active');
   }
 }
+function setBpUodUnlockDate(){
+  const input=document.getElementById('bpUodUnlockDate');
+  _bpUodUnlockMode=input.value?'date':'none';
+  const btn=document.getElementById('bpUodWaitBtn');
+  btn.classList.remove('active');btn.setAttribute('aria-pressed','false');
+}
+function toggleBpUodWaiting(){
+  const waiting=_bpUodUnlockMode!=='waiting';
+  _bpUodUnlockMode=waiting?'waiting':'none';
+  const input=document.getElementById('bpUodUnlockDate');
+  const btn=document.getElementById('bpUodWaitBtn');
+  if(waiting)input.value='';
+  btn.classList.toggle('active',waiting);btn.setAttribute('aria-pressed',String(waiting));
+}
 function toggleBpRemark(){
   _bpRemarkVisible=!_bpRemarkVisible;
   document.getElementById('bpRemarkRow').style.display=_bpRemarkVisible?'block':'none';
@@ -2972,10 +3002,12 @@ function toggleBpRemark(){
 }
 function _getBpData(){
   if(!document.getElementById('brokenPartsCheck').checked)return null;
-  const code=document.getElementById('itemCode').value;
+  const code=document.getElementById('itemCode').value.trim();
   const part=_partsCodes.find(p=>p.code===code)||{};
-  const repairDay=_bpRepairDayMode==='waiting'?'Waiting':fmtDate(document.getElementById('bpRepairDayDate').value);
-  return{brokenParts:code,bpDesc:part.desc||'',bpColC:part.colC||'',bpQty:document.getElementById('bpQty').value,bpRepairDay:repairDay,bpRemark:_bpRemarkVisible?document.getElementById('bpRemark').value.trim():''};
+  const repairDay=code?(_bpRepairDayMode==='waiting'?'Waiting':fmtDate(document.getElementById('bpRepairDayDate').value)):'';
+  const uodDate=document.getElementById('bpUodUnlockDate').value;
+  const bpUodUnlockDay=_bpUodUnlockMode==='waiting'?'Wait for Unlock':_bpUodUnlockMode==='date'&&uodDate?fmtDate(uodDate):'';
+  return{brokenParts:code,bpDesc:code?(part.desc||''):'',bpColC:code?(part.colC||''):'',bpQty:code?document.getElementById('bpQty').value:'',bpRepairDay:repairDay,bpUodUnlockDay,bpRemark:_bpRemarkVisible?document.getElementById('bpRemark').value.trim():''};
 }
 function _resetBpFields(){
   document.getElementById('brokenPartsCheck').checked=false;
@@ -2986,6 +3018,10 @@ function _resetBpFields(){
   document.getElementById('bpRepairDayBtn').textContent='等待';
   document.getElementById('bpRepairDayBtn').classList.remove('active');
   document.getElementById('bpRepairDayDate').style.display='none';
+  _bpUodUnlockMode='none';
+  document.getElementById('bpUodUnlockDate').value='';
+  document.getElementById('bpUodWaitBtn').classList.remove('active');
+  document.getElementById('bpUodWaitBtn').setAttribute('aria-pressed','false');
   _bpRemarkVisible=false;
   document.getElementById('bpRemarkRow').style.display='none';
   document.getElementById('bpRemarkBtn').textContent='▼ 備註';
@@ -2995,7 +3031,7 @@ function closeBrokenPartsListEditor(){document.getElementById('bpListModal').cla
 function bpListFilterSerial(){return document.getElementById('bpFilterSerial').value.trim();}
 function bpListBlankRecord(){
   const sn=bpListFilterSerial()||document.getElementById('serialNo').value.trim();
-  return {rowNumber:'',casino:document.getElementById('casino').value,model:document.getElementById('model').value,serialNo:sn,brokenParts:'',bpDesc:'',bpColC:'',bpQty:'1',bpRepairDay:'Waiting',date:fmtDate(document.getElementById('date').value),bpRemark:''};
+  return {rowNumber:'',casino:document.getElementById('casino').value,model:document.getElementById('model').value,serialNo:sn,brokenParts:'',bpDesc:'',bpColC:'',bpQty:'',bpRepairDay:'',date:fmtDate(document.getElementById('date').value),bpRemark:'',bpUodUnlockDay:''};
 }
 async function openBrokenPartsListEditor(){
   const modal=document.getElementById('bpListModal');
@@ -3070,25 +3106,28 @@ function bpListDateValue(value){
   const match=String(value||'').trim().match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})$/);
   return match?`${match[1]}-${match[2].padStart(2,'0')}-${match[3].padStart(2,'0')}`:'';
 }
-function bpListDateField(field,value,allowWaiting=false){
-  const waiting=allowWaiting&&(!String(value||'').trim()||/^waiting$/i.test(String(value||'').trim()));
-  const repaired=allowWaiting&&!waiting&&!!bpListDateValue(value);
-  return `<div class="bp-list-date" data-waiting="${waiting}">
+function bpListDateField(field,value,waitValue='',defaultWaiting=false){
+  const clean=String(value||'').trim();
+  const waiting=!!waitValue&&((defaultWaiting&&!clean)||clean.toLowerCase()===waitValue.toLowerCase());
+  const completed=!!waitValue&&!waiting&&!!bpListDateValue(value);
+  const completedText=field==='bpUodUnlockDay'?'UOD Unlocked':'Repaired';
+  const waitingClass=field==='bpUodUnlockDay'&&waiting?' uod-waiting':'';
+  return `<div class="bp-list-date" data-waiting="${waiting}" data-wait-value="${esc(waitValue)}" data-completed-text="${esc(completedText)}">
     <input type="date" data-bp-field="${esc(field)}" value="${waiting?'':esc(bpListDateValue(value))}" onclick="openDatePicker(this)" onchange="setBpListEditorDate(this)">
-    ${allowWaiting?`<button class="bp-list-waiting${waiting?' active':repaired?' repaired':''}" onclick="toggleBpListEditorWaiting(this)" type="button">${repaired?'Repaired':'Waiting'}</button>`:''}
+    ${waitValue?`<button class="bp-list-waiting${waiting?' active'+waitingClass:completed?' repaired':''}" onclick="toggleBpListEditorWaiting(this)" type="button">${completed?completedText:waitValue}</button>`:''}
   </div>`;
 }
 function setBpListEditorDate(input){
   const wrap=input.closest('.bp-list-date');if(!wrap)return;
   wrap.dataset.waiting='false';
   const btn=wrap.querySelector('.bp-list-waiting');if(!btn)return;
-  btn.classList.remove('active');btn.classList.toggle('repaired',!!input.value);btn.textContent=input.value?'Repaired':'Waiting';
+  btn.classList.remove('active','uod-waiting');btn.classList.toggle('repaired',!!input.value);btn.textContent=input.value?wrap.dataset.completedText:wrap.dataset.waitValue;
 }
 function toggleBpListEditorWaiting(btn){
   const wrap=btn.closest('.bp-list-date');
   const waiting=wrap.dataset.waiting!=='true';
   wrap.dataset.waiting=String(waiting);
-  btn.classList.toggle('active',waiting);btn.classList.remove('repaired');btn.textContent='Waiting';
+  btn.classList.toggle('active',waiting);btn.classList.toggle('uod-waiting',waiting&&wrap.dataset.waitValue==='Wait for Unlock');btn.classList.remove('repaired');btn.textContent=wrap.dataset.waitValue;
   if(waiting)wrap.querySelector('input').value='';
   else wrap.querySelector('input').showPicker?.();
 }
@@ -3135,7 +3174,7 @@ async function deleteBrokenPartsListRecord(index,btn){
 const BP_PAGE_FIELDS=[
   ['casino','CASINO'],['model','Model'],['serialNo','Serial No.'],['brokenParts','Parts No.'],
   ['bpDesc','Required Parts(JP)'],['bpColC','Required Parts(EN)'],['bpQty','Qty'],
-  ['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark']
+  ['bpRepairDay','Repair Day'],['date','Found Day'],['bpRemark','Remark'],['bpUodUnlockDay','UOD Unlock Day']
 ];
 function brokenPartsRowsHtml(record,visibleFields=null){
   return BP_PAGE_FIELDS
@@ -3145,12 +3184,12 @@ function brokenPartsRowsHtml(record,visibleFields=null){
 }
 function brokenPartsEditInput(label,key,value){return `<div><label>${esc(label)}</label><input data-bp-card-field="${esc(key)}" value="${esc(value??'')}"></div>`;}
 function brokenPartsEditFieldsHtml(record){
-  return `${brokenPartsEditInput('CASINO','casino',record.casino)}${brokenPartsEditInput('Model','model',record.model)}${brokenPartsEditInput('Serial No.','serialNo',record.serialNo)}${brokenPartsEditInput('Parts No.','brokenParts',record.brokenParts)}${brokenPartsEditInput('Required Parts(JP)','bpDesc',record.bpDesc)}${brokenPartsEditInput('Required Parts(EN)','bpColC',record.bpColC)}${brokenPartsEditInput('Qty','bpQty',record.bpQty)}<div><label>Repair Day</label>${bpListDateField('bpRepairDay',record.bpRepairDay,true)}</div><div><label>Found Day</label>${bpListDateField('date',record.date)}</div>${brokenPartsEditInput('Remark','bpRemark',record.bpRemark)}`;
+  return `${brokenPartsEditInput('CASINO','casino',record.casino)}${brokenPartsEditInput('Model','model',record.model)}${brokenPartsEditInput('Serial No.','serialNo',record.serialNo)}${brokenPartsEditInput('Parts No.','brokenParts',record.brokenParts)}${brokenPartsEditInput('Required Parts(JP)','bpDesc',record.bpDesc)}${brokenPartsEditInput('Required Parts(EN)','bpColC',record.bpColC)}${brokenPartsEditInput('Qty','bpQty',record.bpQty)}<div><label>Repair Day</label>${bpListDateField('bpRepairDay',record.bpRepairDay,'Waiting',!!record.brokenParts)}</div><div><label>Found Day</label>${bpListDateField('date',record.date)}</div>${brokenPartsEditInput('Remark','bpRemark',record.bpRemark)}<div><label>UOD Unlock Day</label>${bpListDateField('bpUodUnlockDay',record.bpUodUnlockDay,'Wait for Unlock')}</div>`;
 }
 function collectBrokenPartsCardRecord(card,original){
   const record={...original};
   card.querySelectorAll('[data-bp-card-field]').forEach(input=>{record[input.dataset.bpCardField]=input.value.trim();});
-  card.querySelectorAll('[data-bp-field]').forEach(input=>{const field=input.dataset.bpField;record[field]=field==='bpRepairDay'&&input.closest('.bp-list-date')?.dataset.waiting==='true'?'Waiting':input.value.replace(/-/g,'/');});
+  card.querySelectorAll('[data-bp-field]').forEach(input=>{const wrap=input.closest('.bp-list-date');record[input.dataset.bpField]=wrap?.dataset.waiting==='true'?wrap.dataset.waitValue:input.value.replace(/-/g,'/');});
   return record;
 }
 let _bpPageRecords=[],_bpPage=1,_bpPageTotalPages=1,_bpPageTotalMatches=0,_bpPageSize=10,_bpPageEditingIndex=-1,_bpPageRequest=null,_bpPageCardColumns=1;
@@ -3163,6 +3202,7 @@ function saveListPreferences(){
       brokenPartsModalPageSize:_bpListPageSize,
       brokenPartsPageSize:_bpPageSize,
       brokenPartsCardColumns:_bpPageCardColumns,
+      brokenPartsFieldVersion:2,
       brokenPartsVisibleFields:[..._bpPageVisibleFields]
     }));
   }catch(e){}
@@ -3179,6 +3219,7 @@ function restoreListPreferences(){
   if(Array.isArray(saved.brokenPartsVisibleFields)){
     const validFields=new Set(BP_PAGE_FIELDS.map(([key])=>key));
     _bpPageVisibleFields=new Set(saved.brokenPartsVisibleFields.filter(key=>validFields.has(key)));
+    if(saved.brokenPartsFieldVersion!==2)_bpPageVisibleFields.add('bpUodUnlockDay');
   }
   document.getElementById('dashPageSize').value=String(dashboardPageSize);
   document.getElementById('dashCardColumns').value=String(dashboardCardColumns);
@@ -3225,9 +3266,15 @@ async function loadBrokenPartsPage(page=_bpPage){
 }
 function brokenPartsPageValueHtml(key,value){
   const clean=cleanDashValue(value);
-  if(key!=='bpRepairDay')return esc(clean||'—');
-  if(!clean||/^waiting$/i.test(clean))return '<span class="bp-page-status waiting">Waiting</span>';
-  return `${esc(clean)}<span class="bp-page-status repaired">Repaired</span>`;
+  if(key==='bpRepairDay'){
+    if(!clean||/^waiting$/i.test(clean))return '<span class="bp-page-status waiting">Waiting</span>';
+    return `${esc(clean)}<span class="bp-page-status repaired">Repaired</span>`;
+  }
+  if(key==='bpUodUnlockDay'){
+    if(/^wait for unlock$/i.test(clean))return '<span class="bp-page-status uod-waiting">Wait for Unlock</span>';
+    return `${esc(clean)}<span class="bp-page-status uod-unlocked">UOD Unlocked</span>`;
+  }
+  return esc(clean||'—');
 }
 function renderBrokenPartsPageCard(record,index){
   if(index===_bpPageEditingIndex)return renderBrokenPartsPageEditCard(record,index);
@@ -3590,7 +3637,7 @@ async function loadPoRepairRecords(){
     const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
     if(token!==_poRepairToken||!_poRepairMode)return;
     if(!data.success)throw new Error(data.message||'載入失敗');
-    _poRepairRecords=(data.records||[]).filter(record=>!String(record.bpRepairDay||'').trim()||/^waiting$/i.test(String(record.bpRepairDay||'').trim()));
+    _poRepairRecords=(data.records||[]).filter(record=>record.brokenParts&&(!String(record.bpRepairDay||'').trim()||/^waiting$/i.test(String(record.bpRepairDay||'').trim())));
     renderPoRepairRows();
   }catch(e){
     if(token===_poRepairToken)document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">損壞零件列表載入失敗。</div>';
@@ -3832,6 +3879,7 @@ function renderQueue(){
         ${item.errorDescription?`<div class="q-extra">✎ ${esc(item.errorDescription)}</div>`:''}
         ${item.boxId?`<div class="q-extra">Box：${esc(item.boxId)}</div>`:''}
         ${item.brokenParts?`<div class="q-extra">🔧 ${esc(item.brokenParts)}${item.bpQty?' ×'+item.bpQty:''}${item.bpRepairDay?' · '+esc(item.bpRepairDay):''}</div>`:''}
+        ${item.bpUodUnlockDay?`<div class="q-extra">🔓 UOD：${esc(item.bpUodUnlockDay)}</div>`:''}
         ${item.poRepair?`<div class="q-extra" style="color:#3fb950">提交時同步更新 Repair Day</div>`:''}
       </div>
       <button class="q-edit-icon" onclick="startEditQueue(${i})" title="編輯" type="button">✏️</button>
@@ -4197,7 +4245,7 @@ function renderDashboardInsights(stats,history){
     <div class="dash-insight"><div class="dash-insight-label">場地分佈</div><div class="dash-insight-value">${list(stats.topCasinos)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">有重複維修 S/N</div><div class="dash-insight-value">${repeatLinks(stats.repeatSerials)}</div></div>`;
   if(history){
-    const parts=(history.parts||[]).map(p=>`${esc(p.brokenParts||'未填編號')} · ${esc(p.bpRepairDay||'未設定')} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
+    const parts=(history.parts||[]).map(p=>`${esc(p.brokenParts||'沒有使用零件')} · ${esc(p.bpRepairDay||'未設定')}${p.bpUodUnlockDay?' · UOD '+esc(p.bpUodUnlockDay):''} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
     html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件履歷：<br>${parts}</div></div>`;
   }
   el.innerHTML=html;el.classList.add('show');
@@ -4533,7 +4581,7 @@ async function doSubmit(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   if(ensureSubmissionIds(queue))saveQueue();
-  const records=queue.map(item=>({submissionId:item.submissionId,company:item.company||activeCompany,casino:item.casino||casino,date:item.date||fmtDate(date),poNumber:item.poNumber??poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||''}));
+  const records=queue.map(item=>({submissionId:item.submissionId,company:item.company||activeCompany,casino:item.casino||casino,date:item.date||fmtDate(date),poNumber:item.poNumber??poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||'',bpUodUnlockDay:item.bpUodUnlockDay||''}));
   const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem(queueStorageKey(activeCompany));localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
