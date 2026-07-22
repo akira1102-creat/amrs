@@ -570,7 +570,6 @@
     .bp-page-status.uod-unlocked{background:#0b3d20;color:#3fb950;border:1px solid #238636}
     .bp-page-status.holding{background:#0d419d;color:#79c0ff;border:1px solid #58a6ff}
     .bp-page-status.hold-released{background:#0b3d20;color:#3fb950;border:1px solid #238636}
-    .dash-mobile-card.bp-holding{border-color:#58a6ff;box-shadow:inset 4px 0 #1f6feb,0 0 0 1px rgba(88,166,255,.18)}
     .monthly-page-shell{max-width:1100px;margin:0 auto}
     .monthly-page-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
     .monthly-page-title{font-size:18px;font-weight:800;color:#e6edf3}
@@ -885,7 +884,7 @@
 <div id="bpListModal">
   <div id="bpListBox">
     <div class="template-head">
-      <div class="template-title">壞零件列表/UOD</div>
+      <div class="template-title">壞零件/UOD/Hold機 列表</div>
       <div class="bp-list-head-actions">
         <button class="dash-tool-btn" onclick="openBrokenPartsExportDialog('xls','editor')" type="button">Excel</button>
         <button class="dash-tool-btn" onclick="openBrokenPartsExportDialog('pdf','editor')" type="button">PDF</button>
@@ -970,7 +969,7 @@
   <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
   <button class="menu-item" id="monthlyStatsMenuBtn" onclick="showPage('monthlyStats')" type="button">每月統計</button>
   <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
-  <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>壞零件列表/UOD</span><span class="menu-chevron">▼</span></button>
+  <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>壞零件/UOD/Hold機 列表</span><span class="menu-chevron">▼</span></button>
   <div class="menu-sub menu-collapsible" id="brokenPartsCompanyMenu"></div>
 </nav>
 
@@ -1139,7 +1138,7 @@
   <div class="bp-row">
     <input type="checkbox" id="brokenPartsCheck" class="bp-check" onchange="onBrokenPartsChange()">
     <label for="brokenPartsCheck" class="bp-label">🔧 損壞零件 / UOD 解鎖 / Hold機</label>
-    <button class="mini-edit-btn" onclick="openBrokenPartsListEditor()" type="button">壞零件列表/UOD</button>
+    <button class="mini-edit-btn" onclick="openBrokenPartsListEditor()" type="button">壞零件/UOD/Hold機 列表</button>
   </div>
   <div id="bpFields" style="display:none">
     <div class="bp-section-card" id="bpPartsCard">
@@ -1379,7 +1378,7 @@
 
 <div id="brokenPartsPage" class="app-page">
   <div class="card" id="brokenPartsPageCard">
-    <div class="card-title" id="brokenPartsPageTitle">壞零件列表/UOD</div>
+    <div class="card-title" id="brokenPartsPageTitle">壞零件/UOD/Hold機 列表</div>
     <div class="broken-parts-page-controls">
       <select id="bpPageCasino" onchange="loadBrokenPartsPage(1)"><option value="">全部場地</option></select>
       <input id="bpPageSerial" type="text" inputmode="numeric" enterkeyhint="search" placeholder="S/N" onkeydown="if(event.key==='Enter')loadBrokenPartsPage(1)">
@@ -1452,8 +1451,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.22-08';
-const _APP_VERSION='v1.039';
+const _APP_BUMP='2026.07.22-09';
+const _APP_VERSION='v1.040';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3119,7 +3118,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage){
   const serialNo=bpListFilterSerial();
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
   _bpListEditingIndex=-1;
-  const loadingToken=showLoadingProgress('壞零件列表/UOD 載入中，請稍等...');
+  const loadingToken=showLoadingProgress('壞零件/UOD/Hold機 列表載入中，請稍等...');
   try{
     const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize)});
     const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
@@ -3131,7 +3130,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage){
   }catch(e){
     _bpListRecords=[];
     _bpListPage=1;_bpListTotalPages=1;_bpListTotalMatches=0;
-    showToast('壞零件列表/UOD 載入失敗','err');
+    showToast('壞零件/UOD/Hold機 列表載入失敗','err');
   }finally{hideLoadingProgress(loadingToken);}
   renderBrokenPartsListRows();
   updateBpListPager();
@@ -3214,12 +3213,11 @@ function addBrokenPartsListRow(){
 function renderBrokenPartsListCard(record,index){
   if(index===_bpListEditingIndex)return renderBrokenPartsListEditCard(record,index);
   const number=(_bpListPage-1)*_bpListPageSize+index+1;
-  const holding=isBrokenPartsHolding(record);
-  return `<section class="dash-mobile-card${holding?' bp-holding':''}"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openBrokenPartsRecordHistory('editor',${index})" type="button">查看記錄</button><button class="dash-card-btn" onclick="startBrokenPartsListEdit(${index})" type="button">編輯</button></div></div>${brokenPartsRowsHtml(record)}</section>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openBrokenPartsRecordHistory('editor',${index})" type="button">查看記錄</button><button class="dash-card-btn" onclick="startBrokenPartsListEdit(${index})" type="button">編輯</button></div></div>${brokenPartsRowsHtml(record)}</section>`;
 }
 function renderBrokenPartsListEditCard(record,index){
   const number=(_bpListPage-1)*_bpListPageSize+index+1;
-  return `<section class="dash-mobile-card is-editing${isBrokenPartsHolding(record)?' bp-holding':''}" id="bpListEditCard${index}"><div class="dash-mobile-title"><span>── 編輯記錄 ${number} ──</span></div><div class="dash-card-form">${brokenPartsEditFieldsHtml(record)}</div><div class="dash-card-actions"><button class="dash-card-btn danger" onclick="deleteBrokenPartsListRecord(${index},this)" type="button">刪除</button><button class="dash-card-btn" onclick="cancelBrokenPartsListEdit(${index})" type="button">取消</button><button class="dash-card-btn primary" onclick="saveBrokenPartsListRecord(${index},this)" type="button">儲存</button></div></section>`;
+  return `<section class="dash-mobile-card is-editing" id="bpListEditCard${index}"><div class="dash-mobile-title"><span>── 編輯記錄 ${number} ──</span></div><div class="dash-card-form">${brokenPartsEditFieldsHtml(record)}</div><div class="dash-card-actions"><button class="dash-card-btn danger" onclick="deleteBrokenPartsListRecord(${index},this)" type="button">刪除</button><button class="dash-card-btn" onclick="cancelBrokenPartsListEdit(${index})" type="button">取消</button><button class="dash-card-btn primary" onclick="saveBrokenPartsListRecord(${index},this)" type="button">儲存</button></div></section>`;
 }
 function startBrokenPartsListEdit(index){_bpListEditingIndex=index;renderBrokenPartsListRows();}
 function cancelBrokenPartsListEdit(index){if(!_bpListRecords[index]?.rowNumber)_bpListRecords.splice(index,1);_bpListEditingIndex=-1;renderBrokenPartsListRows();}
@@ -3323,12 +3321,12 @@ async function loadBrokenPartsPage(page=_bpPage){
   const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL){showToast('尚未設定網站代號','err');return;}
   _bpPageRequest?.abort();_bpPageRequest=new AbortController();
   _bpPageEditingIndex=-1;
-  document.getElementById('brokenPartsPageTitle').textContent=`${activeCompany} 壞零件列表/UOD`;
+  document.getElementById('brokenPartsPageTitle').textContent=`${activeCompany} 壞零件/UOD/Hold機 列表`;
   document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
   document.getElementById('bpPageSummary').textContent='正在載入資料...';
   const serialNo=document.getElementById('bpPageSerial').value.trim();
   const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize)});
-  const loadingToken=showLoadingProgress('壞零件列表/UOD 載入中，請稍等...');
+  const loadingToken=showLoadingProgress('壞零件/UOD/Hold機 列表載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:_bpPageRequest.signal},45000);
     if(!data.success)throw new Error(data.message||'載入失敗');
@@ -3339,7 +3337,7 @@ async function loadBrokenPartsPage(page=_bpPage){
   }catch(e){
     if(e.name==='AbortError')return;
     _bpPageRecords=[];_bpPage=1;_bpPageTotalPages=1;_bpPageTotalMatches=0;
-    document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入壞零件列表/UOD失敗。</div>';
+    document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入壞零件/UOD/Hold機 列表失敗。</div>';
     document.getElementById('bpPageSummary').textContent='載入失敗';updateBrokenPartsPagePager();
   }finally{hideLoadingProgress(loadingToken);}
 }
@@ -3360,8 +3358,7 @@ function brokenPartsPageValueHtml(key,value,record=null){
 function renderBrokenPartsPageCard(record,index){
   if(index===_bpPageEditingIndex)return renderBrokenPartsPageEditCard(record,index);
   const number=(_bpPage-1)*_bpPageSize+index+1;
-  const holding=isBrokenPartsHolding(record);
-  return `<section class="dash-mobile-card${holding?' bp-holding':''}"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openBrokenPartsRecordHistory('page',${index})" type="button">查看記錄</button><button class="dash-card-btn" onclick="startBrokenPartsPageEdit(${index})" type="button">編輯</button></div></div>${brokenPartsRowsHtml(record,_bpPageVisibleFields)}</section>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span style="flex:1">── 記錄 ${number} · S/N ${esc(record.serialNo||'—')} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openBrokenPartsRecordHistory('page',${index})" type="button">查看記錄</button><button class="dash-card-btn" onclick="startBrokenPartsPageEdit(${index})" type="button">編輯</button></div></div>${brokenPartsRowsHtml(record,_bpPageVisibleFields)}</section>`;
 }
 function renderBrokenPartsPageRows(){
   const root=document.getElementById('bpPageRows');if(!root)return;
@@ -3369,7 +3366,7 @@ function renderBrokenPartsPageRows(){
 }
 function renderBrokenPartsPageEditCard(record,index){
   const number=(_bpPage-1)*_bpPageSize+index+1;
-  return `<section class="dash-mobile-card is-editing${isBrokenPartsHolding(record)?' bp-holding':''}" id="bpPageEditCard${index}">
+  return `<section class="dash-mobile-card is-editing" id="bpPageEditCard${index}">
     <div class="dash-mobile-title"><span>── 編輯記錄 ${number} ──</span></div>
     <div class="dash-card-form">${brokenPartsEditFieldsHtml(record)}</div>
     <div class="dash-card-actions"><button class="dash-card-btn danger" onclick="deleteBrokenPartsPageRecord(${index},this)" type="button">刪除</button><button class="dash-card-btn" onclick="cancelBrokenPartsPageEdit()" type="button">取消</button><button class="dash-card-btn primary" onclick="saveBrokenPartsPageRecord(${index},this)" type="button">儲存</button></div>
@@ -3721,7 +3718,7 @@ async function loadPoRepairRecords(){
     _poRepairRecords=(data.records||[]).filter(record=>record.brokenParts&&(!String(record.bpRepairDay||'').trim()||/^waiting$/i.test(String(record.bpRepairDay||'').trim())));
     renderPoRepairRows();
   }catch(e){
-    if(token===_poRepairToken)document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">壞零件列表/UOD載入失敗。</div>';
+    if(token===_poRepairToken)document.getElementById('poRepairRows').innerHTML='<div class="po-repair-note">壞零件/UOD/Hold機 列表載入失敗。</div>';
   }finally{hideLoadingProgress(loadingToken);}
 }
 function renderPoRepairRows(){
@@ -3740,7 +3737,7 @@ function selectPoRepair(index){
   const record=_poRepairRecords[index];if(!record?.bpColC)return;
   _poRepairSelected={...record};
   document.getElementById('actionCustom').value=`${String(record.bpColC).trim()}×${record.bpQty||1} Repaired`;
-  const hint=document.getElementById('poRepairHint');hint.className='';hint.style.display='block';hint.textContent='提交時會同時更新壞零件列表/UOD的 Repair Day。';
+  const hint=document.getElementById('poRepairHint');hint.className='';hint.style.display='block';hint.textContent='提交時會同時更新壞零件/UOD/Hold機 列表的 Repair Day。';
   renderPoRepairRows();
 }
 function detachPoRepairMode(showNotice){
@@ -3749,7 +3746,7 @@ function detachPoRepairMode(showNotice){
   document.getElementById('actionCustom').readOnly=false;
   document.getElementById('actionCustomModeBtn').textContent='☰';
   const hint=document.getElementById('poRepairHint');
-  if(showNotice){hint.className='manual';hint.style.display='block';hint.textContent='已取消自動更新，提交後需自行修改壞零件列表/UOD。';}
+  if(showNotice){hint.className='manual';hint.style.display='block';hint.textContent='已取消自動更新，提交後需自行修改壞零件/UOD/Hold機 列表。';}
   else{hint.className='';hint.style.display='none';hint.textContent='';}
 }
 function schedulePoRepairReload(){
