@@ -914,6 +914,7 @@
     <div class="bulk-edit-grid">
       <div><label>日期</label><input id="bulkDashDate" type="date"></div>
       <div><label>場地</label><select id="bulkDashCasino"><option value="">不更改</option></select></div>
+      <div><label>PO 號碼</label><input id="bulkDashPoNumber" type="text" placeholder="不更改"></div>
       <div><label>機型</label><select id="bulkDashModel"><option value="">不更改</option><option>SAE</option><option>TAE</option></select></div>
       <div><label>原因</label><input id="bulkDashReason" type="text" placeholder="不更改"></div>
       <div style="grid-column:1/-1"><label>處理方法</label><input id="bulkDashAction" type="text" placeholder="不更改"></div>
@@ -1441,8 +1442,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.22-04';
-const _APP_VERSION='v1.035';
+const _APP_BUMP='2026.07.22-05';
+const _APP_VERSION='v1.036';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -4426,7 +4427,7 @@ function openBulkEdit(){
   if(!dashboardSelectedRecords.size)return;
   const select=document.getElementById('bulkDashCasino');
   select.innerHTML='<option value="">不更改</option>'+casinoOptionsForCompany(currentDashboardCompany).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
-  ['bulkDashDate','bulkDashReason','bulkDashAction'].forEach(id=>document.getElementById(id).value='');
+  ['bulkDashDate','bulkDashPoNumber','bulkDashReason','bulkDashAction'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('bulkDashModel').value='';
   document.getElementById('bulkDashDeleteBtn').textContent=`刪除已選 ${dashboardSelectedRecords.size} 筆`;
   document.getElementById('bulkEditModal').classList.add('show');
@@ -4435,7 +4436,8 @@ function closeBulkEdit(){document.getElementById('bulkEditModal').classList.remo
 async function saveBulkDashboardEdit(){
   const changes={
     date:dashInputToDate(document.getElementById('bulkDashDate').value),casino:document.getElementById('bulkDashCasino').value,
-    model:document.getElementById('bulkDashModel').value,reason:document.getElementById('bulkDashReason').value.trim(),
+    poNumber:document.getElementById('bulkDashPoNumber').value.trim(),model:document.getElementById('bulkDashModel').value,
+    reason:document.getElementById('bulkDashReason').value.trim(),
     actionTaken:document.getElementById('bulkDashAction').value.trim()
   };
   Object.keys(changes).forEach(key=>{if(changes[key]==='')delete changes[key];});
