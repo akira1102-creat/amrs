@@ -464,17 +464,17 @@
       .po-repair-row>div:nth-child(5)::before{content:'Found Day'}
     }
     #dashboardCard{max-width:1100px}
-    .dash-controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
+    .dash-controls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:end}
     .dash-date-row{display:flex;gap:8px}
     .dash-date-row input{flex:1;min-width:0}
     .dash-clear-btn{width:auto;padding:0 10px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#8b949e;font-size:12px;font-weight:700;cursor:pointer}
     .dash-clear-btn:hover{color:#e6edf3;border-color:#484f58}
     .dash-clear-btn.active{background:#1f6feb;border-color:#58a6ff;color:#fff;box-shadow:0 0 0 3px rgba(31,111,235,.16)}
-    .dash-search{grid-column:1/4}
+    .dash-search{grid-column:1/5}
     .dash-search-line{display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:8px}
     .dash-mode{min-height:42px;padding:0 10px;border:1px solid #30363d;border-radius:12px;background:#21262d;color:#8b949e;font-size:12px;font-weight:800;cursor:pointer;user-select:none}
     .dash-mode.active{background:#1f6feb;border-color:#58a6ff;color:#fff;box-shadow:0 0 0 3px rgba(31,111,235,.16)}
-    .dash-actions{display:flex;gap:8px;grid-column:4/5}
+    .dash-actions{display:flex;gap:8px;grid-column:5/6}
     .dash-btn{width:100%;padding:10px 12px;font-size:13px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:12px;cursor:pointer}
     .dash-btn.secondary{background:#21262d;color:#e6edf3;border:1px solid #30363d}
     .dash-summary{font-size:12px;color:#8b949e;margin:12px 0 10px;min-height:18px}
@@ -781,9 +781,9 @@
     @media(min-width:900px){
       #mainLayout.has-queue{display:flex;gap:24px;align-items:flex-start;max-width:1100px;}
       #mainLayout.has-queue #mainLeft{flex:1;min-width:0;max-width:640px;}
-      #mainLayout.has-queue #mainRight{width:380px;flex-shrink:0;position:sticky;top:16px;}
+      #mainLayout.has-queue #mainRight{width:380px;flex-shrink:0;position:sticky;top:16px;display:flex;flex-direction:column;}
       #mainLayout.has-queue .card{max-width:none;margin-left:0;margin-right:0;}
-      #mainLayout.has-queue .submit-btn{max-width:none;}
+      #mainLayout.has-queue .submit-btn{max-width:none;order:-1;margin-top:0;margin-bottom:16px;}
     }
   </style>
 </head>
@@ -1261,6 +1261,13 @@
         <option value="TAE">TAE</option>
       </select>
     </div>
+    <div>
+      <label>排序</label>
+      <select id="dashSort" onchange="changeDashboardSort()">
+        <option value="newest">最新優先</option>
+        <option value="oldest">最舊優先</option>
+      </select>
+    </div>
     <div class="dash-search">
       <label>搜尋</label>
       <div class="dash-search-line">
@@ -1434,8 +1441,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.22-03';
-const _APP_VERSION='v1.034';
+const _APP_BUMP='2026.07.22-04';
+const _APP_VERSION='v1.035';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -4031,12 +4038,15 @@ function initDashboardFilters(){
   document.getElementById('dashTo').value='';
   document.getElementById('dashCasino').value='';
   document.getElementById('dashModel').value='';
+  document.getElementById('dashSort').value='newest';
   setDashFuzzy(false);
   syncDashDateButtons();
   updateDashboardSearchState();
 }
+function changeDashboardSort(){if(dashboardLastQuery)loadDashboard(1);}
 function resetDashboardFilters(){
   initDashboardFilters();
+  dashboardLastQuery=null;
   document.getElementById('dashSearch').value='';
   clearDashboardResults('請先選擇公司或場地，再按搜尋');
   document.getElementById('dashSummary').textContent='請先選擇查詢範圍';
@@ -4072,6 +4082,7 @@ async function loadDashboard(page=1){
     to:document.getElementById('dashTo').value,
     casino:venueFilter.casino,
     model:document.getElementById('dashModel').value,
+    sort:document.getElementById('dashSort').value,
     q:fuzzy?searchText:'',
     serialNo:fuzzy?'':searchText,
     searchMode:fuzzy?'fuzzy':'serial',
