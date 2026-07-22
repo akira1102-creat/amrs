@@ -651,6 +651,8 @@
     .schedule-machine-count{padding:5px 8px;border:1px solid #d29922;border-radius:6px;background:#2b230f;color:#f2cc60;font-family:inherit;font-size:11px;font-weight:800;line-height:1;cursor:pointer}
     .schedule-machine-count strong{color:#fff3bf;font-size:19px;font-weight:950}
     .schedule-machine-count:hover,.schedule-machine-count:active{border-color:#f2cc60;background:#3a2e12;color:#fff3bf}
+    .schedule-machine-count.stale,.schedule-machine-count.stale:hover,.schedule-machine-count.stale:active{border-color:#484f58;background:#21262d;color:#8b949e}
+    .schedule-machine-count.stale strong{color:#8b949e}
     .schedule-assignment-details{padding:9px 10px;border-top:1px solid #21262d}
     .schedule-assignment-people-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
     .schedule-assignment-people{min-width:0}
@@ -1451,8 +1453,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.22-09';
-const _APP_VERSION='v1.040';
+const _APP_BUMP='2026.07.22-10';
+const _APP_VERSION='v1.041';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1746,11 +1748,24 @@ function showPage(page){
 }
 const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v1';
 const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
-let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null;
+let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null,_scheduleCutoffTimer=null;
 const SCHEDULE_MACHINE_COUNTS_FRESH_MS=5*60*1000;
 let _scheduleMachineCounts={},_scheduleMachineCountsMonth='',_scheduleMachineCountCompanies=new Set(),_scheduleMachineCountsLoadedAt=0,_scheduleMachineCountsRequest=null;
 function scheduleLocalIso(date=new Date()){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+function scheduleMachineCountIsStale(date,shift,now=new Date()){
+  if(date!==scheduleLocalIso(now))return false;
+  const hour=now.getHours();
+  return shift==='am'?hour>=12:shift==='pm'?hour>=17:false;
+}
+function scheduleMachineCountCutoffRefresh(){
+  clearTimeout(_scheduleCutoffTimer);_scheduleCutoffTimer=null;
+  if(activePage!=='schedule')return;
+  const now=new Date(),targets=[new Date(now.getFullYear(),now.getMonth(),now.getDate(),12),new Date(now.getFullYear(),now.getMonth(),now.getDate(),17),new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0)];
+  const next=targets.find(target=>target.getTime()>now.getTime());
+  if(!next)return;
+  _scheduleCutoffTimer=setTimeout(()=>{if(activePage==='schedule')renderSchedulePage();},Math.max(250,next.getTime()-now.getTime()+250));
 }
 function scheduleDateObject(iso){
   const [year,month,day]=String(iso||'').split('-').map(Number);
@@ -1851,7 +1866,8 @@ function renderScheduleAssignment(item,date,shift,showMachineCount=false){
   const title=leaveLabel||item.title;
   const itemMonthCode=date.slice(2,4)+date.slice(5,7);
   const machines=showMachineCount&&item.linked&&itemMonthCode===_scheduleMachineCountsMonth?_scheduleMachineCounts[scheduleMachineCountKey(item.company,item.venue)]:null;
-  const machinesHtml=machines!=null?`<button class="schedule-machine-count" type="button" onclick="showPage('monthlyStats')" aria-label="查看每月統計，餘下每次需做 ${machines} 台"><strong>${machines}</strong> 台</button>`:'';
+  const staleMachineCount=machines!=null&&scheduleMachineCountIsStale(date,shift);
+  const machinesHtml=machines!=null?`<button class="schedule-machine-count${staleMachineCount?' stale':''}" type="button" onclick="showPage('monthlyStats')" aria-label="查看每月統計，餘下每次需做 ${machines} 台"><strong>${machines}</strong> 台</button>`:'';
   const companyHtml=item.linked?`<button class="schedule-company schedule-company-link" data-company="${esc(item.company)}" data-venue="${esc(item.venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
   return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
     <div class="schedule-assignment-head"><div class="schedule-assignment-main">${companyHtml}<div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta">${machinesHtml}<span>${count} 人</span></div></div>
@@ -1885,7 +1901,7 @@ function renderScheduleWeek(){
   else document.getElementById('scheduleWeekRange').textContent='';
   document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day"><div class="schedule-day-date">${scheduleDateLabel(day.date)}</div><div class="schedule-periods">${renderScheduleItems(day.items,day.date,true)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
 }
-function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();}
+function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();scheduleMachineCountCutoffRefresh();}
 async function loadScheduleOverview(force=false,weekOnly=false){
   const today=scheduleLocalIso();if(!_scheduleAnchor)_scheduleAnchor=today;
   const todayEntry=readScheduleCacheEntry(today,35),weekEntry=_scheduleAnchor===today?todayEntry:readScheduleCacheEntry(_scheduleAnchor,7);
