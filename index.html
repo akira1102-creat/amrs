@@ -531,6 +531,8 @@
     .dash-card-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:4px}
     .dash-card-form label{display:block;font-size:12px;color:#8b949e;font-weight:700;margin-bottom:5px}
     .dash-card-form input,.dash-card-form select{width:100%;font-size:13px;padding:8px 10px;border-radius:10px}
+    .dash-card-form .bp-edit-uod-unlock .bp-list-date input{flex:1 1 0;min-width:0}
+    .dash-card-form .bp-edit-uod-unlock .bp-list-waiting{white-space:nowrap}
     .schedule-people-box{width:min(430px,96vw)}
     .schedule-people-context{margin:-2px 0 14px;color:#8b949e;font-size:12px;line-height:1.5}
     .schedule-people-shift{padding:12px 0;border-top:1px solid #30363d}
@@ -1450,8 +1452,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.22-07';
-const _APP_VERSION='v1.038';
+const _APP_BUMP='2026.07.22-08';
+const _APP_VERSION='v1.039';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3258,7 +3260,7 @@ function brokenPartsRowsHtml(record,visibleFields=null){
 }
 function brokenPartsEditInput(label,key,value){return `<div><label>${esc(label)}</label><input data-bp-card-field="${esc(key)}" value="${esc(value??'')}"></div>`;}
 function brokenPartsEditFieldsHtml(record){
-  return `${brokenPartsEditInput('CASINO','casino',record.casino)}${brokenPartsEditInput('Model','model',record.model)}${brokenPartsEditInput('Serial No.','serialNo',record.serialNo)}${brokenPartsEditInput('Parts No.','brokenParts',record.brokenParts)}${brokenPartsEditInput('Required Parts(JP)','bpDesc',record.bpDesc)}${brokenPartsEditInput('Required Parts(EN)','bpColC',record.bpColC)}${brokenPartsEditInput('Qty','bpQty',record.bpQty)}<div><label>Repair Day</label>${bpListDateField('bpRepairDay',record.bpRepairDay,'Waiting',!!record.brokenParts)}</div><div><label>Found Day</label>${bpListDateField('date',record.date)}</div>${brokenPartsEditInput('Remark','bpRemark',record.bpRemark)}<div><label>UOD Activation Date</label>${bpListDateField('bpUodActivationDate',record.bpUodActivationDate)}</div><div><label>UOD Unlock Date</label>${bpListDateField('bpUodUnlockDay',record.bpUodUnlockDay,'Wait for Unlock')}</div><div><label>Hold Date</label>${bpListDateField('bpHoldDate',record.bpHoldDate)}</div><div><label>Hold Release Date</label>${bpListDateField('bpHoldReleaseDate',record.bpHoldReleaseDate)}</div>`;
+  return `${brokenPartsEditInput('CASINO','casino',record.casino)}${brokenPartsEditInput('Model','model',record.model)}${brokenPartsEditInput('Serial No.','serialNo',record.serialNo)}${brokenPartsEditInput('Parts No.','brokenParts',record.brokenParts)}${brokenPartsEditInput('Required Parts(JP)','bpDesc',record.bpDesc)}${brokenPartsEditInput('Required Parts(EN)','bpColC',record.bpColC)}${brokenPartsEditInput('Qty','bpQty',record.bpQty)}<div><label>Repair Day</label>${bpListDateField('bpRepairDay',record.bpRepairDay,'Waiting',!!record.brokenParts)}</div><div><label>Found Day</label>${bpListDateField('date',record.date)}</div>${brokenPartsEditInput('Remark','bpRemark',record.bpRemark)}<div><label>UOD Activation Date</label>${bpListDateField('bpUodActivationDate',record.bpUodActivationDate)}</div><div class="bp-edit-uod-unlock"><label>UOD Unlock Date</label>${bpListDateField('bpUodUnlockDay',record.bpUodUnlockDay,'Wait for Unlock')}</div><div><label>Hold Date</label>${bpListDateField('bpHoldDate',record.bpHoldDate)}</div><div><label>Hold Release Date</label>${bpListDateField('bpHoldReleaseDate',record.bpHoldReleaseDate)}</div>`;
 }
 function collectBrokenPartsCardRecord(card,original){
   const record={...original};
