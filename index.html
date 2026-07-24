@@ -1340,7 +1340,7 @@
     </section>
     <section class="schedule-week">
       <div class="schedule-week-head">
-        <div><div class="schedule-week-title">七日安排</div><div class="schedule-week-range" id="scheduleWeekRange"></div></div>
+        <div><div class="schedule-week-title">未來七日安排</div><div class="schedule-week-range" id="scheduleWeekRange"></div></div>
         <div class="schedule-week-actions">
           <button class="schedule-week-btn" onclick="changeScheduleWeek(-1)" type="button">上一週</button>
           <button class="schedule-week-btn" onclick="returnScheduleToday()" type="button">本週</button>
@@ -1453,8 +1453,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.24-01';
-const _APP_VERSION='v1.043';
+const _APP_BUMP='2026.07.24-02';
+const _APP_VERSION='v1.044';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1783,8 +1783,8 @@ function scheduleVisibleDays(days){
   }).map(day=>({...day,items:(day.items||[]).filter(item=>!/資料輸入\s*\/\s*緊急任務/.test(String(item.title||'')))}));
 }
 function scheduleWeekRange(days,anchor){
-  const end=scheduleAddDays(anchor,6);
-  return (days||[]).filter(day=>day.date>=anchor&&day.date<=end);
+  const start=scheduleAddDays(anchor,1),end=scheduleAddDays(anchor,7);
+  return (days||[]).filter(day=>day.date>=start&&day.date<=end);
 }
 function scheduleCacheKey(from,days){return `${SCHEDULE_CACHE_PREFIX}${from}_${days}`;}
 function readScheduleCacheEntry(from,days){
@@ -1910,7 +1910,8 @@ function renderScheduleWeek(){
 function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();scheduleMachineCountCutoffRefresh();}
 async function loadScheduleOverview(force=false,weekOnly=false){
   const today=scheduleLocalIso();if(!_scheduleAnchor)_scheduleAnchor=today;
-  const todayEntry=readScheduleCacheEntry(today,35),weekEntry=_scheduleAnchor===today?todayEntry:readScheduleCacheEntry(_scheduleAnchor,7);
+  const weekFrom=scheduleAddDays(_scheduleAnchor,1);
+  const todayEntry=readScheduleCacheEntry(today,35),weekEntry=_scheduleAnchor===today?todayEntry:readScheduleCacheEntry(weekFrom,7);
   const cachedToday=todayEntry?.data||readLatestScheduleCache(today),cachedWeek=_scheduleAnchor===today?cachedToday:weekEntry?.data;
   if(cachedToday)_scheduleTodayData=cachedToday;
   if(cachedWeek)_scheduleWeekDays=scheduleWeekRange(cachedWeek.days,_scheduleAnchor);
@@ -1930,7 +1931,7 @@ async function loadScheduleOverview(force=false,weekOnly=false){
   try{
     const needToday=force||!weekOnly||!_scheduleTodayData;
     const todayPromise=needToday?requestScheduleRange(today,35,force,controller.signal):Promise.resolve(_scheduleTodayData);
-    const weekPromise=_scheduleAnchor===today?Promise.resolve(null):requestScheduleRange(_scheduleAnchor,7,force,controller.signal);
+    const weekPromise=_scheduleAnchor===today?Promise.resolve(null):requestScheduleRange(weekFrom,7,force,controller.signal);
     const [todayData,weekData]=await Promise.all([todayPromise,weekPromise]);
     if(todayData)_scheduleTodayData=todayData;
     const sourceDays=_scheduleAnchor===today?(_scheduleTodayData?.days||[]):(weekData?.days||cachedWeek?.days||[]);

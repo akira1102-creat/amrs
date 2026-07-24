@@ -1,4 +1,4 @@
-const CACHE = 'amrs-v1043';
+const CACHE = 'amrs-v1044';
 const ASSETS = ['./', './index.html', './manifest.json', './sw.js'];
 
 self.addEventListener('install', e => {
