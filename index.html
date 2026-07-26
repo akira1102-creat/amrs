@@ -819,20 +819,24 @@
     .photo-crops{min-width:0}
     .photo-crop-card{margin-bottom:12px;padding:10px;border:1px solid #30363d;border-radius:14px;background:#161b22}
     .photo-crop-label{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;color:#8b949e;font-size:12px;font-weight:800}
-    #photoSerialCanvas,#photoRowCanvas{display:block;width:100%;border-radius:8px;background:#fff}
+    #photoSerialCanvas,#photoProblemCanvas,#photoRowCanvas{display:block;width:100%;border-radius:8px;background:#fff}
     #photoSerialCanvas{height:150px}
-    #photoRowCanvas{height:170px}
+    #photoProblemCanvas{height:150px}
+    #photoRowCanvas{height:120px}
     .photo-entry-panel{padding:14px;border:1px solid #30363d;border-radius:16px;background:#161b22}
     .photo-progress{margin-bottom:10px;color:#58a6ff;font-size:14px;font-weight:900;text-align:center}
     #photoSnInput{width:100%;padding:13px;border:2px solid #388bfd;border-radius:12px;background:#0d1117;color:#58a6ff;font-family:monospace;font-size:32px;font-weight:900;letter-spacing:6px;text-align:center}
     .photo-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
     .photo-keypad button{min-height:52px;border:1px solid #30363d;border-radius:12px;background:#21262d;color:#fff;font-size:22px;font-weight:900;cursor:pointer}
     .photo-keypad button:active{background:#388bfd}
-    .photo-keypad .done{background:#238636}
+    .photo-keypad .done{background:#238636;font-size:14px;line-height:1.15}
     .photo-keypad .back{color:#ff7b72}
     .photo-quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
     .photo-quick-actions button{padding:11px 8px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     .photo-quick-actions .issue.active{border-color:#f0883e;background:#4a2b0b;color:#f2cc60}
+    .photo-problem-status{margin-top:9px;padding:8px 10px;border:1px solid #30363d;border-radius:9px;background:#0d1117;color:#8b949e;font-size:12px;font-weight:800;text-align:center}
+    .photo-problem-status.blank{border-color:#238636;color:#7ee787}
+    .photo-problem-status.issue{border-color:#f0883e;color:#f2cc60}
     .photo-issue-fields{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #30363d}
     .photo-issue-fields.show{display:block}
     .photo-issue-fields label{margin-top:8px}
@@ -844,6 +848,7 @@
     .photo-review-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
     .photo-review-row{padding:10px;border:1px solid #30363d;border-radius:10px;background:#161b22;color:#e6edf3;text-align:left;cursor:pointer}
     .photo-review-row.issue{border-color:#f0883e}
+    .photo-review-row.invalid{border-color:#da3633;background:#351416}
     .photo-review-row.duplicate{border-color:#da3633;background:#351416}
     .photo-review-row .row-no{display:block;color:#8b949e;font-size:11px}
     .photo-review-row .row-sn{font-family:monospace;font-size:20px;font-weight:900}
@@ -856,7 +861,8 @@
       .photo-entry-layout{display:block}
       .photo-crop-card{padding:7px}
       #photoSerialCanvas{height:112px}
-      #photoRowCanvas{height:128px}
+      #photoProblemCanvas{height:118px}
+      #photoRowCanvas{height:92px}
       .photo-entry-panel{padding:10px}
       .photo-review-summary{grid-template-columns:repeat(2,1fr)}
       .photo-source-actions{grid-template-columns:1fr}
@@ -947,7 +953,11 @@
             <canvas id="photoSerialCanvas"></canvas>
           </div>
           <div class="photo-crop-card">
-            <div class="photo-crop-label"><span>該行相關內容</span><span>Problem Description／Remarks／Gaming ID</span></div>
+            <div class="photo-crop-label"><span>Problem Description</span><span>有文字就必須輸入 Reason</span></div>
+            <canvas id="photoProblemCanvas"></canvas>
+          </div>
+          <div class="photo-crop-card">
+            <div class="photo-crop-label"><span>Remarks／Gaming ID</span><span>同一行補充資料</span></div>
             <canvas id="photoRowCanvas"></canvas>
           </div>
         </div>
@@ -958,17 +968,19 @@
             <button onclick="photoKey('7')" type="button">7</button><button onclick="photoKey('8')" type="button">8</button><button onclick="photoKey('9')" type="button">9</button>
             <button onclick="photoKey('4')" type="button">4</button><button onclick="photoKey('5')" type="button">5</button><button onclick="photoKey('6')" type="button">6</button>
             <button onclick="photoKey('1')" type="button">1</button><button onclick="photoKey('2')" type="button">2</button><button onclick="photoKey('3')" type="button">3</button>
-            <button class="back" onclick="photoBackspace()" type="button">⌫</button><button onclick="photoKey('0')" type="button">0</button><button class="done" onclick="photoNextRow()" type="button">✓</button>
+            <button class="back" onclick="photoBackspace()" type="button">⌫</button><button onclick="photoKey('0')" type="button">0</button><button class="done" onclick="photoProblemBlankNext()" type="button">Problem<br>空白 ✓</button>
           </div>
+          <div class="photo-problem-status" id="photoProblemStatus">請確認 Problem Description</div>
           <div class="photo-quick-actions">
             <button onclick="photoSkipRow()" type="button">空白／跳過</button>
-            <button class="issue" id="photoIssueBtn" onclick="photoToggleIssue()" type="button">⚠ 有問題</button>
+            <button class="issue" id="photoIssueBtn" onclick="photoMarkProblemContent()" type="button">⚠ Problem 有內容</button>
             <button onclick="photoSkipRemaining()" type="button">餘下全空白</button>
             <button onclick="showPhotoReview()" type="button">完成及核對</button>
           </div>
           <div class="photo-issue-fields" id="photoIssueFields">
             <label>機型</label><select id="photoModel"><option>SAE</option><option>TAE</option></select>
-            <label>原因</label><input id="photoReason" type="text" placeholder="原因">
+            <label>原因</label>
+            <div class="combo"><input id="photoReason" type="text" placeholder="搜尋原因..." autocomplete="off" oninput="onPhotoReasonChange()" onchange="onPhotoReasonChange()"><div class="combo-menu" id="photoReasonMenu"></div></div>
             <label>處理方法／Remarks</label><input id="photoAction" type="text" placeholder="處理方法">
             <label>Problem Description</label><input id="photoError" type="text" placeholder="錯誤描述">
             <label>Gaming ID／Box ID</label><input id="photoBoxId" type="text" placeholder="選填">
@@ -1602,8 +1614,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.26-01';
-const _APP_VERSION='v1.046';
+const _APP_BUMP='2026.07.27-01';
+const _APP_VERSION='v1.047';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -3020,7 +3032,7 @@ const PHOTO_IMPORT_DB='amrs-photo-import';
 let _photoImage=null,_photoState=null,_photoDuplicateApproved=false,_photoResumeBlob=null;
 function photoDefaultRow(){
   return {
-    sn:'',skipped:false,issue:false,
+    sn:'',skipped:false,issue:false,problemChecked:false,
     model:document.getElementById('model')?.value||'SAE',
     reason:document.getElementById('reason')?.value||'PM',
     action:getAction()||'Preventive Maintenance',
@@ -3127,7 +3139,10 @@ async function resumePhotoImport(){
     const blob=_photoResumeBlob||await photoDbGet();
     if(!saved||!blob)throw new Error('找不到上次進度');
     await photoLoadBlob(blob);
-    const rows=Array.from({length:PHOTO_IMPORT_ROWS},(_,index)=>({...photoDefaultRow(),...(saved.rows?.[index]||{})}));
+    const rows=Array.from({length:PHOTO_IMPORT_ROWS},(_,index)=>{
+      const old=saved.rows?.[index]||{};
+      return {...photoDefaultRow(),...old,problemChecked:old.problemChecked===true};
+    });
     _photoState={...saved,rows,current:Math.min(PHOTO_IMPORT_ROWS-1,Math.max(0,Number(saved.current)||0))};
     if(!_photoState.bounds)detectPhotoGrid(false);
     else drawPhotoPreview();
@@ -3250,8 +3265,9 @@ function renderPhotoEntry(){
   const index=_photoState.current,row=_photoState.rows[index],b=_photoState.bounds;
   const rowHeight=(b.bottom-b.top)/PHOTO_IMPORT_ROWS,rowTop=b.top+rowHeight*index;
   photoDrawCrop(document.getElementById('photoSerialCanvas'),Math.max(0,b.serialLeft-(b.serialRight-b.serialLeft)*.12),Math.max(0,rowTop-rowHeight*.15),(b.serialRight-b.serialLeft)*1.24,rowHeight*1.3);
-  const detailLeft=b.left+(b.right-b.left)*.497;
-  photoDrawCrop(document.getElementById('photoRowCanvas'),detailLeft,Math.max(0,rowTop-rowHeight*.12),b.right-detailLeft,rowHeight*1.24,true);
+  const formWidth=b.right-b.left,problemLeft=b.left+formWidth*.544,problemRight=b.left+formWidth*.706,remarksRight=b.left+formWidth*.942;
+  photoDrawCrop(document.getElementById('photoProblemCanvas'),problemLeft,Math.max(0,rowTop-rowHeight*.12),problemRight-problemLeft,rowHeight*1.24,true);
+  photoDrawCrop(document.getElementById('photoRowCanvas'),problemRight,Math.max(0,rowTop-rowHeight*.12),remarksRight-problemRight,rowHeight*1.24,true);
   document.getElementById('photoEntryProgress').textContent=`第 ${index+1} / ${PHOTO_IMPORT_ROWS} 行`;
   document.getElementById('photoSerialCropLabel').textContent=`第 ${index+1} 行`;
   document.getElementById('photoSnInput').value=row.sn||'';
@@ -3262,6 +3278,9 @@ function renderPhotoEntry(){
   document.getElementById('photoBoxId').value=row.boxId||'';
   document.getElementById('photoIssueBtn').classList.toggle('active',!!row.issue);
   document.getElementById('photoIssueFields').classList.toggle('show',!!row.issue);
+  const problemStatus=document.getElementById('photoProblemStatus');
+  problemStatus.className='photo-problem-status'+(row.problemChecked?(row.issue?' issue':' blank'):'');
+  problemStatus.textContent=row.problemChecked?(row.issue?'⚠ Problem 有內容：請完成 Reason 及 Problem Description':'✓ Problem 空白'):'請確認 Problem Description';
   setTimeout(()=>document.getElementById('photoSnInput').focus(),0);
 }
 function photoKey(value){
@@ -3271,15 +3290,40 @@ function photoKey(value){
 function photoBackspace(){
   const input=document.getElementById('photoSnInput');input.value=input.value.slice(0,-1);input.focus();
 }
-function photoToggleIssue(){
-  photoSyncCurrent();const row=_photoState.rows[_photoState.current];row.issue=!row.issue;
-  document.getElementById('photoIssueBtn').classList.toggle('active',row.issue);
-  document.getElementById('photoIssueFields').classList.toggle('show',row.issue);photoSaveDraft();
+function onPhotoReasonChange(){
+  const reason=document.getElementById('photoReason').value.trim(),action=ACTION_MAP[reason];
+  if(action)document.getElementById('photoAction').value=action;
+}
+function photoMarkProblemContent(){
+  photoSyncCurrent();const row=_photoState.rows[_photoState.current];
+  row.problemChecked=true;row.issue=true;
+  if(!row.reason||row.reason.trim().toUpperCase()==='PM')row.reason='';
+  document.getElementById('photoReason').value=row.reason;
+  document.getElementById('photoIssueBtn').classList.add('active');
+  document.getElementById('photoIssueFields').classList.add('show');
+  const status=document.getElementById('photoProblemStatus');status.className='photo-problem-status issue';status.textContent='⚠ Problem 有內容：請完成 Reason 及 Problem Description';
+  photoSaveDraft();setTimeout(()=>document.getElementById('photoReason').focus(),0);
+}
+function photoProblemValidation(row,index){
+  if(row.skipped||!row.sn)return '';
+  if(!row.problemChecked)return `第 ${index+1} 行未確認 Problem Description`;
+  if(row.issue&&(!row.reason||row.reason.trim().toUpperCase()==='PM'))return `第 ${index+1} 行 Problem 有內容，Reason 不可留空或使用 PM`;
+  if(row.issue&&!row.errorDescription.trim())return `第 ${index+1} 行請輸入 Problem Description`;
+  return '';
+}
+function photoProblemBlankNext(){
+  photoSyncCurrent();const row=_photoState.rows[_photoState.current];
+  row.problemChecked=true;row.issue=false;row.reason='PM';row.action='Preventive Maintenance';row.errorDescription='';row.boxId='';
+  document.getElementById('photoReason').value='PM';document.getElementById('photoAction').value='Preventive Maintenance';
+  document.getElementById('photoError').value='';document.getElementById('photoBoxId').value='';
+  photoNextRow();
 }
 function photoNextRow(){
   photoSyncCurrent();const row=_photoState.rows[_photoState.current];
   if(!row.sn&&!row.skipped){showToast('請輸入機身號碼，或按「空白／跳過」','err');return;}
   if(row.sn&&!/^\d{1,4}$/.test(row.sn)){showToast('機身號碼必須為 1–4 位數字','err');return;}
+  const problemError=photoProblemValidation(row,_photoState.current);
+  if(problemError){showToast(problemError,'err');if(row.issue)setTimeout(()=>document.getElementById(!row.reason||row.reason.trim().toUpperCase()==='PM'?'photoReason':'photoError').focus(),0);return;}
   if(_photoState.current>=PHOTO_IMPORT_ROWS-1){showPhotoReview();return;}
   _photoState.current++;photoSaveDraft();renderPhotoEntry();
 }
@@ -3287,7 +3331,7 @@ function photoPreviousRow(){
   photoSyncCurrent();if(_photoState.current>0)_photoState.current--;photoSaveDraft();renderPhotoEntry();
 }
 function photoSkipRow(){
-  const row=_photoState.rows[_photoState.current];row.sn='';row.skipped=true;row.issue=false;
+  const row=_photoState.rows[_photoState.current];row.sn='';row.skipped=true;row.issue=false;row.problemChecked=false;
   if(_photoState.current>=PHOTO_IMPORT_ROWS-1)showPhotoReview();
   else{_photoState.current++;photoSaveDraft();renderPhotoEntry();}
 }
@@ -3296,7 +3340,7 @@ function photoSkipRemaining(){
   const currentRow=_photoState.rows[_photoState.current],start=currentRow.sn?_photoState.current+1:_photoState.current;
   if(start>=PHOTO_IMPORT_ROWS){showPhotoReview();return;}
   if(!confirm(`將第 ${start+1} 行至第 ${PHOTO_IMPORT_ROWS} 行標記為空白？`))return;
-  for(let i=start;i<PHOTO_IMPORT_ROWS;i++){_photoState.rows[i]={..._photoState.rows[i],sn:'',skipped:true,issue:false};}
+  for(let i=start;i<PHOTO_IMPORT_ROWS;i++){_photoState.rows[i]={..._photoState.rows[i],sn:'',skipped:true,issue:false,problemChecked:false};}
   showPhotoReview();
 }
 function photoRowsAsItems(){
@@ -3317,6 +3361,7 @@ function showPhotoReview(){
   _photoState.stage='review';_photoDuplicateApproved=false;photoSaveDraft();photoShowStep('photoStepReview');
   const entered=_photoState.rows.filter(row=>row.sn&&!row.skipped).length,skipped=_photoState.rows.filter(row=>row.skipped).length;
   const issues=_photoState.rows.filter(row=>row.sn&&row.issue&&!row.skipped).length,duplicates=photoDuplicateSet();
+  const problemErrors=_photoState.rows.map((row,index)=>photoProblemValidation(row,index)).filter(Boolean);
   document.getElementById('photoReviewSummary').innerHTML=`
     <div class="photo-review-stat"><strong>${PHOTO_IMPORT_ROWS}</strong>表格行數</div>
     <div class="photo-review-stat"><strong>${entered}</strong>已輸入</div>
@@ -3324,17 +3369,25 @@ function showPhotoReview(){
     <div class="photo-review-stat"><strong>${issues}</strong>有問題</div>`;
   document.getElementById('photoReviewList').innerHTML=_photoState.rows.map((row,index)=>{
     const label=row.skipped?'空白':(row.sn||'未處理'),classes=['photo-review-row'];
-    if(row.issue)classes.push('issue');if(row.sn&&duplicates.has(row.sn))classes.push('duplicate');
-    return `<button class="${classes.join(' ')}" onclick="editPhotoReviewRow(${index})" type="button"><span class="row-no">第 ${index+1} 行${row.issue?' · 有問題':''}</span><span class="row-sn">${esc(label)}</span></button>`;
+    const problemError=photoProblemValidation(row,index);
+    if(row.issue)classes.push('issue');if(problemError)classes.push('invalid');if(row.sn&&duplicates.has(row.sn))classes.push('duplicate');
+    return `<button class="${classes.join(' ')}" onclick="editPhotoReviewRow(${index})" type="button"><span class="row-no">第 ${index+1} 行${row.issue?' · Problem 有內容':''}${problemError?' · 待完成':''}</span><span class="row-sn">${esc(label)}</span></button>`;
   }).join('');
-  const warning=document.getElementById('photoReviewWarning');warning.className='photo-review-warning';warning.textContent='';
-  const button=document.getElementById('photoAddQueueBtn');button.disabled=entered===0;button.textContent='加入待提交';
+  const warning=document.getElementById('photoReviewWarning');
+  warning.className='photo-review-warning'+(problemErrors.length?' show':'');
+  warning.textContent=problemErrors.length?problemErrors.join('；'):'';
+  const button=document.getElementById('photoAddQueueBtn');button.disabled=entered===0||problemErrors.length>0;button.textContent='加入待提交';
 }
 function goPhotoEntry(){_photoState.stage='entry';photoShowStep('photoStepEntry');renderPhotoEntry();photoSaveDraft();}
 function editPhotoReviewRow(index){_photoState.current=index;goPhotoEntry();}
 async function addPhotoRowsToQueue(){
   const items=photoRowsAsItems();
   if(!items.length){showToast('沒有可加入的機身號碼','err');return;}
+  const invalidIndex=_photoState.rows.findIndex((row,index)=>!!photoProblemValidation(row,index));
+  if(invalidIndex>=0){
+    const message=photoProblemValidation(_photoState.rows[invalidIndex],invalidIndex);
+    showToast(message,'err');_photoState.current=invalidIndex;goPhotoEntry();return;
+  }
   const duplicateSerials=sameDayDuplicateSerials(items);
   if(duplicateSerials.length&&!_photoDuplicateApproved){
     const warning=document.getElementById('photoReviewWarning');
@@ -3357,6 +3410,7 @@ document.getElementById('photoFileInput').addEventListener('change',async event=
     _photoState=photoNewState();detectPhotoGrid(false);photoSaveDraft();
   }catch(e){showToast(e.message||'無法讀取相片','err');photoShowStep('photoStepSource');}
 });
+_setupSearchCombo('photoReason','photoReasonMenu',_reasonOptions,{keepAll:true,usageType:'reason',maxOptions:Infinity});
 document.getElementById('photoSnInput').addEventListener('input',event=>{event.target.value=event.target.value.replace(/\D/g,'').slice(0,4);});
 document.getElementById('photoSnInput').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();photoNextRow();}});
 
