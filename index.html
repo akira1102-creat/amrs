@@ -793,6 +793,74 @@
       #mainLayout.has-queue .card{max-width:none;margin-left:0;margin-right:0;}
       #mainLayout.has-queue .submit-btn{max-width:none;order:-1;margin-top:0;margin-bottom:16px;}
     }
+    .scl-photo-import-btn{display:none;flex:0 0 auto;padding:7px 11px;border:1px solid #2ea043;border-radius:9px;background:#163d24;color:#7ee787;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    body.company-scl .scl-photo-import-btn{display:block}
+    #photoImportModal{display:none;position:fixed;inset:0;z-index:9200;background:#0d1117;color:#e6edf3;overflow:auto}
+    #photoImportModal.show{display:block}
+    .photo-import-shell{width:min(1100px,100%);min-height:100%;margin:0 auto;padding:16px}
+    .photo-import-head{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:12px;margin:-16px -16px 16px;padding:12px 16px;border-bottom:1px solid #30363d;background:rgba(13,17,23,.96);backdrop-filter:blur(12px)}
+    .photo-import-title{font-size:17px;font-weight:900;flex:1}
+    .photo-import-close{padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
+    .photo-step{display:none}
+    .photo-step.active{display:block}
+    .photo-import-note{margin-bottom:14px;padding:11px 13px;border:1px solid #30363d;border-radius:12px;background:#161b22;color:#8b949e;font-size:13px;line-height:1.55}
+    .photo-source-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:640px;margin:20px auto}
+    .photo-source-btn{display:flex;align-items:center;justify-content:center;min-height:70px;padding:14px;border:1px solid #388bfd;border-radius:16px;background:#161b22;color:#e6edf3;font-size:15px;font-weight:900;cursor:pointer;text-align:center}
+    .photo-source-btn.primary{background:#1f6feb;color:#fff}
+    .photo-source-btn.danger{border-color:#da3633;color:#ff7b72}
+    #photoFileInput{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+    .photo-preview-wrap{position:relative;width:100%;max-height:58vh;overflow:auto;border:1px solid #30363d;border-radius:14px;background:#000;text-align:center}
+    #photoPreviewCanvas{display:block;max-width:100%;height:auto;margin:0 auto}
+    .photo-detect-status{margin:10px 0;color:#8b949e;font-size:13px;text-align:center}
+    .photo-adjust-grid{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+    .photo-adjust-grid button,.photo-nav button,.photo-review-actions button{padding:9px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
+    .photo-adjust-grid button.primary,.photo-nav button.primary,.photo-review-actions button.primary{border-color:#388bfd;background:#1f6feb;color:#fff}
+    .photo-entry-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,.6fr);gap:16px}
+    .photo-crops{min-width:0}
+    .photo-crop-card{margin-bottom:12px;padding:10px;border:1px solid #30363d;border-radius:14px;background:#161b22}
+    .photo-crop-label{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;color:#8b949e;font-size:12px;font-weight:800}
+    #photoSerialCanvas,#photoRowCanvas{display:block;width:100%;border-radius:8px;background:#fff}
+    #photoSerialCanvas{height:150px}
+    #photoRowCanvas{height:170px}
+    .photo-entry-panel{padding:14px;border:1px solid #30363d;border-radius:16px;background:#161b22}
+    .photo-progress{margin-bottom:10px;color:#58a6ff;font-size:14px;font-weight:900;text-align:center}
+    #photoSnInput{width:100%;padding:13px;border:2px solid #388bfd;border-radius:12px;background:#0d1117;color:#58a6ff;font-family:monospace;font-size:32px;font-weight:900;letter-spacing:6px;text-align:center}
+    .photo-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+    .photo-keypad button{min-height:52px;border:1px solid #30363d;border-radius:12px;background:#21262d;color:#fff;font-size:22px;font-weight:900;cursor:pointer}
+    .photo-keypad button:active{background:#388bfd}
+    .photo-keypad .done{background:#238636}
+    .photo-keypad .back{color:#ff7b72}
+    .photo-quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .photo-quick-actions button{padding:11px 8px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
+    .photo-quick-actions .issue.active{border-color:#f0883e;background:#4a2b0b;color:#f2cc60}
+    .photo-issue-fields{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #30363d}
+    .photo-issue-fields.show{display:block}
+    .photo-issue-fields label{margin-top:8px}
+    .photo-issue-fields input,.photo-issue-fields select{width:100%}
+    .photo-nav{display:flex;justify-content:space-between;gap:8px;margin-top:14px}
+    .photo-review-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+    .photo-review-stat{padding:12px;border:1px solid #30363d;border-radius:12px;background:#161b22;text-align:center}
+    .photo-review-stat strong{display:block;color:#58a6ff;font-size:24px}
+    .photo-review-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+    .photo-review-row{padding:10px;border:1px solid #30363d;border-radius:10px;background:#161b22;color:#e6edf3;text-align:left;cursor:pointer}
+    .photo-review-row.issue{border-color:#f0883e}
+    .photo-review-row.duplicate{border-color:#da3633;background:#351416}
+    .photo-review-row .row-no{display:block;color:#8b949e;font-size:11px}
+    .photo-review-row .row-sn{font-family:monospace;font-size:20px;font-weight:900}
+    .photo-review-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;flex-wrap:wrap}
+    .photo-review-warning{display:none;margin:12px 0;padding:11px;border:1px solid #da3633;border-radius:10px;background:#351416;color:#ff7b72;font-weight:800}
+    .photo-review-warning.show{display:block}
+    @media(max-width:760px){
+      .photo-import-shell{padding:10px}
+      .photo-import-head{margin:-10px -10px 10px;padding:10px}
+      .photo-entry-layout{display:block}
+      .photo-crop-card{padding:7px}
+      #photoSerialCanvas{height:112px}
+      #photoRowCanvas{height:128px}
+      .photo-entry-panel{padding:10px}
+      .photo-review-summary{grid-template-columns:repeat(2,1fr)}
+      .photo-source-actions{grid-template-columns:1fr}
+    }
   </style>
 </head>
 <body class="auth-locked">
@@ -841,6 +909,86 @@
     <div id="setupTestResult"></div>
     <button id="setupSaveBtn" onclick="saveSetup()" disabled>儲存並繼續</button>
     <button id="setupCancelBtn" onclick="cancelSetup()" style="display:none">返回上一頁</button>
+  </div>
+</div>
+
+<div id="photoImportModal" role="dialog" aria-modal="true" aria-label="SCL 紙本相片匯入">
+  <div class="photo-import-shell">
+    <div class="photo-import-head">
+      <div class="photo-import-title">SCL 紙本相片匯入</div>
+      <button class="photo-import-close" onclick="closePhotoImport()" type="button">關閉</button>
+    </div>
+    <section class="photo-step active" id="photoStepSource">
+      <div class="photo-import-note">相片只會保存在目前裝置，不會上傳。請盡量由正上方拍攝，並包括完整表格；最上面的表格名稱可以不同。</div>
+      <div class="photo-source-actions">
+        <label class="photo-source-btn primary" for="photoFileInput">📷 拍攝／選擇表格相片</label>
+        <button class="photo-source-btn" id="photoResumeBtn" onclick="resumePhotoImport()" type="button" hidden>繼續上次進度</button>
+        <button class="photo-source-btn danger" id="photoDiscardBtn" onclick="discardPhotoImport()" type="button" hidden>刪除上次進度</button>
+      </div>
+      <input id="photoFileInput" type="file" accept="image/*" capture="environment">
+    </section>
+    <section class="photo-step" id="photoStepAlign">
+      <div class="photo-preview-wrap"><canvas id="photoPreviewCanvas"></canvas></div>
+      <div class="photo-detect-status" id="photoDetectStatus">正在找出表格線...</div>
+      <div class="photo-adjust-grid">
+        <button onclick="adjustPhotoGrid('top',-1)" type="button">頂部 ↑</button>
+        <button onclick="adjustPhotoGrid('top',1)" type="button">頂部 ↓</button>
+        <button onclick="adjustPhotoGrid('bottom',-1)" type="button">底部 ↑</button>
+        <button onclick="adjustPhotoGrid('bottom',1)" type="button">底部 ↓</button>
+        <button onclick="detectPhotoGrid(true)" type="button">重新偵測</button>
+        <button class="primary" onclick="startPhotoEntry()" type="button">開始逐行輸入</button>
+      </div>
+    </section>
+    <section class="photo-step" id="photoStepEntry">
+      <div class="photo-entry-layout">
+        <div class="photo-crops">
+          <div class="photo-crop-card">
+            <div class="photo-crop-label"><span>Serial Number</span><span id="photoSerialCropLabel">第 1 行</span></div>
+            <canvas id="photoSerialCanvas"></canvas>
+          </div>
+          <div class="photo-crop-card">
+            <div class="photo-crop-label"><span>該行相關內容</span><span>Problem Description／Remarks／Gaming ID</span></div>
+            <canvas id="photoRowCanvas"></canvas>
+          </div>
+        </div>
+        <div class="photo-entry-panel">
+          <div class="photo-progress" id="photoEntryProgress">第 1 / 35 行</div>
+          <input id="photoSnInput" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+          <div class="photo-keypad">
+            <button onclick="photoKey('7')" type="button">7</button><button onclick="photoKey('8')" type="button">8</button><button onclick="photoKey('9')" type="button">9</button>
+            <button onclick="photoKey('4')" type="button">4</button><button onclick="photoKey('5')" type="button">5</button><button onclick="photoKey('6')" type="button">6</button>
+            <button onclick="photoKey('1')" type="button">1</button><button onclick="photoKey('2')" type="button">2</button><button onclick="photoKey('3')" type="button">3</button>
+            <button class="back" onclick="photoBackspace()" type="button">⌫</button><button onclick="photoKey('0')" type="button">0</button><button class="done" onclick="photoNextRow()" type="button">✓</button>
+          </div>
+          <div class="photo-quick-actions">
+            <button onclick="photoSkipRow()" type="button">空白／跳過</button>
+            <button class="issue" id="photoIssueBtn" onclick="photoToggleIssue()" type="button">⚠ 有問題</button>
+            <button onclick="photoSkipRemaining()" type="button">餘下全空白</button>
+            <button onclick="showPhotoReview()" type="button">完成及核對</button>
+          </div>
+          <div class="photo-issue-fields" id="photoIssueFields">
+            <label>機型</label><select id="photoModel"><option>SAE</option><option>TAE</option></select>
+            <label>原因</label><input id="photoReason" type="text" placeholder="原因">
+            <label>處理方法／Remarks</label><input id="photoAction" type="text" placeholder="處理方法">
+            <label>Problem Description</label><input id="photoError" type="text" placeholder="錯誤描述">
+            <label>Gaming ID／Box ID</label><input id="photoBoxId" type="text" placeholder="選填">
+          </div>
+          <div class="photo-nav">
+            <button onclick="photoPreviousRow()" type="button">← 上一行</button>
+            <button class="primary" onclick="photoNextRow()" type="button">下一行 →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="photo-step" id="photoStepReview">
+      <div class="photo-review-summary" id="photoReviewSummary"></div>
+      <div class="photo-review-warning" id="photoReviewWarning"></div>
+      <div class="photo-review-list" id="photoReviewList"></div>
+      <div class="photo-review-actions">
+        <button onclick="goPhotoEntry()" type="button">返回修改</button>
+        <button class="primary" id="photoAddQueueBtn" onclick="addPhotoRowsToQueue()" type="button">加入待提交</button>
+      </div>
+    </section>
   </div>
 </div>
 
@@ -1028,6 +1176,7 @@
   <div class="card-title">新增記錄</div>
   <div class="sn-mode-row">
     <label id="snLabel" for="serialNo">機身號碼（點擊開啟數字鍵盤）</label>
+    <button class="scl-photo-import-btn" onclick="openPhotoImport()" type="button">📷 紙本匯入</button>
     <button class="batch-mode-btn" id="batchToggleBtn" onclick="toggleBatch()" type="button" aria-pressed="false">批量模式</button>
   </div>
   <form id="snSingleArea" onsubmit="addToQueue(); return false;" style="margin-bottom:14px">
@@ -1453,8 +1602,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.25-01';
-const _APP_VERSION='v1.045';
+const _APP_BUMP='2026.07.26-01';
+const _APP_VERSION='v1.046';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2863,6 +3012,353 @@ function ensureSubmissionIds(items){
   return changed;
 }
 if(ensureSubmissionIds(queue))saveQueue();
+
+// ── SCL paper photo import ─────────────────────────────────
+const PHOTO_IMPORT_ROWS=35;
+const PHOTO_IMPORT_DRAFT_KEY='_amrs_scl_photo_import_v1';
+const PHOTO_IMPORT_DB='amrs-photo-import';
+let _photoImage=null,_photoState=null,_photoDuplicateApproved=false,_photoResumeBlob=null;
+function photoDefaultRow(){
+  return {
+    sn:'',skipped:false,issue:false,
+    model:document.getElementById('model')?.value||'SAE',
+    reason:document.getElementById('reason')?.value||'PM',
+    action:getAction()||'Preventive Maintenance',
+    errorDescription:'',boxId:''
+  };
+}
+function photoNewState(){
+  return {stage:'align',current:0,bounds:null,rows:Array.from({length:PHOTO_IMPORT_ROWS},photoDefaultRow)};
+}
+function photoShowStep(id){
+  document.querySelectorAll('#photoImportModal .photo-step').forEach(step=>step.classList.toggle('active',step.id===id));
+  document.getElementById('photoImportModal').scrollTop=0;
+}
+function photoOpenDb(){
+  return new Promise((resolve,reject)=>{
+    const request=indexedDB.open(PHOTO_IMPORT_DB,1);
+    request.onupgradeneeded=()=>request.result.createObjectStore('draft');
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });
+}
+async function photoDbGet(){
+  try{
+    const db=await photoOpenDb();
+    return await new Promise((resolve,reject)=>{
+      const tx=db.transaction('draft','readonly'),request=tx.objectStore('draft').get('scl');
+      request.onsuccess=()=>resolve(request.result||null);request.onerror=()=>reject(request.error);
+      tx.oncomplete=()=>db.close();
+    });
+  }catch(e){return null;}
+}
+async function photoDbSet(blob){
+  try{
+    const db=await photoOpenDb();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction('draft','readwrite');tx.objectStore('draft').put(blob,'scl');
+      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+    });
+    db.close();
+  }catch(e){}
+}
+async function photoDbDelete(){
+  try{
+    const db=await photoOpenDb();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction('draft','readwrite');tx.objectStore('draft').delete('scl');
+      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+    });
+    db.close();
+  }catch(e){}
+}
+function photoLoadBlob(blob){
+  return new Promise((resolve,reject)=>{
+    const image=new Image(),url=URL.createObjectURL(blob);
+    image.onload=()=>{URL.revokeObjectURL(url);_photoImage=image;resolve(image);};
+    image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('無法讀取相片'));};
+    image.src=url;
+  });
+}
+async function photoPrepareBlob(file){
+  const image=await photoLoadBlob(file);
+  const maxSide=2400,scale=Math.min(1,maxSide/Math.max(image.naturalWidth,image.naturalHeight));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+  canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),'image/jpeg',.9));
+}
+function photoSaveDraft(){
+  if(!_photoState)return;
+  try{localStorage.setItem(PHOTO_IMPORT_DRAFT_KEY,JSON.stringify(_photoState));}catch(e){}
+}
+async function openPhotoImport(){
+  if(activeCompany!=='SCL'){showToast('紙本相片匯入只適用於 SCL','err');return;}
+  hideSnPad();
+  document.getElementById('photoImportModal').classList.add('show');
+  photoShowStep('photoStepSource');
+  const draft=localStorage.getItem(PHOTO_IMPORT_DRAFT_KEY);
+  _photoResumeBlob=await photoDbGet();
+  const canResume=!!draft&&!!_photoResumeBlob;
+  document.getElementById('photoResumeBtn').hidden=!canResume;
+  document.getElementById('photoDiscardBtn').hidden=!canResume;
+}
+function closePhotoImport(){
+  photoSyncCurrent();
+  photoSaveDraft();
+  document.getElementById('photoImportModal').classList.remove('show');
+}
+async function clearPhotoDraft(){
+  localStorage.removeItem(PHOTO_IMPORT_DRAFT_KEY);
+  await photoDbDelete();
+  _photoState=null;_photoImage=null;_photoResumeBlob=null;
+  document.getElementById('photoFileInput').value='';
+}
+async function discardPhotoImport(){
+  if(!confirm('刪除這張相片及所有未完成輸入？'))return;
+  await clearPhotoDraft();
+  photoShowStep('photoStepSource');
+  document.getElementById('photoResumeBtn').hidden=true;
+  document.getElementById('photoDiscardBtn').hidden=true;
+}
+async function resumePhotoImport(){
+  try{
+    const saved=JSON.parse(localStorage.getItem(PHOTO_IMPORT_DRAFT_KEY)||'null');
+    const blob=_photoResumeBlob||await photoDbGet();
+    if(!saved||!blob)throw new Error('找不到上次進度');
+    await photoLoadBlob(blob);
+    const rows=Array.from({length:PHOTO_IMPORT_ROWS},(_,index)=>({...photoDefaultRow(),...(saved.rows?.[index]||{})}));
+    _photoState={...saved,rows,current:Math.min(PHOTO_IMPORT_ROWS-1,Math.max(0,Number(saved.current)||0))};
+    if(!_photoState.bounds)detectPhotoGrid(false);
+    else drawPhotoPreview();
+    if(saved.stage==='entry'||saved.stage==='review'){photoShowStep('photoStepEntry');renderPhotoEntry();}
+    else photoShowStep('photoStepAlign');
+  }catch(e){showToast(e.message||'無法恢復相片進度','err');}
+}
+function photoClusterPeaks(scores,threshold){
+  const peaks=[];let start=-1;
+  for(let i=0;i<=scores.length;i++){
+    if(i<scores.length&&scores[i]>=threshold){if(start<0)start=i;continue;}
+    if(start>=0){
+      let best=start;
+      for(let j=start+1;j<i;j++)if(scores[j]>scores[best])best=j;
+      peaks.push(best);start=-1;
+    }
+  }
+  return peaks;
+}
+function photoMedian(values){
+  const sorted=values.slice().sort((a,b)=>a-b);
+  return sorted.length?sorted[Math.floor(sorted.length/2)]:0;
+}
+function photoBestGrid(peaks,count){
+  let best=null;
+  for(let i=0;i+count<=peaks.length;i++){
+    const slice=peaks.slice(i,i+count),gaps=slice.slice(1).map((value,index)=>value-slice[index]);
+    const median=photoMedian(gaps);if(median<5||median>80)continue;
+    const score=gaps.reduce((sum,gap)=>sum+Math.abs(gap-median),0)/gaps.length/median;
+    if(!best||score<best.score-.02||(Math.abs(score-best.score)<=.02&&slice[slice.length-1]>best.slice[best.slice.length-1]))best={slice,score,median};
+  }
+  return best&&best.score<.28?best:null;
+}
+function detectPhotoGrid(redetect=true){
+  if(!_photoImage)return;
+  const maxWidth=1200,scale=Math.min(1,maxWidth/_photoImage.naturalWidth);
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(_photoImage.naturalWidth*scale));canvas.height=Math.max(1,Math.round(_photoImage.naturalHeight*scale));
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(_photoImage,0,0,canvas.width,canvas.height);
+  const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data,w=canvas.width,h=canvas.height;
+  const dark=(x,y)=>{const i=(y*w+x)*4;return pixels[i]+pixels[i+1]+pixels[i+2]<390;};
+  const horizontal=Array(h).fill(0);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x+=2)if(dark(x,y))horizontal[y]++;
+  const yPeaks=photoClusterPeaks(horizontal,w*.28);
+  const grid=photoBestGrid(yPeaks,PHOTO_IMPORT_ROWS+1);
+  let top,bottom,left,right,serialLeft,serialRight,automatic=false;
+  if(grid){
+    top=grid.slice[0];bottom=grid.slice[grid.slice.length-1];automatic=true;
+    const topPeakIndex=yPeaks.indexOf(top),previousPeak=topPeakIndex>0?yPeaks[topPeakIndex-1]:null,nextPeak=topPeakIndex>=0?yPeaks[topPeakIndex+1]:null;
+    if(previousPeak!=null&&nextPeak!=null&&top-previousPeak>grid.median*1.25&&(bottom-nextPeak)/PHOTO_IMPORT_ROWS>grid.median*.75)top=nextPeak;
+    const vertical=Array(w).fill(0);
+    for(let x=0;x<w;x++)for(let y=top;y<=bottom;y+=2)if(dark(x,y))vertical[x]++;
+    let xPeaks=photoClusterPeaks(vertical,(bottom-top)*.28).filter(x=>x>w*.002&&x<w*.998);
+    if(xPeaks.length>=10){
+      left=xPeaks[0];right=xPeaks[xPeaks.length-1];
+      const inside=xPeaks.filter(x=>x>=left&&x<=right);
+      serialLeft=inside[3];serialRight=inside[4];
+    }
+  }
+  if(!(right>left&&serialRight>serialLeft)){
+    left=w*.009;right=w*.968;top=h*.078;bottom=h*.929;
+    serialLeft=w*.235;serialRight=w*.306;automatic=false;
+  }
+  const inverse=1/scale;
+  _photoState=_photoState||photoNewState();
+  _photoState.bounds={left:left*inverse,right:right*inverse,top:top*inverse,bottom:bottom*inverse,serialLeft:serialLeft*inverse,serialRight:serialRight*inverse};
+  _photoState.stage='align';photoSaveDraft();drawPhotoPreview();
+  document.getElementById('photoDetectStatus').textContent=automatic?'✓ 已按表格線找到 35 行；請確認紅色範圍。':'未能完整辨認表格線，已套用固定格式；如有偏差可微調頂部／底部。';
+  if(redetect)photoShowStep('photoStepAlign');
+}
+function drawPhotoPreview(){
+  if(!_photoImage||!_photoState?.bounds)return;
+  const canvas=document.getElementById('photoPreviewCanvas'),maxWidth=1000;
+  const scale=Math.min(1,maxWidth/_photoImage.naturalWidth);
+  canvas.width=Math.round(_photoImage.naturalWidth*scale);canvas.height=Math.round(_photoImage.naturalHeight*scale);
+  const ctx=canvas.getContext('2d');ctx.drawImage(_photoImage,0,0,canvas.width,canvas.height);
+  const b=_photoState.bounds;
+  ctx.save();ctx.scale(scale,scale);ctx.strokeStyle='#ff3b30';ctx.lineWidth=3/scale;
+  ctx.strokeRect(b.left,b.top,b.right-b.left,b.bottom-b.top);
+  ctx.fillStyle='rgba(255,59,48,.16)';ctx.fillRect(b.serialLeft,b.top,b.serialRight-b.serialLeft,b.bottom-b.top);
+  ctx.lineWidth=1/scale;
+  for(let i=0;i<=PHOTO_IMPORT_ROWS;i++){const y=b.top+(b.bottom-b.top)*i/PHOTO_IMPORT_ROWS;ctx.beginPath();ctx.moveTo(b.left,y);ctx.lineTo(b.right,y);ctx.stroke();}
+  ctx.restore();
+}
+function adjustPhotoGrid(edge,direction){
+  if(!_photoState?.bounds||!_photoImage)return;
+  const amount=Math.max(1,_photoImage.naturalHeight*.0025)*direction,b=_photoState.bounds;
+  if(edge==='top')b.top=Math.min(b.bottom-35,b.top+amount);
+  else b.bottom=Math.max(b.top+35,b.bottom+amount);
+  photoSaveDraft();drawPhotoPreview();
+}
+function startPhotoEntry(){
+  if(!_photoImage||!_photoState?.bounds){showToast('請先選擇表格相片','err');return;}
+  _photoState.stage='entry';photoShowStep('photoStepEntry');renderPhotoEntry();photoSaveDraft();
+}
+function photoDrawCrop(canvas,sx,sy,sw,sh,stretch=false){
+  const cssWidth=Math.max(320,canvas.clientWidth||700),cssHeight=Math.max(100,canvas.clientHeight||150),ratio=Math.min(2,window.devicePixelRatio||1);
+  canvas.width=Math.round(cssWidth*ratio);canvas.height=Math.round(cssHeight*ratio);
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  if(stretch)ctx.drawImage(_photoImage,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+  else{
+    const scale=Math.min(canvas.width/sw,canvas.height/sh),dw=sw*scale,dh=sh*scale;
+    ctx.drawImage(_photoImage,sx,sy,sw,sh,(canvas.width-dw)/2,(canvas.height-dh)/2,dw,dh);
+  }
+}
+function photoSyncCurrent(){
+  if(!_photoState||!document.getElementById('photoStepEntry')?.classList.contains('active'))return;
+  const row=_photoState.rows[_photoState.current];if(!row)return;
+  row.sn=document.getElementById('photoSnInput').value.replace(/\D/g,'').slice(0,4);
+  row.model=document.getElementById('photoModel').value;
+  row.reason=document.getElementById('photoReason').value.trim();
+  row.action=document.getElementById('photoAction').value.trim();
+  row.errorDescription=document.getElementById('photoError').value.trim();
+  row.boxId=document.getElementById('photoBoxId').value.trim();
+  if(row.sn)row.skipped=false;
+}
+function renderPhotoEntry(){
+  if(!_photoState||!_photoImage)return;
+  const index=_photoState.current,row=_photoState.rows[index],b=_photoState.bounds;
+  const rowHeight=(b.bottom-b.top)/PHOTO_IMPORT_ROWS,rowTop=b.top+rowHeight*index;
+  photoDrawCrop(document.getElementById('photoSerialCanvas'),Math.max(0,b.serialLeft-(b.serialRight-b.serialLeft)*.12),Math.max(0,rowTop-rowHeight*.15),(b.serialRight-b.serialLeft)*1.24,rowHeight*1.3);
+  const detailLeft=b.left+(b.right-b.left)*.497;
+  photoDrawCrop(document.getElementById('photoRowCanvas'),detailLeft,Math.max(0,rowTop-rowHeight*.12),b.right-detailLeft,rowHeight*1.24,true);
+  document.getElementById('photoEntryProgress').textContent=`第 ${index+1} / ${PHOTO_IMPORT_ROWS} 行`;
+  document.getElementById('photoSerialCropLabel').textContent=`第 ${index+1} 行`;
+  document.getElementById('photoSnInput').value=row.sn||'';
+  document.getElementById('photoModel').value=row.model||'SAE';
+  document.getElementById('photoReason').value=row.reason||'PM';
+  document.getElementById('photoAction').value=row.action||'Preventive Maintenance';
+  document.getElementById('photoError').value=row.errorDescription||'';
+  document.getElementById('photoBoxId').value=row.boxId||'';
+  document.getElementById('photoIssueBtn').classList.toggle('active',!!row.issue);
+  document.getElementById('photoIssueFields').classList.toggle('show',!!row.issue);
+  setTimeout(()=>document.getElementById('photoSnInput').focus(),0);
+}
+function photoKey(value){
+  const input=document.getElementById('photoSnInput');
+  input.value=(input.value+value).replace(/\D/g,'').slice(0,4);input.focus();
+}
+function photoBackspace(){
+  const input=document.getElementById('photoSnInput');input.value=input.value.slice(0,-1);input.focus();
+}
+function photoToggleIssue(){
+  photoSyncCurrent();const row=_photoState.rows[_photoState.current];row.issue=!row.issue;
+  document.getElementById('photoIssueBtn').classList.toggle('active',row.issue);
+  document.getElementById('photoIssueFields').classList.toggle('show',row.issue);photoSaveDraft();
+}
+function photoNextRow(){
+  photoSyncCurrent();const row=_photoState.rows[_photoState.current];
+  if(!row.sn&&!row.skipped){showToast('請輸入機身號碼，或按「空白／跳過」','err');return;}
+  if(row.sn&&!/^\d{1,4}$/.test(row.sn)){showToast('機身號碼必須為 1–4 位數字','err');return;}
+  if(_photoState.current>=PHOTO_IMPORT_ROWS-1){showPhotoReview();return;}
+  _photoState.current++;photoSaveDraft();renderPhotoEntry();
+}
+function photoPreviousRow(){
+  photoSyncCurrent();if(_photoState.current>0)_photoState.current--;photoSaveDraft();renderPhotoEntry();
+}
+function photoSkipRow(){
+  const row=_photoState.rows[_photoState.current];row.sn='';row.skipped=true;row.issue=false;
+  if(_photoState.current>=PHOTO_IMPORT_ROWS-1)showPhotoReview();
+  else{_photoState.current++;photoSaveDraft();renderPhotoEntry();}
+}
+function photoSkipRemaining(){
+  photoSyncCurrent();
+  const currentRow=_photoState.rows[_photoState.current],start=currentRow.sn?_photoState.current+1:_photoState.current;
+  if(start>=PHOTO_IMPORT_ROWS){showPhotoReview();return;}
+  if(!confirm(`將第 ${start+1} 行至第 ${PHOTO_IMPORT_ROWS} 行標記為空白？`))return;
+  for(let i=start;i<PHOTO_IMPORT_ROWS;i++){_photoState.rows[i]={..._photoState.rows[i],sn:'',skipped:true,issue:false};}
+  showPhotoReview();
+}
+function photoRowsAsItems(){
+  return _photoState.rows.filter(row=>!row.skipped&&row.sn).map(row=>({
+    sn:row.sn,model:row.model||'SAE',reason:row.reason||'PM',action:row.action||'Preventive Maintenance',
+    errorDescription:row.errorDescription||'',boxId:row.boxId||'',inspector:''
+  }));
+}
+function photoDuplicateSet(){
+  const items=photoRowsAsItems(),counts=new Map();
+  items.forEach(item=>counts.set(item.sn,(counts.get(item.sn)||0)+1));
+  return new Set([...counts].filter(([,count])=>count>1).map(([sn])=>sn));
+}
+function showPhotoReview(){
+  photoSyncCurrent();
+  const invalid=_photoState.rows.find(row=>!row.skipped&&row.sn&&!/^\d{1,4}$/.test(row.sn));
+  if(invalid){showToast('部分機身號碼格式錯誤','err');return;}
+  _photoState.stage='review';_photoDuplicateApproved=false;photoSaveDraft();photoShowStep('photoStepReview');
+  const entered=_photoState.rows.filter(row=>row.sn&&!row.skipped).length,skipped=_photoState.rows.filter(row=>row.skipped).length;
+  const issues=_photoState.rows.filter(row=>row.sn&&row.issue&&!row.skipped).length,duplicates=photoDuplicateSet();
+  document.getElementById('photoReviewSummary').innerHTML=`
+    <div class="photo-review-stat"><strong>${PHOTO_IMPORT_ROWS}</strong>表格行數</div>
+    <div class="photo-review-stat"><strong>${entered}</strong>已輸入</div>
+    <div class="photo-review-stat"><strong>${skipped}</strong>空白</div>
+    <div class="photo-review-stat"><strong>${issues}</strong>有問題</div>`;
+  document.getElementById('photoReviewList').innerHTML=_photoState.rows.map((row,index)=>{
+    const label=row.skipped?'空白':(row.sn||'未處理'),classes=['photo-review-row'];
+    if(row.issue)classes.push('issue');if(row.sn&&duplicates.has(row.sn))classes.push('duplicate');
+    return `<button class="${classes.join(' ')}" onclick="editPhotoReviewRow(${index})" type="button"><span class="row-no">第 ${index+1} 行${row.issue?' · 有問題':''}</span><span class="row-sn">${esc(label)}</span></button>`;
+  }).join('');
+  const warning=document.getElementById('photoReviewWarning');warning.className='photo-review-warning';warning.textContent='';
+  const button=document.getElementById('photoAddQueueBtn');button.disabled=entered===0;button.textContent='加入待提交';
+}
+function goPhotoEntry(){_photoState.stage='entry';photoShowStep('photoStepEntry');renderPhotoEntry();photoSaveDraft();}
+function editPhotoReviewRow(index){_photoState.current=index;goPhotoEntry();}
+async function addPhotoRowsToQueue(){
+  const items=photoRowsAsItems();
+  if(!items.length){showToast('沒有可加入的機身號碼','err');return;}
+  const duplicateSerials=sameDayDuplicateSerials(items);
+  if(duplicateSerials.length&&!_photoDuplicateApproved){
+    const warning=document.getElementById('photoReviewWarning');
+    warning.textContent=`S/N ${duplicateSerials.join('、')} 今日或這批資料內已經出現。請核對；如確定仍要加入，再按一次「仍然加入」。`;
+    warning.classList.add('show');_photoDuplicateApproved=true;
+    document.getElementById('photoAddQueueBtn').textContent='仍然加入';return;
+  }
+  const contextual=items.map(item=>withQueueContext(item,'SCL'));ensureSubmissionIds(contextual);
+  queue.push(...contextual);saveQueue();renderQueue();scheduleQueueDuplicateCheck(contextual);
+  _updateRecentReasons(contextual[0]?.reason||'',contextual[0]?.action||'');
+  await clearPhotoDraft();
+  document.getElementById('photoImportModal').classList.remove('show');
+  showToast(`✓ 已從紙本相片加入 ${contextual.length} 筆待提交`);
+}
+document.getElementById('photoFileInput').addEventListener('change',async event=>{
+  const file=event.target.files?.[0];if(!file)return;
+  const status=document.getElementById('photoDetectStatus');photoShowStep('photoStepAlign');status.textContent='正在處理相片及找出表格線...';
+  try{
+    const blob=await photoPrepareBlob(file);await photoDbSet(blob);await photoLoadBlob(blob);
+    _photoState=photoNewState();detectPhotoGrid(false);photoSaveDraft();
+  }catch(e){showToast(e.message||'無法讀取相片','err');photoShowStep('photoStepSource');}
+});
+document.getElementById('photoSnInput').addEventListener('input',event=>{event.target.value=event.target.value.replace(/\D/g,'').slice(0,4);});
+document.getElementById('photoSnInput').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();photoNextRow();}});
 
 // ── Local Log & Stats ──────────────────────────────────────
 function _todayLogKey(){const t=new Date();return `_ml_log_${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;}
