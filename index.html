@@ -815,7 +815,11 @@
     .photo-adjust-grid{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:12px 0}
     .photo-adjust-grid button,.photo-nav button,.photo-review-actions button{padding:9px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     .photo-adjust-grid button.primary,.photo-nav button.primary,.photo-review-actions button.primary{border-color:#388bfd;background:#1f6feb;color:#fff}
-    .photo-entry-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,.6fr);gap:16px}
+    .photo-entry-layout{display:flex;flex-direction:column;gap:12px}
+    .photo-sn-row,.photo-entry-body{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,.6fr);gap:16px}
+    .photo-sn-row{align-items:stretch}
+    .photo-sn-row .photo-crop-card{margin-bottom:0}
+    .photo-sn-input-panel{display:flex;flex-direction:column;justify-content:center;padding:14px;border:1px solid #30363d;border-radius:16px;background:#161b22}
     .photo-crops{min-width:0}
     .photo-crop-card{margin-bottom:12px;padding:10px;border:1px solid #30363d;border-radius:14px;background:#161b22}
     .photo-crop-label{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;color:#8b949e;font-size:12px;font-weight:800}
@@ -858,9 +862,13 @@
     @media(max-width:760px){
       .photo-import-shell{padding:10px}
       .photo-import-head{margin:-10px -10px 10px;padding:10px}
-      .photo-entry-layout{display:block}
+      .photo-sn-row{grid-template-columns:minmax(0,1fr) minmax(132px,.9fr);gap:8px}
+      .photo-entry-body{display:block}
       .photo-crop-card{padding:7px}
-      #photoSerialCanvas{height:112px}
+      .photo-sn-input-panel{padding:8px}
+      .photo-sn-input-panel .photo-progress{margin-bottom:6px;font-size:12px}
+      #photoSnInput{padding:10px 6px;font-size:27px;letter-spacing:3px}
+      #photoSerialCanvas{height:104px}
       #photoProblemCanvas{height:118px}
       #photoRowCanvas{height:92px}
       .photo-entry-panel{padding:10px}
@@ -947,11 +955,18 @@
     </section>
     <section class="photo-step" id="photoStepEntry">
       <div class="photo-entry-layout">
-        <div class="photo-crops">
+        <div class="photo-sn-row">
           <div class="photo-crop-card">
             <div class="photo-crop-label"><span>Serial Number</span><span id="photoSerialCropLabel">第 1 行</span></div>
             <canvas id="photoSerialCanvas"></canvas>
           </div>
+          <div class="photo-sn-input-panel">
+            <div class="photo-progress" id="photoEntryProgress">第 1 / 35 行</div>
+            <input id="photoSnInput" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+          </div>
+        </div>
+        <div class="photo-entry-body">
+          <div class="photo-crops">
           <div class="photo-crop-card">
             <div class="photo-crop-label"><span>Problem Description</span><span>有文字就必須輸入 Reason</span></div>
             <canvas id="photoProblemCanvas"></canvas>
@@ -962,8 +977,6 @@
           </div>
         </div>
         <div class="photo-entry-panel">
-          <div class="photo-progress" id="photoEntryProgress">第 1 / 35 行</div>
-          <input id="photoSnInput" type="text" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
           <div class="photo-keypad">
             <button onclick="photoKey('7')" type="button">7</button><button onclick="photoKey('8')" type="button">8</button><button onclick="photoKey('9')" type="button">9</button>
             <button onclick="photoKey('4')" type="button">4</button><button onclick="photoKey('5')" type="button">5</button><button onclick="photoKey('6')" type="button">6</button>
@@ -989,6 +1002,7 @@
             <button onclick="photoPreviousRow()" type="button">← 上一行</button>
             <button class="primary" onclick="photoNextRow()" type="button">下一行 →</button>
           </div>
+        </div>
         </div>
       </div>
     </section>
@@ -1614,8 +1628,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.27-01';
-const _APP_VERSION='v1.047';
+const _APP_BUMP='2026.07.27-02';
+const _APP_VERSION='v1.048';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
