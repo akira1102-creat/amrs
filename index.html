@@ -573,7 +573,14 @@
     .monthly-page-shell{max-width:1100px;margin:0 auto}
     .monthly-page-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
     .monthly-page-title{font-size:18px;font-weight:800;color:#e6edf3}
-    .monthly-refresh{flex:0 0 auto;padding:9px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    .monthly-page-tools{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+    .monthly-month-nav{display:flex;align-items:center;gap:5px}
+    .monthly-month-btn,.monthly-month-arrow{height:36px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    .monthly-month-btn{min-width:104px;padding:0 12px;border-color:#388bfd;background:#0d203d;color:#79c0ff}
+    .monthly-month-arrow{padding:0 10px}
+    .monthly-month-arrow:hover,.monthly-month-btn:hover,.monthly-refresh:hover{border-color:#58a6ff;color:#fff}
+    .monthly-month-picker{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+    .monthly-refresh{flex:0 0 auto;height:36px;padding:0 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
     .monthly-company-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .monthly-company-grid>.dash-mobile-empty{grid-column:1/-1}
     .monthly-company-card{border:1px solid #30363d;border-radius:14px;background:#161b22;padding:15px;min-width:0}
@@ -740,6 +747,10 @@
     .mob .bp-field-options{position:fixed;left:16px;right:16px;top:auto;width:auto}
     .mob .monthly-company-grid{grid-template-columns:1fr}
     .mob .monthly-page-title{font-size:16px}
+    .mob .monthly-page-head{align-items:stretch;flex-direction:column;gap:9px}
+    .mob .monthly-page-tools{justify-content:stretch}
+    .mob .monthly-month-nav{flex:1;min-width:0}
+    .mob .monthly-month-btn{flex:1;min-width:0}
     .mob .schedule-page-title{font-size:16px}
     .mob .schedule-page-head{align-items:center}
     .mob .schedule-focus{padding-top:14px}
@@ -1531,7 +1542,15 @@
   <div class="monthly-page-shell">
     <div class="monthly-page-head">
       <div class="monthly-page-title">每月統計</div>
-      <button class="monthly-refresh" id="monthlyStatsRefreshBtn" onclick="loadMonthlyStats(true)" type="button">重新整理</button>
+      <div class="monthly-page-tools">
+        <div class="monthly-month-nav" aria-label="統計月份導覽">
+          <button class="monthly-month-arrow" id="monthlyStatsPrevBtn" onclick="shiftMonthlyStatsMonth(-1)" type="button">‹ 上個月</button>
+          <button class="monthly-month-btn" id="monthlyStatsMonthBtn" onclick="openMonthlyStatsPicker()" type="button" aria-label="選擇統計月份">—</button>
+          <button class="monthly-month-arrow" id="monthlyStatsNextBtn" onclick="shiftMonthlyStatsMonth(1)" type="button">下個月 ›</button>
+          <input class="monthly-month-picker" id="monthlyStatsMonthPicker" type="month" aria-label="選擇統計年月" onchange="selectMonthlyStatsMonth(this.value)">
+        </div>
+        <button class="monthly-refresh" id="monthlyStatsRefreshBtn" onclick="loadMonthlyStats(true)" type="button">重新整理</button>
+      </div>
     </div>
     <div class="monthly-company-grid" id="monthlyStatsGrid"><div class="dash-mobile-empty">正在載入資料...</div></div>
   </div>
@@ -1628,8 +1647,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.07.27-02';
-const _APP_VERSION='v1.048';
+const _APP_BUMP='2026.08.01-01';
+const _APP_VERSION='v1.049';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2023,8 +2042,7 @@ function applyScheduleMachineCounts(data,monthCode){
 }
 function hydrateScheduleMachineCountsFromCache(monthCode){
   try{
-    const cached=JSON.parse(localStorage.getItem('_amrs_monthly_stats_v3')||'null');
-    return applyScheduleMachineCounts(cached?.data,monthCode);
+    return applyScheduleMachineCounts(getCachedMonthlyStats(monthCode),monthCode);
   }catch(e){return false;}
 }
 async function loadScheduleVisibleMachineCounts(days,force=false){
@@ -2150,8 +2168,45 @@ function openScheduleInputFromButton(button){
   window.scrollTo({top:0,behavior:'smooth'});showToast(`已開啟 ${venue} · ${scheduleDateLabel(date)}`);
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
-const MONTHLY_STATS_CACHE_KEY='_amrs_monthly_stats_v3',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
-let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null;
+const MONTHLY_STATS_CACHE_PREFIX='_amrs_monthly_stats_v4_',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
+let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null,_monthlyStatsMonth='';
+function monthlyStatsMonthCode(date=new Date()){
+  return String(date.getFullYear()).slice(-2)+String(date.getMonth()+1).padStart(2,'0');
+}
+function isMonthlyStatsMonthCode(value){return /^\d{4}$/.test(String(value||''))&&Number(String(value).slice(2))>=1&&Number(String(value).slice(2))<=12;}
+function shiftMonthlyStatsMonthCode(code,delta){
+  const year=2000+Number(String(code).slice(0,2)),month=Number(String(code).slice(2));
+  const total=year*12+(month-1)+delta,nextYear=Math.floor(total/12),nextMonth=total%12+1;
+  return String(nextYear).slice(-2)+String(nextMonth).padStart(2,'0');
+}
+function monthlyStatsMonthLabel(code){return `${2000+Number(String(code).slice(0,2))}年${Number(String(code).slice(2))}月`;}
+function syncMonthlyStatsMonthUi(){
+  const code=_monthlyStatsMonth||monthlyStatsMonthCode(),year=2000+Number(code.slice(0,2)),month=code.slice(2);
+  const button=document.getElementById('monthlyStatsMonthBtn'),picker=document.getElementById('monthlyStatsMonthPicker');
+  if(button)button.textContent=monthlyStatsMonthLabel(code);
+  if(picker)picker.value=`${year}-${month}`;
+}
+function setMonthlyStatsMonth(code){
+  if(!isMonthlyStatsMonthCode(code))return;
+  if(_monthlyStatsMonth===code){syncMonthlyStatsMonthUi();return;}
+  _monthlyStatsMonth=code;syncMonthlyStatsMonthUi();
+  if(activePage==='monthlyStats')loadMonthlyStats(true,code);
+}
+function shiftMonthlyStatsMonth(delta){setMonthlyStatsMonth(shiftMonthlyStatsMonthCode(_monthlyStatsMonth||monthlyStatsMonthCode(),delta));}
+function selectMonthlyStatsMonth(value){
+  if(!value)return;
+  const [year,month]=String(value).split('-');
+  setMonthlyStatsMonth(String(Number(year)).slice(-2)+String(Number(month)).padStart(2,'0'));
+}
+function openMonthlyStatsPicker(){
+  const picker=document.getElementById('monthlyStatsMonthPicker');if(!picker)return;
+  try{picker.showPicker?.();}catch(e){picker.focus();}
+}
+_monthlyStatsMonth=monthlyStatsMonthCode();
+function monthlyStatsCacheStorageKey(monthCode){return MONTHLY_STATS_CACHE_PREFIX+monthCode;}
+function clearMonthlyStatsCache(){
+  try{Object.keys(localStorage).filter(key=>key.startsWith(MONTHLY_STATS_CACHE_PREFIX)).forEach(key=>localStorage.removeItem(key));}catch(e){}
+}
 function toggleSclMonthlySettings(){
   const content=document.getElementById('sclMonthlySettingsContent'),toggle=document.getElementById('sclMonthlyToggle');
   const open=!content.classList.contains('show');content.classList.toggle('show',open);toggle.setAttribute('aria-expanded',String(open));
@@ -2196,7 +2251,7 @@ async function saveSclMonthlySettings(){
     const data=await postGasJson({action:'updateMonthlySettings',company:'SCL',settings:{poNumber,targets}});
     if(!data.success)throw new Error(data.message||'儲存失敗');
     applySclMonthlySettings(data.settings||{poNumber,targets});_sclMonthlySettingsLoaded=true;syncPoQuickFillButton(false);
-    localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);
+    clearMonthlyStatsCache();
     status.textContent='已更新 Monthly 工作表';status.style.color='#3fb950';showToast('✓ SCL 本月設定已更新');
     if(activePage==='monthlyStats')loadMonthlyStats(true);
   }catch(e){status.textContent=e.message||'儲存失敗';status.style.color='#ff7b72';showToast(e.message||'儲存失敗','err');}
@@ -2250,10 +2305,9 @@ function renderMonthlyStatsData(data){
   grid.innerHTML=companies.map(renderMonthlyCompany).join('')||'<div class="dash-mobile-empty">沒有統計資料。</div>';
   bindAnimatedSortable(grid,'.monthly-company-card','.monthly-drag',items=>localStorage.setItem(MONTHLY_COMPANY_ORDER_KEY,JSON.stringify(items.map(item=>item.dataset.monthlyCompany))));
 }
-function getCachedMonthlyStats(){
+function getCachedMonthlyStats(monthCode=_monthlyStatsMonth||monthlyStatsMonthCode()){
   try{
-    const cached=JSON.parse(localStorage.getItem(MONTHLY_STATS_CACHE_KEY)||'null');
-    const now=new Date(),monthCode=String(now.getFullYear()).slice(-2)+String(now.getMonth()+1).padStart(2,'0');
+    const cached=JSON.parse(localStorage.getItem(monthlyStatsCacheStorageKey(monthCode))||'null');
     return cached?.data?.monthCode===monthCode&&Array.isArray(cached.data.companies)?cached.data:null;
   }catch(e){return null;}
 }
@@ -2278,16 +2332,18 @@ function assembleMonthlyStats(base,companyResults){
   });
   return {success:true,monthCode:base.monthCode,scheduleSheet:base.scheduleSheet,monthLabel:base.monthLabel,companies};
 }
-async function loadMonthlyStats(force=false){
+async function loadMonthlyStats(force=false,requestedMonth=''){
   const url=getScriptUrl();if(!url)return;
+  const monthCode=requestedMonth||_monthlyStatsMonth||monthlyStatsMonthCode();
+  if(!isMonthlyStatsMonthCode(monthCode))return;
+  _monthlyStatsMonth=monthCode;syncMonthlyStatsMonthUi();
   _monthlyStatsRequest?.abort();_monthlyStatsRequest=new AbortController();
-  const grid=document.getElementById('monthlyStatsGrid'),btn=document.getElementById('monthlyStatsRefreshBtn'),cached=getCachedMonthlyStats();
+  const grid=document.getElementById('monthlyStatsGrid'),btn=document.getElementById('monthlyStatsRefreshBtn'),cached=getCachedMonthlyStats(monthCode);
   if(cached)renderMonthlyStatsData(cached);else grid.innerHTML='<div class="dash-mobile-empty">正在載入六間公司資料...</div>';
   btn.disabled=true;btn.textContent=cached&&!force?'更新中...':'載入中...';
   const loadingToken=showLoadingProgress('每月統計載入中，請稍等...');
   try{
     const suffix=force?'&refresh=1':'';
-    const now=new Date(),monthCode=String(now.getFullYear()).slice(-2)+String(now.getMonth()+1).padStart(2,'0');
     const loadCompany=async company=>{
       const endpoint=`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`;
       try{
@@ -2308,7 +2364,7 @@ async function loadMonthlyStats(force=false){
     if(!base.success)throw new Error(base.message||'載入失敗');
     const data=assembleMonthlyStats(base,companyResults);
     if(!data.success||!Array.isArray(data.companies))throw new Error(data.message||'載入失敗');
-    localStorage.setItem(MONTHLY_STATS_CACHE_KEY,JSON.stringify({savedAt:Date.now(),data}));renderMonthlyStatsData(data);
+    localStorage.setItem(monthlyStatsCacheStorageKey(monthCode),JSON.stringify({savedAt:Date.now(),data}));renderMonthlyStatsData(data);
   }catch(e){
     if(e.name==='AbortError')return;
     if(!cached)grid.innerHTML=`<div class="dash-mobile-empty">${esc(e.message||'無法載入每月統計')}</div>`;
@@ -5296,7 +5352,7 @@ async function doSubmit(){
   btn.disabled=true;
   if(ensureSubmissionIds(queue))saveQueue();
   const records=queue.map(item=>({submissionId:item.submissionId,company:item.company||activeCompany,casino:item.casino||casino,date:item.date||fmtDate(date),poNumber:item.poNumber??poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||'',bpUodActivationDate:item.bpUodActivationDate||(/^wait for unlock$/i.test(item.bpUodUnlockDay||'')?(item.date||fmtDate(date)):'')||'',bpUodUnlockDay:item.bpUodUnlockDay||'',bpHoldDate:item.bpHoldDate||'',bpHoldReleaseDate:item.bpHoldReleaseDate||''}));
-  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem(queueStorageKey(activeCompany));localStorage.removeItem(MONTHLY_STATS_CACHE_KEY);renderQueue();loadTodayRecords();};
+  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem(queueStorageKey(activeCompany));clearMonthlyStatsCache();renderQueue();loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
   for(let i=0;i<records.length;i+=CHUNK_SIZE){
