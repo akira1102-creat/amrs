@@ -1,5 +1,9 @@
-const CACHE = 'amrs-v1049';
+const CACHE = 'amrs-v1050';
 const ASSETS = ['./', './index.html', './manifest.json', './sw.js'];
+
+self.addEventListener('message', e => {
+  if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
 
 self.addEventListener('install', e => {
   e.waitUntil(

@@ -1647,8 +1647,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.01-01';
-const _APP_VERSION='v1.049';
+const _APP_BUMP='2026.08.03-01';
+const _APP_VERSION='v1.050';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1800,8 +1800,23 @@ function _migrateCompanyCodes(){
   if(old&&!localStorage.getItem(_companyKey('SCL')))localStorage.setItem(_companyKey('SCL'),old);
 }
 _migrateCompanyCodes();
-function getDeployId(company){return localStorage.getItem(_companyKey(company||activeCompany))||localStorage.getItem('_ml_gas')||'';}
-function getScriptUrl(){const id=getDeployId();if(!id)return '';if(id.startsWith('https://'))return id;return 'https://script.google.com/macros/s/'+id+'/exec';}
+function extractDeployId(value){
+  let raw=String(value||'').trim().replace(/^['"]|['"]$/g,'');
+  if(!raw)return '';
+  if(/^https?:\/\//i.test(raw)){
+    try{
+      const url=new URL(raw),match=url.pathname.match(/^\/macros\/s\/([A-Za-z0-9_-]+)(?:\/(?:exec|dev))?\/?$/i);
+      return url.hostname.toLowerCase()==='script.google.com'&&match?match[1]:'';
+    }catch(e){return '';}
+  }
+  raw=raw.replace(/\/(?:exec|dev)\/?$/i,'').trim();
+  return /^[A-Za-z0-9_-]{20,200}$/.test(raw)?raw:'';
+}
+function getDeployId(company){
+  const raw=localStorage.getItem(_companyKey(company||activeCompany))||localStorage.getItem('_ml_gas')||'';
+  return extractDeployId(raw);
+}
+function getScriptUrl(){const id=getDeployId();return id?'https://script.google.com/macros/s/'+id+'/exec':'';}
 async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
   const controller=new AbortController(),externalSignal=options.signal;
   const abortFromExternal=()=>controller.abort();
@@ -1812,7 +1827,12 @@ async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
   const timer=setTimeout(()=>controller.abort('timeout'),timeoutMs);
   try{
     const response=await fetch(url,{...options,signal:controller.signal});
-    if(!response.ok)throw new Error(`伺服器錯誤 (${response.status})`);
+    if(!response.ok){
+      const error=new Error(response.status===404?'找不到 GAS Web App，請檢查 Deploy ID 或 /exec 網址':'伺服器錯誤 ('+response.status+')');
+      error.httpStatus=response.status;
+      error.retryable=response.status===408||response.status===429||response.status>=500;
+      throw error;
+    }
     return await response.json();
   }catch(error){
     if(controller.signal.aborted&&!externalSignal?.aborted){const timeoutError=new Error('伺服器回應逾時，系統會安全重試');timeoutError.name='TimeoutError';throw timeoutError;}
@@ -1828,7 +1848,7 @@ function postGasJson(payload,timeoutMs=60000){
 function hasAnyDeployId(){return getCompanyOrder().some(c=>!!getDeployId(c));}
 function firstConfiguredCompany(){return getCompanyOrder().find(c=>!!getDeployId(c))||'';}
 function unlockApp(){document.body.classList.remove('auth-locked');}
-function normalizeDeployInput(id){return id.startsWith('https://')?id:'https://script.google.com/macros/s/'+id+'/exec';}
+function normalizeDeployInput(id){const deployId=extractDeployId(id);return deployId?'https://script.google.com/macros/s/'+deployId+'/exec':'';}
 function companyParam(){return 'company='+encodeURIComponent(activeCompany);}
 function syncCompanySpecificFields(){
   document.body.classList.toggle('company-geg',activeCompany==='GEG');
@@ -1846,9 +1866,9 @@ function resetSetupVerification(){
   res.className='';res.textContent='';res.style.display='none';
 }
 function saveSetup(){
-  const id=document.getElementById('gasUrlInput').value.trim();
-  if(!id||id.includes(' ')||id.length<20){document.getElementById('setupErr').textContent='請輸入有效 Deploy ID。';return;}
-  if(setupVerifiedId!==id){document.getElementById('setupErr').textContent='請先測試連線成功，再儲存。';return;}
+  const input=document.getElementById('gasUrlInput').value.trim(),id=extractDeployId(input);
+  if(!id){document.getElementById('setupErr').textContent='請輸入有效 Deploy ID 或完整 /exec 網址。';return;}
+  if(setupVerifiedId!==normalizeDeployInput(input)){document.getElementById('setupErr').textContent='請先測試連線成功，再儲存。';return;}
   localStorage.setItem('_ml_gas',id);
   COMPANIES.forEach(c=>localStorage.setItem(_companyKey(c),id));
   document.getElementById('setupScreen').classList.remove('show');
@@ -1868,10 +1888,9 @@ function cancelSetup(){
   renderCompanyMenu();
 }
 async function testConnection(){
-  const id=document.getElementById('gasUrlInput').value.trim();
+  const input=document.getElementById('gasUrlInput').value.trim(),base=normalizeDeployInput(input);
   const res=document.getElementById('setupTestResult');
-  if(!id||id.length<20){res.className='setupTestResult err';res.textContent='先輸入 Deploy ID';res.style.display='block';return;}
-  const base=normalizeDeployInput(id);
+  if(!base){res.className='setupTestResult err';res.textContent='請輸入有效 Deploy ID 或完整 /exec 網址';res.style.display='block';return;}
   const url=base+(base.includes('?')?'&':'?')+'action=today&'+companyParam();
   const btn=document.getElementById('setupTestBtn');
   btn.textContent='測試中…';btn.disabled=true;
@@ -1881,7 +1900,7 @@ async function testConnection(){
     if(Array.isArray(data.records)){
       res.className='setupTestResult ok';
       res.textContent='✓ 連接成功！今日有 '+data.records.length+' 條記錄';
-      setupVerifiedId=id;
+      setupVerifiedId=base;
       document.getElementById('setupSaveBtn').disabled=false;
     }else{
       res.className='setupTestResult err';
@@ -1891,7 +1910,7 @@ async function testConnection(){
     }
   }catch(e){
     res.className='setupTestResult err';
-    res.textContent='✗ 連接失敗，請確認 Deploy ID 正確';
+    res.textContent='✗ '+(e.message||'連接失敗，請確認 Deploy ID 正確');
     setupVerifiedId='';
     document.getElementById('setupSaveBtn').disabled=true;
   }
@@ -1900,8 +1919,7 @@ async function testConnection(){
 }
 function openGasSettings(opts={}){
   setupReturnState=opts.returnState||null;
-  let cur=getDeployId();
-  if(cur.startsWith('https://script.google.com/macros/s/')){cur=cur.replace('https://script.google.com/macros/s/','').replace('/exec','');}
+  const cur=getDeployId();
   document.getElementById('gasUrlInput').value=cur;
   document.getElementById('setupErr').textContent='';
   document.getElementById('setupTitle').textContent='請輸入 Deploy ID';
@@ -3516,6 +3534,16 @@ try{_retryQueue=JSON.parse(localStorage.getItem('_ml_retry')||'[]');}catch(e){}
 function _saveRetry(){localStorage.setItem('_ml_retry',JSON.stringify(_retryQueue));}
 if(_retryQueue.some(item=>ensureSubmissionIds(item.records)))_saveRetry();
 let _retryBusy=false,_retryTimer=null,_retryAttempts=0,_retryLastError='';
+function isRetryableServerMessage(message){
+  return /lock|busy|too many|timeout|timed out|temporar|try again|service invoked|quota|rate limit|忙碌|稍後|重試|逾時/i.test(String(message||''));
+}
+function queueSubmissionRetry(chunks,startIndex,message){
+  const remaining=chunks.slice(startIndex);
+  if(!remaining.length)return;
+  remaining.forEach(chunk=>_retryQueue.push({records:chunk.records,repairs:chunk.repairs}));
+  _retryLastError=message||'提交結果未確認';
+  _saveRetry();_updateRetryNotice();_scheduleRetry(3000);
+}
 function _updateRetryNotice(){
   const el=document.getElementById('retryNotice');if(!el)return;
   if(_retryQueue.length){
@@ -3535,19 +3563,25 @@ async function _attemptRetry(){
   const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL)return;
   const item=_retryQueue[0];
   _retryBusy=true;_updateRetryNotice();
+  let retryAllowed=true;
   try{
     const body=item.repairs?.length?{action:'submitRecords',records:item.records,brokenPartsRepairs:item.repairs}:item.records;
-    const data=await postGasJson(body);
-    if(!data.success)throw new Error(data.message||'同步失敗');
+    const data=await postGasJson(body,90000);
+    if(!data.success){
+      const error=new Error(data.message||'同步失敗');
+      error.retryable=data.retryable===true||isRetryableServerMessage(data.message);
+      throw error;
+    }
     _appendLocalLog(item.records);
     _retryQueue.shift();_retryAttempts=0;_retryLastError='';_saveRetry();
     showToast(`✓ ${item.records.length} 筆暫存記錄已同步`);
   }catch(e){
     _retryAttempts++;
     _retryLastError=e.message||'同步失敗，稍後自動重試';
+    retryAllowed=e.retryable!==false&&e.httpStatus!==404&&!/找不到 GAS Web App|Deploy ID|\/exec 網址/i.test(_retryLastError);
   }finally{
     _retryBusy=false;_updateRetryNotice();
-    if(_retryQueue.length)_scheduleRetry(_retryLastError?Math.min(60000,5000*Math.pow(2,Math.min(_retryAttempts-1,3))):1000);
+    if(_retryQueue.length&&retryAllowed)_scheduleRetry(_retryLastError?Math.min(60000,5000*Math.pow(2,Math.min(_retryAttempts-1,3))):1000);
   }
 }
 window.addEventListener('online',()=>_scheduleRetry(1000));
@@ -5377,6 +5411,13 @@ async function doSubmit(){
         btn.textContent=chunks.length>1?`儲存中... (${completedChunks}/${chunks.length})`:'儲存中...';
         _appendLocalLog(chunk.records);
       }else{
+        if(data.retryable===true||isRetryableServerMessage(data.message)){
+          queueSubmissionRetry(chunks,ci,data.message||'伺服器正忙碌，稍後會自動重試');
+          renderQueue();
+          showToast('伺服器正忙碌，剩餘資料已安全暫存並會自動重試','warn');
+          clearQueue();
+          return;
+        }
         renderQueue();
         showToast('錯誤：'+(data.message||'伺服器錯誤'),'err');
         btn.disabled=false;
@@ -5387,8 +5428,12 @@ async function doSubmit(){
     showToast(skippedCount?`✓ 已完成：新增 ${savedCount} 筆，略過 ${skippedCount} 筆已提交記錄`:`✓ 已儲存 ${savedCount} 筆記錄`);
     clearQueue();
   }catch(e){
-    chunks.slice(completedChunks).forEach(chunk=>_retryQueue.push({records:chunk.records,repairs:chunk.repairs}));
-    if(chunks.length>completedChunks){_saveRetry();_retryLastError=e.message||'提交結果未確認';_updateRetryNotice();_scheduleRetry(3000);}
+    if(e.retryable===false||[400,401,403,404].includes(e.httpStatus)){
+      renderQueue();
+      showToast(e.message||'請檢查 Deploy ID 或提交資料格式','err');
+      return;
+    }
+    queueSubmissionRetry(chunks,completedChunks,e.message||'提交結果未確認');
     showToast('提交結果未確認，剩餘資料已安全暫存並會自動核對重試','warn');
     clearQueue();
   }finally{
@@ -5441,7 +5486,29 @@ if(!_isMob){
     document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addToQueue();}});
   });
 }
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator){
+  let reloadedForUpdate=false;
+  const hadController=Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!hadController||reloadedForUpdate)return;
+    reloadedForUpdate=true;
+    window.location.reload();
+  });
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(registration=>{
+    const activate=worker=>{if(worker)worker.postMessage({type:'SKIP_WAITING'});};
+    activate(registration.waiting);
+    registration.addEventListener('updatefound',()=>{
+      const installing=registration.installing;
+      installing?.addEventListener('statechange',()=>{
+        if(installing.state==='installed')activate(registration.waiting||installing);
+      });
+    });
+    const check=()=>registration.update().catch(()=>{});
+    check();
+    window.addEventListener('pageshow',check);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')check();});
+  }).catch(()=>{});
+}
 restoreListPreferences();
 renderCompanyMenu();
 syncCompanySpecificFields();
