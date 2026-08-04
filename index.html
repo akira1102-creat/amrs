@@ -1647,8 +1647,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.04-01';
-const _APP_VERSION='v1.051';
+const _APP_BUMP='2026.08.04-02';
+const _APP_VERSION='v1.052';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1817,7 +1817,28 @@ function getDeployId(company){
   return extractDeployId(raw);
 }
 function getScriptUrl(){const id=getDeployId();return id?'https://script.google.com/macros/s/'+id+'/exec':'';}
-async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
+const GAS_READ_CONCURRENCY=2;
+let _gasReadActive=0,_gasReadSequence=0,_gasReadQueue=[];
+function pumpGasReadQueue(){
+  while(_gasReadActive<GAS_READ_CONCURRENCY&&_gasReadQueue.length){
+    const entry=_gasReadQueue.shift();
+    if(entry.signal?.aborted){entry.reject(new DOMException('Aborted','AbortError'));continue;}
+    _gasReadActive++;
+    if(entry.signal)entry.signal.removeEventListener('abort',entry.abort);
+    let released=false;
+    entry.resolve(()=>{if(released)return;released=true;_gasReadActive--;pumpGasReadQueue();});
+  }
+}
+function acquireGasReadSlot(signal,priority='normal'){
+  if(signal?.aborted)return Promise.reject(new DOMException('Aborted','AbortError'));
+  return new Promise((resolve,reject)=>{
+    const entry={signal,resolve,reject,priority:priority==='background'?1:0,sequence:_gasReadSequence++};
+    entry.abort=()=>{const index=_gasReadQueue.indexOf(entry);if(index>=0){_gasReadQueue.splice(index,1);reject(new DOMException('Aborted','AbortError'));}};
+    if(signal)signal.addEventListener('abort',entry.abort,{once:true});
+    _gasReadQueue.push(entry);_gasReadQueue.sort((a,b)=>a.priority-b.priority||a.sequence-b.sequence);pumpGasReadQueue();
+  });
+}
+async function fetchJsonAttempt(url,options={},timeoutMs=60000){
   const controller=new AbortController(),externalSignal=options.signal;
   const abortFromExternal=()=>controller.abort();
   if(externalSignal){
@@ -1840,6 +1861,24 @@ async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
   }finally{
     clearTimeout(timer);
     if(externalSignal)externalSignal.removeEventListener('abort',abortFromExternal);
+  }
+}
+async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
+  const {gasPriority='normal',...requestOptions}=options;
+  const method=String(requestOptions.method||'GET').toUpperCase(),attempts=method==='GET'?2:1;
+  for(let attempt=0;attempt<attempts;attempt++){
+    let release=null,retry=false;
+    try{
+      if(method==='GET')release=await acquireGasReadSlot(requestOptions.signal,gasPriority);
+      return await fetchJsonAttempt(url,requestOptions,timeoutMs);
+    }
+    catch(error){
+      if(requestOptions.signal?.aborted)throw error;
+      const transient=error.name==='TimeoutError'||error.httpStatus===404||error.httpStatus===408||error.httpStatus===429||error.httpStatus>=500;
+      if(attempt>=attempts-1||!transient)throw error;
+      retry=true;
+    }finally{if(release)release();}
+    if(retry)await new Promise(resolve=>setTimeout(resolve,350));
   }
 }
 function postGasJson(payload,timeoutMs=60000){
@@ -1936,6 +1975,8 @@ function showPage(page){
     if(page==='dashboard')syncCasinoOptions();
     if(page==='brokenParts')syncBrokenPartsVenueOptions();
   }
+  if(page!=='schedule')_scheduleMachineCountsRequest?.controller.abort();
+  if(page!=='monthlyStats')_monthlyStatsRequest?.abort();
   if(page!=='input'&&document.getElementById('snPad').classList.contains('show'))hideSnPad();
   activePage=page;
   document.body.classList.toggle('dashboard-view',page!=='input');
@@ -2061,7 +2102,9 @@ function applyScheduleMachineCounts(data,monthCode){
 }
 function hydrateScheduleMachineCountsFromCache(monthCode){
   try{
-    return applyScheduleMachineCounts(getCachedMonthlyStats(monthCode),monthCode);
+    const cached=getCachedMonthlyStatsEntry(monthCode),applied=applyScheduleMachineCounts(cached?.data,monthCode);
+    if(applied)_scheduleMachineCountsLoadedAt=Number(cached?.savedAt)||0;
+    return applied;
   }catch(e){return false;}
 }
 async function loadScheduleVisibleMachineCounts(days,force=false){
@@ -2078,8 +2121,8 @@ async function loadScheduleVisibleMachineCounts(days,force=false){
   try{
     const suffix=force?'&refresh=1':'';
     const [base,companyResults]=await Promise.all([
-      fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:controller.signal},45000),
-      Promise.all(companies.map(company=>fetchJsonWithTimeout(`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`,{signal:controller.signal},45000)))
+      fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:controller.signal,gasPriority:'background'},45000),
+      Promise.all(companies.map(company=>fetchJsonWithTimeout(`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`,{signal:controller.signal,gasPriority:'background'},45000)))
     ]);
     if(!base.success||companyResults.some(result=>!result.success))return;
     applyScheduleMachineCounts(assembleMonthlyStats(base,companyResults),monthCode);
@@ -2187,7 +2230,8 @@ function openScheduleInputFromButton(button){
   window.scrollTo({top:0,behavior:'smooth'});showToast(`已開啟 ${venue} · ${scheduleDateLabel(date)}`);
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
-const MONTHLY_STATS_CACHE_PREFIX='_amrs_monthly_stats_v4_',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1';
+const MONTHLY_STATS_CACHE_PREFIX='_amrs_monthly_stats_v4_',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1',MONTHLY_STATS_CACHE_FRESH_MS=5*60*1000;
+const SCL_MONTHLY_SETTINGS_CACHE_KEY='_amrs_scl_monthly_settings_v1',SCL_MONTHLY_SETTINGS_CACHE_FRESH_MS=5*60*1000;
 let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null,_monthlyStatsMonth='';
 function monthlyStatsMonthCode(date=new Date()){
   return String(date.getFullYear()).slice(-2)+String(date.getMonth()+1).padStart(2,'0');
@@ -2235,24 +2279,38 @@ function applySclMonthlySettings(settings){
   document.getElementById('sclMonthlyPo').value=settings?.poNumber||'';
   Object.entries(SCL_MONTHLY_INPUTS).forEach(([venue,id])=>{document.getElementById(id).value=String(settings?.targets?.[venue]??0);});
 }
+function getCachedSclMonthlySettings(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(SCL_MONTHLY_SETTINGS_CACHE_KEY)||'null');
+    return cached?.settings?cached:null;
+  }catch(e){return null;}
+}
+function saveCachedSclMonthlySettings(settings){
+  try{localStorage.setItem(SCL_MONTHLY_SETTINGS_CACHE_KEY,JSON.stringify({savedAt:Date.now(),settings}));}catch(e){}
+}
 async function loadSclMonthlySettings(force=false,quiet=false){
   if(activeCompany!=='SCL'||(_sclMonthlySettingsLoaded&&!force))return;
   const url=getScriptUrl();if(!url)return;
+  const cached=getCachedSclMonthlySettings(),cacheFresh=!force&&cached?.savedAt&&Date.now()-cached.savedAt<SCL_MONTHLY_SETTINGS_CACHE_FRESH_MS;
+  const status=document.getElementById('sclMonthlyStatus');
+  if(cached){applySclMonthlySettings(cached.settings);_sclMonthlySettingsLoaded=true;syncPoQuickFillButton(false);status.textContent='已載入本月設定';status.style.color='#3fb950';}
+  if(cacheFresh)return;
   if(_sclMonthlySettingsRequest&&!force)return;
   _sclMonthlySettingsRequest?.abort();
   const controller=new AbortController();_sclMonthlySettingsRequest=controller;
-  const status=document.getElementById('sclMonthlyStatus');status.textContent='載入中...';status.style.color='#8b949e';
-  const loadingToken=quiet?null:showLoadingProgress('本月設定載入中，請稍等...');
+  status.textContent=cached?'更新中...':'載入中...';status.style.color='#8b949e';
+  const loadingToken=quiet||cached?null:showLoadingProgress('本月設定載入中，請稍等...');
   try{
-    const data=await fetchJsonWithTimeout(`${url}?action=monthlySettings&company=SCL`,{signal:controller.signal},30000);
+    const suffix=force?'&refresh=1':'';
+    const data=await fetchJsonWithTimeout(`${url}?action=monthlySettings&company=SCL${suffix}`,{signal:controller.signal},30000);
     if(!data.success||!data.settings)throw new Error(data.message||'載入失敗');
-    applySclMonthlySettings(data.settings);_sclMonthlySettingsLoaded=true;
+    applySclMonthlySettings(data.settings);saveCachedSclMonthlySettings(data.settings);_sclMonthlySettingsLoaded=true;
     syncPoQuickFillButton(false);
     status.textContent='已從 Monthly 工作表載入';status.style.color='#3fb950';
   }catch(e){
     if(e.name==='AbortError')return;
-    status.textContent='載入失敗';status.style.color='#ff7b72';
-    const btn=document.getElementById('poQuickFillBtn');if(activeCompany==='SCL'&&btn){btn.textContent='載入失敗';btn.disabled=true;btn.classList.remove('active');}
+    status.textContent=cached?'已使用暫存本月設定':'載入失敗';status.style.color=cached?'#3fb950':'#ff7b72';
+    const btn=document.getElementById('poQuickFillBtn');if(activeCompany==='SCL'&&btn){if(cached)syncPoQuickFillButton(false);else{btn.textContent='載入失敗';btn.disabled=true;btn.classList.remove('active');}}
   }finally{if(loadingToken)hideLoadingProgress(loadingToken);if(_sclMonthlySettingsRequest===controller)_sclMonthlySettingsRequest=null;}
 }
 async function saveSclMonthlySettings(){
@@ -2269,7 +2327,7 @@ async function saveSclMonthlySettings(){
   try{
     const data=await postGasJson({action:'updateMonthlySettings',company:'SCL',settings:{poNumber,targets}});
     if(!data.success)throw new Error(data.message||'儲存失敗');
-    applySclMonthlySettings(data.settings||{poNumber,targets});_sclMonthlySettingsLoaded=true;syncPoQuickFillButton(false);
+    const savedSettings=data.settings||{poNumber,targets};applySclMonthlySettings(savedSettings);saveCachedSclMonthlySettings(savedSettings);_sclMonthlySettingsLoaded=true;syncPoQuickFillButton(false);
     clearMonthlyStatsCache();
     status.textContent='已更新 Monthly 工作表';status.style.color='#3fb950';showToast('✓ SCL 本月設定已更新');
     if(activePage==='monthlyStats')loadMonthlyStats(true);
@@ -2324,12 +2382,13 @@ function renderMonthlyStatsData(data){
   grid.innerHTML=companies.map(renderMonthlyCompany).join('')||'<div class="dash-mobile-empty">沒有統計資料。</div>';
   bindAnimatedSortable(grid,'.monthly-company-card','.monthly-drag',items=>localStorage.setItem(MONTHLY_COMPANY_ORDER_KEY,JSON.stringify(items.map(item=>item.dataset.monthlyCompany))));
 }
-function getCachedMonthlyStats(monthCode=_monthlyStatsMonth||monthlyStatsMonthCode()){
+function getCachedMonthlyStatsEntry(monthCode=_monthlyStatsMonth||monthlyStatsMonthCode()){
   try{
     const cached=JSON.parse(localStorage.getItem(monthlyStatsCacheStorageKey(monthCode))||'null');
-    return cached?.data?.monthCode===monthCode&&Array.isArray(cached.data.companies)?cached.data:null;
+    return cached?.data?.monthCode===monthCode&&Array.isArray(cached.data.companies)?cached:null;
   }catch(e){return null;}
 }
+function getCachedMonthlyStats(monthCode=_monthlyStatsMonth||monthlyStatsMonthCode()){return getCachedMonthlyStatsEntry(monthCode)?.data||null;}
 function assembleMonthlyStats(base,companyResults){
   const schedule=base.scheduleVenues||{},sclSettings=base.sclSettings||{poNumber:'',targets:{}},gegTargets=base.gegTargets||{};
   const companies=companyResults.map(result=>{
@@ -2356,25 +2415,19 @@ async function loadMonthlyStats(force=false,requestedMonth=''){
   const monthCode=requestedMonth||_monthlyStatsMonth||monthlyStatsMonthCode();
   if(!isMonthlyStatsMonthCode(monthCode))return;
   _monthlyStatsMonth=monthCode;syncMonthlyStatsMonthUi();
-  _monthlyStatsRequest?.abort();_monthlyStatsRequest=new AbortController();
-  const grid=document.getElementById('monthlyStatsGrid'),btn=document.getElementById('monthlyStatsRefreshBtn'),cached=getCachedMonthlyStats(monthCode);
+  const grid=document.getElementById('monthlyStatsGrid'),btn=document.getElementById('monthlyStatsRefreshBtn'),cacheEntry=getCachedMonthlyStatsEntry(monthCode),cached=cacheEntry?.data||null;
   if(cached)renderMonthlyStatsData(cached);else grid.innerHTML='<div class="dash-mobile-empty">正在載入六間公司資料...</div>';
+  if(!force&&cacheEntry?.savedAt&&Date.now()-cacheEntry.savedAt<MONTHLY_STATS_CACHE_FRESH_MS){btn.disabled=false;btn.textContent='重新整理';return;}
+  _monthlyStatsRequest?.abort();_monthlyStatsRequest=new AbortController();
   btn.disabled=true;btn.textContent=cached&&!force?'更新中...':'載入中...';
-  const loadingToken=showLoadingProgress('每月統計載入中，請稍等...');
+  const loadingToken=cached&&!force?null:showLoadingProgress('每月統計載入中，請稍等...');
   try{
     const suffix=force?'&refresh=1':'';
     const loadCompany=async company=>{
       const endpoint=`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`;
-      try{
-        const result=await fetchJsonWithTimeout(endpoint,{signal:_monthlyStatsRequest.signal},45000);
-        if(!result.success)throw new Error(result.message||`${company} 載入失敗`);
-        return result;
-      }catch(error){
-        if(error.name==='AbortError')throw error;
-        const retry=await fetchJsonWithTimeout(endpoint,{signal:_monthlyStatsRequest.signal},45000);
-        if(!retry.success)throw new Error(retry.message||`${company} 載入失敗`);
-        return retry;
-      }
+      const result=await fetchJsonWithTimeout(endpoint,{signal:_monthlyStatsRequest.signal},45000);
+      if(!result.success)throw new Error(result.message||`${company} 載入失敗`);
+      return result;
     };
     const [base,companyResults]=await Promise.all([
       fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:_monthlyStatsRequest.signal},45000),
@@ -2387,7 +2440,7 @@ async function loadMonthlyStats(force=false,requestedMonth=''){
   }catch(e){
     if(e.name==='AbortError')return;
     if(!cached)grid.innerHTML=`<div class="dash-mobile-empty">${esc(e.message||'無法載入每月統計')}</div>`;
-  }finally{hideLoadingProgress(loadingToken);btn.disabled=false;btn.textContent='重新整理';}
+  }finally{if(loadingToken)hideLoadingProgress(loadingToken);btn.disabled=false;btn.textContent='重新整理';}
 }
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
@@ -2846,6 +2899,8 @@ let REASONS=DEFAULT_REASONS.slice();
 let ACTION_MAP={...DEFAULT_ACTION_MAP};
 let ALL_ACTIONS=DEFAULT_ACTIONS.slice();
 let _templateMappings=[];
+const TEMPLATE_CACHE_PREFIX='_amrs_template_v1_',TEMPLATE_CACHE_FRESH_MS=10*60*1000;
+let _templateRequest=null,_templateRequestCompany='';
 const _comboRegistry={};
 let _comboSelecting=false;
 function _comboOption(o){return typeof o==='string'?{value:o,label:o}:o;}
@@ -2927,13 +2982,31 @@ function applyTemplateMappings(mappings){
   _refreshSearchCombo('reason');
   _refreshSearchCombo('actionDrop');
 }
-async function loadTemplateMappings(){
+function templateCacheKey(company){return TEMPLATE_CACHE_PREFIX+company;}
+function readTemplateCache(company){
+  try{
+    const cached=JSON.parse(localStorage.getItem(templateCacheKey(company))||'null');
+    return Array.isArray(cached?.mappings)?cached:null;
+  }catch(e){return null;}
+}
+function saveTemplateCache(company,mappings){
+  try{localStorage.setItem(templateCacheKey(company),JSON.stringify({savedAt:Date.now(),mappings}));}catch(e){}
+}
+async function loadTemplateMappings(force=false){
   const SCRIPT_URL=getScriptUrl();
   if(!SCRIPT_URL)return;
-  try{
-    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=template&'+companyParam(),{},30000);
-    if(data.success)applyTemplateMappings(data.mappings||[]);
-  }catch(e){}
+  const company=activeCompany,cached=readTemplateCache(company);
+  if(cached&&activeCompany===company)applyTemplateMappings(cached.mappings);
+  if(!force&&cached?.savedAt&&Date.now()-cached.savedAt<TEMPLATE_CACHE_FRESH_MS)return;
+  if(_templateRequest&&_templateRequestCompany===company)return _templateRequest;
+  const request=(async()=>{
+    try{
+      const data=await fetchJsonWithTimeout(`${SCRIPT_URL}?action=template&company=${encodeURIComponent(company)}`,{gasPriority:force?'normal':'background'},30000);
+      if(data.success){const mappings=data.mappings||[];saveTemplateCache(company,mappings);if(activeCompany===company)applyTemplateMappings(mappings);}
+    }catch(e){}
+  })();
+  _templateRequest=request;_templateRequestCompany=company;
+  try{await request;}finally{if(_templateRequest===request){_templateRequest=null;_templateRequestCompany='';}}
 }
 function closeTemplateEditor(){document.getElementById('templateModal').classList.remove('show');}
 function renderTemplateEditorRows(){
@@ -2986,7 +3059,7 @@ function sortTemplateRowsAz(){
 async function openTemplateEditor(){
   document.getElementById('templateModal').classList.add('show');
   document.getElementById('templateRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
-  await loadTemplateMappings();
+  await loadTemplateMappings(true);
   renderTemplateEditorRows();
 }
 function collectTemplateRows(){
@@ -3012,7 +3085,7 @@ async function saveTemplateEditor(){
   try{
     const data=await postGasJson({action:'updateTemplate',company:activeCompany,mappings});
     if(!data.success)throw new Error(data.message||'儲存失敗');
-    applyTemplateMappings(data.mappings||mappings);
+    const savedMappings=data.mappings||mappings;applyTemplateMappings(savedMappings);saveTemplateCache(activeCompany,savedMappings);
     closeTemplateEditor();
     showToast('✓ Template 已更新');
   }catch(e){
@@ -4806,6 +4879,7 @@ async function loadDashboard(page=1){
     sort:document.getElementById('dashSort').value,
     q:fuzzy?searchText:'',
     serialNo:fuzzy?'':searchText,
+    includeParts:'0',
     searchMode:fuzzy?'fuzzy':'serial',
     page:String(Math.max(1,page)),
     pageSize:String(dashboardPageSize)
@@ -4818,8 +4892,10 @@ async function loadDashboard(page=1){
     dashboardPage=data.page||Math.max(1,page);
     dashboardTotalPages=data.totalPages||1;
     dashboardTotalMatches=data.totalMatches??data.returned??0;
+    const stats=data.stats||null,history=data.history||null;
     renderDashboardRows(data.records||[]);
-    renderDashboardInsights(data.stats||null,data.history||null);
+    renderDashboardInsights(stats,history);
+    if(history&&!fuzzy&&searchText)void loadDashboardPartsHistory(stats,history,dashboardRequest.signal);
     summary.textContent=searchText
       ?`🔍 ${fuzzy?searchText:`Serial No. ${searchText}`} 共找到 ${dashboardTotalMatches} 筆記錄`
       :`共找到 ${dashboardTotalMatches} 筆記錄`;
@@ -4831,6 +4907,18 @@ async function loadDashboard(page=1){
     summary.textContent='載入失敗';
     showToast('資料查詢載入失敗','err');
   }finally{hideLoadingProgress(loadingToken);}
+}
+async function loadDashboardPartsHistory(stats,history,signal){
+  try{
+    const qs=new URLSearchParams({action:'brokenPartsList',company:currentDashboardCompany,serialNo:history.serialNo,page:'1',pageSize:'20',sort:'newest'});
+    const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{signal},45000);
+    if(signal?.aborted||!data.success)return;
+    history.parts=data.records||[];
+    renderDashboardInsights(stats,history);
+  }catch(error){
+    if(error.name==='AbortError')return;
+    history.parts=[];renderDashboardInsights(stats,history);
+  }
 }
 function renderDashboardRows(records){
   const rowsEl=document.getElementById('dashRows');
@@ -5031,7 +5119,7 @@ function renderDashboardInsights(stats,history){
     <div class="dash-insight"><div class="dash-insight-label">場地分佈</div><div class="dash-insight-value">${list(stats.topCasinos)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">有重複維修 S/N</div><div class="dash-insight-value">${repeatLinks(stats.repeatSerials)}</div></div>`;
   if(history){
-    const parts=(history.parts||[]).map(p=>`${esc(p.brokenParts||'沒有使用零件')} · ${esc(p.bpRepairDay||'未設定')}${p.bpUodActivationDate?' · UOD Activation '+esc(p.bpUodActivationDate):''}${p.bpUodUnlockDay?' · UOD Unlock '+esc(p.bpUodUnlockDay):''}${p.bpHoldDate?' · Hold '+esc(p.bpHoldDate):''}${p.bpHoldReleaseDate?' · Hold Release '+esc(p.bpHoldReleaseDate):''} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
+    const parts=history.parts===null?'載入中...':(history.parts||[]).map(p=>`${esc(p.brokenParts||'沒有使用零件')} · ${esc(p.bpRepairDay||'未設定')}${p.bpUodActivationDate?' · UOD Activation '+esc(p.bpUodActivationDate):''}${p.bpUodUnlockDay?' · UOD Unlock '+esc(p.bpUodUnlockDay):''}${p.bpHoldDate?' · Hold '+esc(p.bpHoldDate):''}${p.bpHoldReleaseDate?' · Hold Release '+esc(p.bpHoldReleaseDate):''} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
     html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件履歷：<br>${parts}</div></div>`;
   }
   el.innerHTML=html;el.classList.add('show');
