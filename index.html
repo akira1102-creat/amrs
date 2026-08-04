@@ -1643,12 +1643,14 @@
   </div>
 </div>
 
+<script src="./cloud-api.js"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.04-04';
-const _APP_VERSION='v1.054';
+const _APP_BUMP='2026.08.04-05';
+const _APP_VERSION='v1.055';
+const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1847,6 +1849,27 @@ function acquireGasReadSlot(signal,priority='normal'){
     _gasReadQueue.push(entry);_gasReadQueue.sort((a,b)=>a.priority-b.priority||a.sequence-b.sequence);pumpGasReadQueue();
   });
 }
+async function transportFetch(url,options={}){
+  let parsed=null;
+  try{parsed=new URL(String(url));}catch(e){}
+  const isGas=parsed?.hostname==='script.google.com'&&/^\/macros\/s\/[^/]+\/exec\/?$/i.test(parsed.pathname);
+  const method=String(options.method||'GET').toUpperCase();
+  if(!isGas||method!=='GET')return fetch(url,options);
+  const release=await acquireGasReadSlot(options.signal,'normal');
+  try{return await fetch(url,options);}finally{release();}
+}
+const _dualTransport=typeof window.createDualTransport==='function'?window.createDualTransport({
+  cloudflareBaseUrl:_CLOUDFLARE_API_URL,
+  fetchImpl:transportFetch,
+  getDeployId:()=>getDeployId(),
+  getGasUrl:()=>getScriptUrl()
+}):null;
+function isGasApiUrl(url){
+  try{
+    const parsed=new URL(String(url));
+    return parsed.hostname==='script.google.com'&&/^\/macros\/s\/[^/]+\/exec\/?$/i.test(parsed.pathname);
+  }catch(e){return false;}
+}
 async function fetchJsonAttempt(url,options={},timeoutMs=60000){
   const controller=new AbortController(),externalSignal=options.signal;
   const abortFromExternal=()=>controller.abort();
@@ -1873,8 +1896,12 @@ async function fetchJsonAttempt(url,options={},timeoutMs=60000){
   }
 }
 async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
-  const {gasPriority='normal',...requestOptions}=options;
+  const {gasPriority='normal',forceGasDirect=false,...requestOptions}=options;
   const method=String(requestOptions.method||'GET').toUpperCase(),attempts=method==='GET'?3:1;
+  if(!forceGasDirect&&method==='GET'&&_dualTransport&&isGasApiUrl(url)){
+    const parsed=new URL(String(url));
+    return _dualTransport.get({query:parsed.searchParams,signal:requestOptions.signal,timeoutMs});
+  }
   for(let attempt=0;attempt<attempts;attempt++){
     let release=null,retry=false;
     try{
@@ -1891,6 +1918,7 @@ async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
   }
 }
 function postGasJson(payload,timeoutMs=60000){
+  if(_dualTransport)return _dualTransport.post(payload,{timeoutMs});
   return fetchJsonWithTimeout(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)},timeoutMs);
 }
 async function postSubmissionJson(payload,timeoutMs=90000){
@@ -1937,6 +1965,7 @@ function saveSetup(){
   if(setupVerifiedId!==normalizeDeployInput(input)){document.getElementById('setupErr').textContent='請先測試連線成功，再儲存。';return;}
   localStorage.setItem('_ml_gas',id);
   COMPANIES.forEach(c=>localStorage.setItem(_companyKey(c),id));
+  if(_dualTransport)_dualTransport.clearSession();
   document.getElementById('setupScreen').classList.remove('show');
   setupReturnState=null;setupVerifiedId='';
   _sclMonthlySettingsLoaded=false;
@@ -1962,7 +1991,7 @@ async function testConnection(){
   btn.textContent='測試中…';btn.disabled=true;
   res.className='';res.style.display='none';
   try{
-    const data=await fetchJsonWithTimeout(url,{},30000);
+    const data=await fetchJsonWithTimeout(url,{forceGasDirect:true},30000);
     if(data.success===true){
       res.className='setupTestResult ok';
       res.textContent='✓ 連接成功！';

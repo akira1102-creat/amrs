@@ -1,5 +1,5 @@
-const CACHE = 'amrs-v1054';
-const ASSETS = ['./', './index.html', './manifest.json', './sw.js'];
+const CACHE = 'amrs-v1055';
+const ASSETS = ['./', './index.html', './cloud-api.js', './manifest.json', './sw.js'];
 
 self.addEventListener('message', e => {
   if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();

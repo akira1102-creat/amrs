@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "amrs-api",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-08-04",
+  "workers_dev": true,
+  "preview_urls": false,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "amrs-state",
+      "database_id": "09e1bd5d-3fd0-4dcc-b693-ff08aa69d4ad"
+    }
+  ]
+}
