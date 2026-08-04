@@ -1647,8 +1647,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.04-03';
-const _APP_VERSION='v1.053';
+const _APP_BUMP='2026.08.04-04';
+const _APP_VERSION='v1.054';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1817,10 +1817,10 @@ function getDeployId(company){
   return extractDeployId(raw);
 }
 function getScriptUrl(){const id=getDeployId();return id?'https://script.google.com/macros/s/'+id+'/exec':'';}
-const GAS_READ_CONCURRENCY=2;
-let _gasReadActive=0,_gasReadSequence=0,_gasReadQueue=[];
+const GAS_READ_CONCURRENCY=1;
+let _gasReadActive=0,_gasReadSequence=0,_gasReadQueue=[],_gasWriteActive=0,_gasSubmissionTail=Promise.resolve();
 function pumpGasReadQueue(){
-  while(_gasReadActive<GAS_READ_CONCURRENCY&&_gasReadQueue.length){
+  while(_gasWriteActive===0&&_gasReadActive<GAS_READ_CONCURRENCY&&_gasReadQueue.length){
     const entry=_gasReadQueue.shift();
     if(entry.signal?.aborted){entry.reject(new DOMException('Aborted','AbortError'));continue;}
     _gasReadActive++;
@@ -1828,6 +1828,15 @@ function pumpGasReadQueue(){
     let released=false;
     entry.resolve(()=>{if(released)return;released=true;_gasReadActive--;pumpGasReadQueue();});
   }
+}
+async function withGasSubmissionSlot(callback){
+  let releaseTail;
+  const previous=_gasSubmissionTail;
+  _gasSubmissionTail=new Promise(resolve=>{releaseTail=resolve;});
+  await previous;
+  _gasWriteActive++;
+  try{return await callback();}
+  finally{_gasWriteActive--;releaseTail();pumpGasReadQueue();}
 }
 function acquireGasReadSlot(signal,priority='normal'){
   if(signal?.aborted)return Promise.reject(new DOMException('Aborted','AbortError'));
@@ -1849,7 +1858,7 @@ async function fetchJsonAttempt(url,options={},timeoutMs=60000){
   try{
     const response=await fetch(url,{...options,signal:controller.signal});
     if(!response.ok){
-      const error=new Error(response.status===404?'找不到 GAS Web App，請檢查 Deploy ID 或 /exec 網址':'伺服器錯誤 ('+response.status+')');
+      const error=new Error(response.status===404?'暫時無法連接 GAS；如持續出現請檢查 Deploy ID':'伺服器錯誤 ('+response.status+')');
       error.httpStatus=response.status;
       error.retryable=response.status===408||response.status===429||response.status>=500;
       throw error;
@@ -1865,7 +1874,7 @@ async function fetchJsonAttempt(url,options={},timeoutMs=60000){
 }
 async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
   const {gasPriority='normal',...requestOptions}=options;
-  const method=String(requestOptions.method||'GET').toUpperCase(),attempts=method==='GET'?2:1;
+  const method=String(requestOptions.method||'GET').toUpperCase(),attempts=method==='GET'?3:1;
   for(let attempt=0;attempt<attempts;attempt++){
     let release=null,retry=false;
     try{
@@ -1878,11 +1887,29 @@ async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
       if(attempt>=attempts-1||!transient)throw error;
       retry=true;
     }finally{if(release)release();}
-    if(retry)await new Promise(resolve=>setTimeout(resolve,350));
+    if(retry)await new Promise(resolve=>setTimeout(resolve,350*(attempt+1)+Math.floor(Math.random()*350)));
   }
 }
 function postGasJson(payload,timeoutMs=60000){
   return fetchJsonWithTimeout(getScriptUrl(),{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)},timeoutMs);
+}
+async function postSubmissionJson(payload,timeoutMs=90000){
+  return withGasSubmissionSlot(async()=>{
+    let lastError=null;
+    for(let attempt=0;attempt<2;attempt++){
+      try{
+        const data=await postGasJson(payload,timeoutMs);
+        if(data.success||!(data.retryable===true||isRetryableServerMessage(data.message)))return data;
+        if(attempt===1)return data;
+      }catch(error){
+        lastError=error;
+        const transient=error.name==='TimeoutError'||error.httpStatus===404||error.httpStatus===408||error.httpStatus===429||error.httpStatus>=500;
+        if(attempt===1||!transient)throw error;
+      }
+      await new Promise(resolve=>setTimeout(resolve,900*(attempt+1)+Math.floor(Math.random()*700)));
+    }
+    throw lastError||new Error('提交結果未確認');
+  });
 }
 function hasAnyDeployId(){return getCompanyOrder().some(c=>!!getDeployId(c));}
 function firstConfiguredCompany(){return getCompanyOrder().find(c=>!!getDeployId(c))||'';}
@@ -1930,15 +1957,15 @@ async function testConnection(){
   const input=document.getElementById('gasUrlInput').value.trim(),base=normalizeDeployInput(input);
   const res=document.getElementById('setupTestResult');
   if(!base){res.className='setupTestResult err';res.textContent='請輸入有效 Deploy ID 或完整 /exec 網址';res.style.display='block';return;}
-  const url=base+(base.includes('?')?'&':'?')+'action=today&'+companyParam();
+  const url=base+(base.includes('?')?'&':'?')+'action=ping';
   const btn=document.getElementById('setupTestBtn');
   btn.textContent='測試中…';btn.disabled=true;
   res.className='';res.style.display='none';
   try{
     const data=await fetchJsonWithTimeout(url,{},30000);
-    if(Array.isArray(data.records)){
+    if(data.success===true){
       res.className='setupTestResult ok';
-      res.textContent='✓ 連接成功！今日有 '+data.records.length+' 條記錄';
+      res.textContent='✓ 連接成功！';
       setupVerifiedId=base;
       document.getElementById('setupSaveBtn').disabled=false;
     }else{
@@ -2447,13 +2474,11 @@ async function loadMonthlyStats(force=false,requestedMonth=''){
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
   switchQueueCompany(company);
-  _queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;
   document.getElementById('activeCompanyLabel').textContent=company;
   syncCompanySpecificFields();
   syncCasinoOptions();
   loadTemplateMappings();
   showPage('input');renderCompanyMenu();
-  if(queue.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);
   if(!getDeployId(company))openGasSettings({returnState:prev});else loadTodayRecords();
 }
 function renderCompanyMenu(){
@@ -3131,7 +3156,6 @@ document.getElementById('model').addEventListener('change',function(){localStora
 document.getElementById('poNumber').addEventListener('input',function(){saveCompanyPoNumber(activeCompany,this.value);syncPoQuickFillButton(false);});
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='',_batchMode=false;
 let _queueAddBusy=false;
-let _queueDuplicateResults=[],_duplicateCheckedKeys=new Set(),_duplicateCheckPromise=null,_duplicateCheckRerun=false,_duplicateCheckRunning=false,_duplicateCheckContextVersion=0,_submitCheckBusy=false;
 function setQueueAddBusy(busy,batch=false){
   _queueAddBusy=busy;
   const singleBtn=document.getElementById('addQueueBtn');
@@ -3616,7 +3640,9 @@ function isRetryableServerMessage(message){
 function queueSubmissionRetry(chunks,startIndex,message){
   const remaining=chunks.slice(startIndex);
   if(!remaining.length)return;
-  remaining.forEach(chunk=>_retryQueue.push({records:chunk.records,repairs:chunk.repairs}));
+  const chunkKey=chunk=>(chunk.records||[]).map(record=>record.submissionId||'').join('|');
+  const existing=new Set(_retryQueue.map(chunkKey));
+  remaining.forEach(chunk=>{const key=chunkKey(chunk);if(!existing.has(key)){_retryQueue.push({records:chunk.records,repairs:chunk.repairs});existing.add(key);}});
   _retryLastError=message||'提交結果未確認';
   _saveRetry();_updateRetryNotice();_scheduleRetry(3000);
 }
@@ -3642,7 +3668,7 @@ async function _attemptRetry(){
   let retryAllowed=true;
   try{
     const body=item.repairs?.length?{action:'submitRecords',records:item.records,brokenPartsRepairs:item.repairs}:item.records;
-    const data=await postGasJson(body,90000);
+    const data=await postSubmissionJson(body,90000);
     if(!data.success){
       const error=new Error(data.message||'同步失敗');
       error.retryable=data.retryable===true||isRetryableServerMessage(data.message);
@@ -3653,7 +3679,7 @@ async function _attemptRetry(){
     showToast(`✓ ${item.records.length} 筆暫存記錄已同步`);
   }catch(e){
     _retryAttempts++;
-    _retryLastError=e.message||'同步失敗，稍後自動重試';
+    _retryLastError=e.httpStatus===404?'GAS 暫時未能連線，請稍後再試':(e.message||'同步失敗，稍後自動重試');
     retryAllowed=e.retryable!==false&&e.httpStatus!==404&&!/找不到 GAS Web App|Deploy ID|\/exec 網址/i.test(_retryLastError);
   }finally{
     _retryBusy=false;_updateRetryNotice();
@@ -4346,75 +4372,16 @@ function requestSameDayDuplicateConfirmation(items,batch){
   return true;
 }
 
-async function fetchDuplicateFaults(serialNos,reason,throwOnError=false,date=''){
-  if(!reason||reason.trim().toUpperCase()==='PM')return {};
-  try{
-    const qs=new URLSearchParams({action:'duplicateFault',company:activeCompany,serialNos:[...new Set(serialNos)].join(','),reason,date:date||fmtDate(document.getElementById('date').value)});
-    const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},30000);
-    return data.duplicates||{};
-  }catch(e){if(throwOnError)throw e;return {};}
-}
-
 function isDuplicateCheckItem(item){return String(item?.reason||'').trim().toUpperCase()!=='PM';}
 function duplicateItemKey(item){return `${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}\u0000${String(item?.date||'')}`;}
-function scheduleQueueDuplicateCheck(addedItems){
-  const items=Array.isArray(addedItems)?addedItems:[addedItems];
-  if(items.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);
-}
+function scheduleQueueDuplicateCheck(){renderQueueDuplicateNotice();}
 function syncSubmitButtonState(){
   const btn=document.getElementById('submitBtn');if(!btn||isSubmitting)return;
-  const checking=_duplicateCheckRunning||_submitCheckBusy;
-  btn.disabled=queue.length===0||checking;
-  btn.textContent=checking?'檢查重複記錄中...':'全部提交';
-}
-async function refreshQueueDuplicateChecks(force){
-  if(_duplicateCheckPromise){
-    if(!force)_duplicateCheckRerun=true;
-    await _duplicateCheckPromise;
-    if(force)return refreshQueueDuplicateChecks(true);
-    if(_duplicateCheckRerun){_duplicateCheckRerun=false;return refreshQueueDuplicateChecks(false);}
-    return;
-  }
-  const allCandidates=queue.filter(isDuplicateCheckItem);
-  const candidates=allCandidates.filter(item=>!_duplicateCheckedKeys.has(duplicateItemKey(item)));
-  if(!allCandidates.length){_queueDuplicateResults=[];renderQueueDuplicateNotice();return;}
-  if(!candidates.length){renderQueueDuplicateNotice();return;}
-  const groups=new Map();
-  candidates.forEach(item=>{
-    const reason=String(item.reason||'').trim(),date=String(item.date||'');
-    const groupKey=`${reason}\u0000${date}`;
-    if(!groups.has(groupKey))groups.set(groupKey,new Set());
-    groups.get(groupKey).add(String(item.sn||''));
-  });
-  const checkVersion=_duplicateCheckContextVersion;
-  _duplicateCheckRunning=true;renderQueueDuplicateNotice();syncSubmitButtonState();
-  _duplicateCheckPromise=(async()=>{
-    const found=[],checkedKeys=new Set();
-    for(const [groupKey,snSet] of groups){
-      const [reason,date]=groupKey.split('\u0000');
-      const serialNos=[...snSet];
-      for(let i=0;i<serialNos.length;i+=50){
-        const chunk=serialNos.slice(i,i+50);
-        try{
-          const duplicates=await fetchDuplicateFaults(chunk,reason,true,date);
-          chunk.forEach(sn=>checkedKeys.add(`${sn}\u0000${reason}\u0000${date}`));
-          Object.entries(duplicates).forEach(([sn,records])=>{
-            if(records?.length)found.push({sn:String(sn),reason,date,count:records.length});
-          });
-        }catch(e){}
-      }
-    }
-    if(checkVersion===_duplicateCheckContextVersion){
-      checkedKeys.forEach(key=>_duplicateCheckedKeys.add(key));
-      _queueDuplicateResults=_queueDuplicateResults.filter(result=>!checkedKeys.has(`${result.sn}\u0000${result.reason}\u0000${result.date||''}`)).concat(found);
-    }
-  })();
-  try{await _duplicateCheckPromise;}
-  finally{_duplicateCheckPromise=null;_duplicateCheckRunning=false;renderQueueDuplicateNotice();syncSubmitButtonState();}
+  btn.disabled=queue.length===0;
+  btn.textContent='全部提交';
 }
 function collectQueueDuplicateWarnings(){
   const faultItems=queue.filter(isDuplicateCheckItem);
-  const activeKeys=new Set(faultItems.map(duplicateItemKey));
   const counts=new Map();
   faultItems.forEach(item=>{const key=duplicateItemKey(item);counts.set(key,(counts.get(key)||0)+1);});
   const warnings=[];
@@ -4425,9 +4392,6 @@ function collectQueueDuplicateWarnings(){
     if(exists)todayKeys.add(duplicateItemKey(item));
   });
   todayKeys.forEach(key=>{const [sn,reason]=key.split('\u0000');warnings.push(`S/N ${sn} 今日已提交「${reason}」`);});
-  _queueDuplicateResults.forEach(result=>{
-    if(activeKeys.has(`${result.sn}\u0000${result.reason}\u0000${result.date||''}`))warnings.push(`S/N ${result.sn} 在 ${result.date} 前 30 日已有 ${result.count} 次「${result.reason}」`);
-  });
   return [...new Set(warnings)];
 }
 function renderQueueDuplicateNotice(){
@@ -4435,9 +4399,7 @@ function renderQueueDuplicateNotice(){
   const warnings=collectQueueDuplicateWarnings();
   if(warnings.length){
     notice.className='warning';
-    notice.textContent=`⚠ 發現非 PM 重複記錄\n${warnings.join('\n')}${_duplicateCheckRunning?'\n正在繼續背景檢查...':''}`;
-  }else if(_duplicateCheckRunning){
-    notice.className='checking';notice.textContent='正在背景檢查非 PM 重複記錄...';
+    notice.textContent=`⚠ 發現當日或待提交內非 PM 重複記錄\n${warnings.join('\n')}`;
   }else{
     notice.className='';notice.textContent='';
   }
@@ -4755,7 +4717,7 @@ function renderTodayPanel(){}
 function toggleToday(){}
 document.getElementById('casino').addEventListener('change',function(){localStorage.setItem(_casinoKey(activeCompany),this.value);localStorage.setItem('casino',this.value);});
 document.getElementById('casino').addEventListener('change',()=>{if(queue.length>0)showToast('新加入記錄會使用新場地，已加入記錄不變','warn');loadTodayRecords();});
-document.getElementById('date').addEventListener('change',()=>{_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;renderQueueDuplicateNotice();if(queue.length>0){showToast('新加入記錄會使用新日期，已加入記錄不變','warn');if(queue.some(isDuplicateCheckItem))refreshQueueDuplicateChecks(false);}});
+document.getElementById('date').addEventListener('change',()=>{renderQueueDuplicateNotice();if(queue.length>0)showToast('新加入記錄會使用新日期，已加入記錄不變','warn');});
 document.getElementById('dashCasino').addEventListener('change',updateDashboardSearchState);
 ['dashFrom','dashTo'].forEach(id=>{
   const input=document.getElementById(id);
@@ -5418,7 +5380,6 @@ async function saveDashboardRow(rowNumber,btn){
   }
 }
 async function submitAll(){
-  if(_submitCheckBusy)return;
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
@@ -5430,10 +5391,6 @@ async function submitAll(){
     if(activeCompany==='GEG'&&item.voidSeal&&!/^\d{5}$/.test(item.voidSeal))errors.push(`S/N ${item.sn} Void Seal 必須為 5 位`);
   });
   if(errors.length){showToast(errors[0],'err');return;}
-  _submitCheckBusy=true;syncSubmitButtonState();
-  try{await refreshQueueDuplicateChecks(true);}
-  finally{_submitCheckBusy=false;syncSubmitButtonState();}
-  if(!queue.length){showToast('待提交清單是空的','err');return;}
   warnings.push(...collectQueueDuplicateWarnings());
   const seals=queue.map(item=>item.voidSeal).filter(Boolean);const repeatedSeals=[...new Set(seals.filter((seal,i)=>seals.indexOf(seal)!==i))];if(repeatedSeals.length)warnings.push(`Void Seal 重複：${repeatedSeals.join('、')}`);
   const queueCasinos=[...new Set(queue.map(item=>item.casino||casino))];
@@ -5468,7 +5425,6 @@ async function doSubmit(){
   if(isSubmitting)return;
   isSubmitting=true;
   document.getElementById('confirmModal').classList.remove('show');
-  const SCRIPT_URL=getScriptUrl();
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
@@ -5477,7 +5433,7 @@ async function doSubmit(){
   btn.disabled=true;
   if(ensureSubmissionIds(queue))saveQueue();
   const records=queue.map(item=>({submissionId:item.submissionId,company:item.company||activeCompany,casino:item.casino||casino,date:item.date||fmtDate(date),poNumber:item.poNumber??poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||'',bpUodActivationDate:item.bpUodActivationDate||(/^wait for unlock$/i.test(item.bpUodUnlockDay||'')?(item.date||fmtDate(date)):'')||'',bpUodUnlockDay:item.bpUodUnlockDay||'',bpHoldDate:item.bpHoldDate||'',bpHoldReleaseDate:item.bpHoldReleaseDate||''}));
-  const clearQueue=()=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_queueDuplicateResults=[];_duplicateCheckedKeys.clear();_duplicateCheckContextVersion++;localStorage.removeItem(queueStorageKey(activeCompany));clearMonthlyStatsCache();renderQueue();loadTodayRecords();};
+  const clearQueue=(refreshToday=true)=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem(queueStorageKey(activeCompany));clearMonthlyStatsCache();renderQueue();if(refreshToday)loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
   for(let i=0;i<records.length;i+=CHUNK_SIZE){
@@ -5492,7 +5448,7 @@ async function doSubmit(){
       const chunk=chunks[ci];
       btn.textContent=chunks.length>1?`儲存中... (${completedChunks}/${chunks.length})`:'儲存中...';
       const payload=chunk.repairs.length?{action:'submitRecords',records:chunk.records,brokenPartsRepairs:chunk.repairs}:chunk.records;
-      const data=await postGasJson(payload,90000);
+      const data=await postSubmissionJson(payload,90000);
       if(data.success){
         savedCount+=Number.isFinite(Number(data.inserted))?Number(data.inserted):chunk.records.length;
         skippedCount+=Number(data.skipped)||0;
@@ -5506,7 +5462,7 @@ async function doSubmit(){
           queueSubmissionRetry(chunks,ci,data.message||'伺服器正忙碌，稍後會自動重試');
           renderQueue();
           showToast('伺服器正忙碌，剩餘資料已安全暫存並會自動重試','warn');
-          clearQueue();
+          clearQueue(false);
           return;
         }
         renderQueue();
@@ -5519,14 +5475,14 @@ async function doSubmit(){
     showToast(skippedCount?`✓ 已完成：新增 ${savedCount} 筆，略過 ${skippedCount} 筆已提交記錄`:`✓ 已儲存 ${savedCount} 筆記錄`);
     clearQueue();
   }catch(e){
-    if(e.retryable===false||[400,401,403,404].includes(e.httpStatus)){
+    if([400,401,403].includes(e.httpStatus)){
       renderQueue();
       showToast(e.message||'請檢查 Deploy ID 或提交資料格式','err');
       return;
     }
-    queueSubmissionRetry(chunks,completedChunks,e.message||'提交結果未確認');
+    queueSubmissionRetry(chunks,completedChunks,e.httpStatus===404?'GAS 暫時未能連線，稍後會再核對':(e.message||'提交結果未確認'));
     showToast('提交結果未確認，剩餘資料已安全暫存並會自動核對重試','warn');
-    clearQueue();
+    clearQueue(false);
   }finally{
     hideSubmitProgress();
     btn.textContent='全部提交';
@@ -5616,7 +5572,7 @@ initDashboardFilters();
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden&&activePage==='schedule'&&localStorage.getItem('_ml_auth')===_PH&&hasAnyDeployId()&&scheduleShouldForceDailyRefresh())loadScheduleOverview(true);
 });
-if(queue.length>0){renderQueue();if(queue.some(isDuplicateCheckItem))setTimeout(()=>refreshQueueDuplicateChecks(false),0);setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
+if(queue.length>0){renderQueue();setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
 _renderStats();
 _updateRetryNotice();
 </script>
