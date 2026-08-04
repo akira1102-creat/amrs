@@ -1647,8 +1647,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.04-02';
-const _APP_VERSION='v1.052';
+const _APP_BUMP='2026.08.04-03';
+const _APP_VERSION='v1.053';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -2120,12 +2120,9 @@ async function loadScheduleVisibleMachineCounts(days,force=false){
   const controller=new AbortController(),request={monthCode,controller};_scheduleMachineCountsRequest=request;
   try{
     const suffix=force?'&refresh=1':'';
-    const [base,companyResults]=await Promise.all([
-      fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:controller.signal,gasPriority:'background'},45000),
-      Promise.all(companies.map(company=>fetchJsonWithTimeout(`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`,{signal:controller.signal,gasPriority:'background'},45000)))
-    ]);
-    if(!base.success||companyResults.some(result=>!result.success))return;
-    applyScheduleMachineCounts(assembleMonthlyStats(base,companyResults),monthCode);
+    const data=await fetchJsonWithTimeout(`${url}?action=scheduleMachineCounts&month=${monthCode}${suffix}`,{signal:controller.signal,gasPriority:'background'},45000);
+    if(!data.success||!Array.isArray(data.companies))return;
+    applyScheduleMachineCounts(data,monthCode);
     _scheduleMachineCountsLoadedAt=Date.now();
     if(activePage==='schedule')renderSchedulePage();
   }catch(error){if(error.name!=='AbortError')console.warn('Schedule machine count unavailable',error);}
@@ -2195,9 +2192,9 @@ async function loadScheduleOverview(force=false,weekOnly=false){
   _scheduleRequest?.abort();
   const controller=new AbortController();_scheduleRequest=controller;
   const hasImmediateToday=Array.isArray(_scheduleTodayData?.days),hasImmediateWeek=_scheduleAnchor===today?hasImmediateToday:!!cachedWeek;
-  const showLoading=!hasImmediateToday||!hasImmediateWeek,backgroundRefresh=force&&hasImmediateToday&&hasImmediateWeek;
-  const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=showLoading||backgroundRefresh;btn.textContent=backgroundRefresh?'更新中...':showLoading?'載入中...':'重新整理';
-  const loadingToken=showLoading?showLoadingProgress('工作安排載入中，請稍等...'):null;
+  const showLoading=!hasImmediateToday||!hasImmediateWeek,backgroundRefresh=hasImmediateToday&&hasImmediateWeek;
+  const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=true;btn.textContent=backgroundRefresh?'更新中...':'載入中...';
+  const loadingToken=showLoadingProgress(backgroundRefresh?'工作安排更新中，請稍等...':'工作安排載入中，請稍等...');
   try{
     const needToday=force||!weekOnly||!_scheduleTodayData;
     const todayPromise=needToday?requestScheduleRange(today,SCHEDULE_INITIAL_DAYS,force,controller.signal):Promise.resolve(_scheduleTodayData);
@@ -2213,8 +2210,8 @@ async function loadScheduleOverview(force=false,weekOnly=false){
     if(!_scheduleTodayData)document.getElementById('scheduleFocusItems').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
     if(!_scheduleWeekDays.length)document.getElementById('scheduleTimeline').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;
   }finally{
-    if(loadingToken)hideLoadingProgress(loadingToken);
-    if(_scheduleRequest===controller){btn.disabled=false;btn.textContent='重新整理';}
+    hideLoadingProgress(loadingToken);
+    if(_scheduleRequest===controller){_scheduleRequest=null;btn.disabled=false;btn.textContent='重新整理';}
   }
 }
 function changeScheduleWeek(direction){_scheduleAnchor=scheduleAddDays(_scheduleAnchor||scheduleLocalIso(),Number(direction)*7);loadScheduleOverview(false,true);}
@@ -2418,29 +2415,34 @@ async function loadMonthlyStats(force=false,requestedMonth=''){
   const grid=document.getElementById('monthlyStatsGrid'),btn=document.getElementById('monthlyStatsRefreshBtn'),cacheEntry=getCachedMonthlyStatsEntry(monthCode),cached=cacheEntry?.data||null;
   if(cached)renderMonthlyStatsData(cached);else grid.innerHTML='<div class="dash-mobile-empty">正在載入六間公司資料...</div>';
   if(!force&&cacheEntry?.savedAt&&Date.now()-cacheEntry.savedAt<MONTHLY_STATS_CACHE_FRESH_MS){btn.disabled=false;btn.textContent='重新整理';return;}
-  _monthlyStatsRequest?.abort();_monthlyStatsRequest=new AbortController();
+  _monthlyStatsRequest?.abort();const controller=new AbortController();_monthlyStatsRequest=controller;
   btn.disabled=true;btn.textContent=cached&&!force?'更新中...':'載入中...';
-  const loadingToken=cached&&!force?null:showLoadingProgress('每月統計載入中，請稍等...');
+  const loadingToken=showLoadingProgress(cached?'每月統計更新中，請稍等...':'每月統計載入中，請稍等...');
   try{
     const suffix=force?'&refresh=1':'';
-    const loadCompany=async company=>{
-      const endpoint=`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`;
-      const result=await fetchJsonWithTimeout(endpoint,{signal:_monthlyStatsRequest.signal},45000);
-      if(!result.success)throw new Error(result.message||`${company} 載入失敗`);
-      return result;
-    };
-    const [base,companyResults]=await Promise.all([
-      fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:_monthlyStatsRequest.signal},45000),
-      Promise.all(COMPANIES.map(loadCompany))
-    ]);
-    if(!base.success)throw new Error(base.message||'載入失敗');
-    const data=assembleMonthlyStats(base,companyResults);
+    let data;
+    if(force){
+      const loadCompany=async company=>{
+        const endpoint=`${url}?action=monthlyStatsCompany&company=${encodeURIComponent(company)}&month=${monthCode}${suffix}`;
+        const result=await fetchJsonWithTimeout(endpoint,{signal:controller.signal},45000);
+        if(!result.success)throw new Error(result.message||`${company} 載入失敗`);
+        return result;
+      };
+      const [base,companyResults]=await Promise.all([
+        fetchJsonWithTimeout(`${url}?action=monthlyStatsBase&month=${monthCode}${suffix}`,{signal:controller.signal},45000),
+        Promise.all(COMPANIES.map(loadCompany))
+      ]);
+      if(!base.success)throw new Error(base.message||'載入失敗');
+      data=assembleMonthlyStats(base,companyResults);
+    }else{
+      data=await fetchJsonWithTimeout(`${url}?action=monthlyStats&month=${monthCode}`,{signal:controller.signal},45000);
+    }
     if(!data.success||!Array.isArray(data.companies))throw new Error(data.message||'載入失敗');
     localStorage.setItem(monthlyStatsCacheStorageKey(monthCode),JSON.stringify({savedAt:Date.now(),data}));renderMonthlyStatsData(data);
   }catch(e){
     if(e.name==='AbortError')return;
     if(!cached)grid.innerHTML=`<div class="dash-mobile-empty">${esc(e.message||'無法載入每月統計')}</div>`;
-  }finally{if(loadingToken)hideLoadingProgress(loadingToken);btn.disabled=false;btn.textContent='重新整理';}
+  }finally{hideLoadingProgress(loadingToken);if(_monthlyStatsRequest===controller){_monthlyStatsRequest=null;btn.disabled=false;btn.textContent='重新整理';}}
 }
 function selectCompany(company){
   const prev={company:activeCompany,page:activePage};
