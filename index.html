@@ -1647,8 +1647,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.03-01';
-const _APP_VERSION='v1.050';
+const _APP_BUMP='2026.08.04-01';
+const _APP_VERSION='v1.051';
 const _isMob=document.documentElement.classList.contains('mob');
 
 // Render version label
@@ -1959,6 +1959,7 @@ function showPage(page){
   if(page==='brokenParts')loadBrokenPartsPage(1);
 }
 const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v1',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
+const SCHEDULE_INITIAL_DAYS=8,SCHEDULE_EXTENDED_DAYS=35;
 const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
 let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null,_scheduleCutoffTimer=null;
 const SCHEDULE_MACHINE_COUNTS_FRESH_MS=5*60*1000;
@@ -2031,7 +2032,7 @@ function saveScheduleCache(from,days,data){
   try{
     const cached={savedAt:Date.now(),data};
     localStorage.setItem(scheduleCacheKey(from,days),JSON.stringify(cached));
-    if(days>=35)localStorage.setItem(SCHEDULE_LATEST_CACHE_KEY,JSON.stringify(cached));
+    if(days>=SCHEDULE_INITIAL_DAYS)localStorage.setItem(SCHEDULE_LATEST_CACHE_KEY,JSON.stringify(cached));
   }catch(e){}
 }
 async function requestScheduleRange(from,days,force,signal){
@@ -2119,7 +2120,7 @@ function renderScheduleFocus(){
   const label=document.getElementById('scheduleFocusLabel'),dateEl=document.getElementById('scheduleFocusDate'),itemsEl=document.getElementById('scheduleFocusItems');
   const today=scheduleLocalIso(),days=scheduleVisibleDays(_scheduleTodayData?.days).filter(day=>day.date>=today);
   let focus=days[0]?.items?.length?days[0]:days.slice(1).find(day=>day.items?.length);
-  if(!focus){label.textContent='工作安排';dateEl.textContent='未來 35 日沒有安排';itemsEl.innerHTML='';return;}
+  if(!focus){label.textContent='工作安排';dateEl.textContent=`未來 ${SCHEDULE_INITIAL_DAYS-1} 日沒有安排`;itemsEl.innerHTML='';return;}
   const isToday=focus.date===scheduleLocalIso();
   label.textContent=isToday?'今日工作':'下一個工作日';dateEl.textContent=scheduleDateLabel(focus.date);
   const currentMonth=scheduleLocalIso().slice(0,7),showMachineCount=focus.date.startsWith(currentMonth);
@@ -2137,7 +2138,7 @@ function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();schedul
 async function loadScheduleOverview(force=false,weekOnly=false){
   const today=scheduleLocalIso();if(!_scheduleAnchor)_scheduleAnchor=today;
   const weekFrom=scheduleAddDays(_scheduleAnchor,1);
-  const todayEntry=readScheduleCacheEntry(today,35),weekEntry=_scheduleAnchor===today?todayEntry:readScheduleCacheEntry(weekFrom,7);
+  const todayEntry=readScheduleCacheEntry(today,SCHEDULE_INITIAL_DAYS)||readScheduleCacheEntry(today,SCHEDULE_EXTENDED_DAYS),weekEntry=_scheduleAnchor===today?todayEntry:readScheduleCacheEntry(weekFrom,7);
   const cachedToday=todayEntry?.data||readLatestScheduleCache(today),cachedWeek=_scheduleAnchor===today?cachedToday:weekEntry?.data;
   if(cachedToday)_scheduleTodayData=cachedToday;
   if(cachedWeek)_scheduleWeekDays=scheduleWeekRange(cachedWeek.days,_scheduleAnchor);
@@ -2151,12 +2152,12 @@ async function loadScheduleOverview(force=false,weekOnly=false){
   _scheduleRequest?.abort();
   const controller=new AbortController();_scheduleRequest=controller;
   const hasImmediateToday=Array.isArray(_scheduleTodayData?.days),hasImmediateWeek=_scheduleAnchor===today?hasImmediateToday:!!cachedWeek;
-  const showLoading=force||!hasImmediateToday||!hasImmediateWeek;
-  const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=showLoading;btn.textContent=showLoading?'載入中...':'重新整理';
+  const showLoading=!hasImmediateToday||!hasImmediateWeek,backgroundRefresh=force&&hasImmediateToday&&hasImmediateWeek;
+  const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=showLoading||backgroundRefresh;btn.textContent=backgroundRefresh?'更新中...':showLoading?'載入中...':'重新整理';
   const loadingToken=showLoading?showLoadingProgress('工作安排載入中，請稍等...'):null;
   try{
     const needToday=force||!weekOnly||!_scheduleTodayData;
-    const todayPromise=needToday?requestScheduleRange(today,35,force,controller.signal):Promise.resolve(_scheduleTodayData);
+    const todayPromise=needToday?requestScheduleRange(today,SCHEDULE_INITIAL_DAYS,force,controller.signal):Promise.resolve(_scheduleTodayData);
     const weekPromise=_scheduleAnchor===today?Promise.resolve(null):requestScheduleRange(weekFrom,7,force,controller.signal);
     const [todayData,weekData]=await Promise.all([todayPromise,weekPromise]);
     if(todayData)_scheduleTodayData=todayData;
