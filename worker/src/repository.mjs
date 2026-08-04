@@ -20,7 +20,10 @@ import {
   getDashboardRecords,
   getMonthlyScheduleFromRows,
   getMonthlyStatsSubsetFromData,
+  monthlyCompanyStatsCacheKey,
   monthlyStatsBaseFromData,
+  monthlyStatsBaseCacheKey,
+  monthlyStatsCacheKey,
   monthlyStatsCompanyFromRows,
   normalizeDateParam,
   normalizeMonthlyCode,
@@ -45,6 +48,7 @@ import {
 
 const DEFAULT_CACHE_TTL_MS = 15_000;
 const LONG_CACHE_TTL_MS = 5 * 60_000;
+const MONTHLY_STATS_CACHE_TTL_MS = 10 * 60_000;
 const MAX_READ_COLUMNS = 200;
 
 function own(object, key) {
@@ -663,43 +667,54 @@ export function createRepository(env = {}, dependencies = {}) {
 
   async function monthlyBase(params = {}) {
     const monthCode = normalizeMonthlyCode(params.month, new Date(nowMs(now)), config.timeZone);
-    const schedule = await readScheduleTable(monthCode, { refresh: text(params.refresh) === "1" });
-    const scheduleData = schedule
-      ? getMonthlyScheduleFromRows(schedule.rows, monthCode, new Date(nowMs(now)), schedule.sheetName, { timeZone: config.timeZone })
-      : { sheetName: scheduleSheetName(monthCode), venues: {} };
-    const settings = await readMonthlySettings({ refresh: text(params.refresh) === "1" });
-    return monthlyStatsBaseFromData({
-      monthCode,
-      now: new Date(nowMs(now)),
-      timeZone: config.timeZone,
-      schedule: { sheetName: scheduleData.sheetName, venues: scheduleData.venues },
-      sclSettings: settings,
-    });
+    const refresh = text(params.refresh) === "1";
+    return cached(memory, db, cacheAdapter, "monthly-base", monthlyStatsBaseCacheKey(monthCode, new Date(nowMs(now))), async () => {
+      const schedule = await readScheduleTable(monthCode, { refresh });
+      const scheduleData = schedule
+        ? getMonthlyScheduleFromRows(schedule.rows, monthCode, new Date(nowMs(now)), schedule.sheetName, { timeZone: config.timeZone })
+        : { sheetName: scheduleSheetName(monthCode), venues: {} };
+      const settings = await readMonthlySettings({ refresh });
+      return monthlyStatsBaseFromData({
+        monthCode,
+        now: new Date(nowMs(now)),
+        timeZone: config.timeZone,
+        schedule: { sheetName: scheduleData.sheetName, venues: scheduleData.venues },
+        sclSettings: settings,
+      });
+    }, { refresh, ttlMs: MONTHLY_STATS_CACHE_TTL_MS, now });
   }
 
   async function monthlyCompany(params = {}) {
     const company = normalizeRequestCompany(params.company);
     const monthCode = normalizeMonthlyCode(params.month, new Date(nowMs(now)), config.timeZone);
-    const main = await mainRowsForCompany(company, { refresh: text(params.refresh) === "1" });
-    const settings = company === "SCL" ? await readMonthlySettings({ refresh: text(params.refresh) === "1" }) : {};
-    return monthlyStatsCompanyFromRows({
-      company,
-      month: monthCode,
-      poNumber: params.poNumber,
-      now: new Date(nowMs(now)),
-      timeZone: config.timeZone,
-    }, main.rows, settings);
+    const refresh = text(params.refresh) === "1";
+    return cached(memory, db, cacheAdapter, `monthly-company:${company}`, monthlyCompanyStatsCacheKey(monthCode, company), async () => {
+      const main = await mainRowsForCompany(company, { refresh });
+      const settings = company === "SCL" ? await readMonthlySettings({ refresh }) : {};
+      return monthlyStatsCompanyFromRows({
+        company,
+        month: monthCode,
+        poNumber: params.poNumber,
+        now: new Date(nowMs(now)),
+        timeZone: config.timeZone,
+      }, main.rows, settings);
+    }, { refresh, ttlMs: MONTHLY_STATS_CACHE_TTL_MS, now });
   }
 
   async function monthlySubset(params = {}, companies = COMPANIES) {
     const monthCode = normalizeMonthlyCode(params.month, new Date(nowMs(now)), config.timeZone);
-    const base = await monthlyBase({ ...params, month: monthCode });
-    const results = await Promise.all(companies.map((company) => monthlyCompany({
-      ...params,
-      company,
-      month: monthCode,
-    })));
-    return getMonthlyStatsSubsetFromData({ base, companyResults: results });
+    const refresh = text(params.refresh) === "1";
+    const allCompanies = companies.length === COMPANIES.length && COMPANIES.every((company) => companies.includes(company));
+    const scope = allCompanies ? "monthly-all" : "monthly-machine-counts";
+    return cached(memory, db, cacheAdapter, scope, monthlyStatsCacheKey(monthCode, new Date(nowMs(now))), async () => {
+      const base = await monthlyBase({ ...params, month: monthCode });
+      const results = await Promise.all(companies.map((company) => monthlyCompany({
+        ...params,
+        company,
+        month: monthCode,
+      })));
+      return getMonthlyStatsSubsetFromData({ base, companyResults: results });
+    }, { refresh, ttlMs: MONTHLY_STATS_CACHE_TTL_MS, now });
   }
 
   async function scheduleOverview(params = {}) {
@@ -903,8 +918,13 @@ export function createRepository(env = {}, dependencies = {}) {
       data.push({ range: `${quoteSheetName(MONTHLY_SHEET)}!${cell}`, values: [[Number(raw)]] });
     }
     await sheets.valuesBatchUpdate({ spreadsheetId: config.sheets.SCL, data, valueInputOption: "USER_ENTERED" });
-    await invalidateCache(db, memory, cacheAdapter, "monthly-settings", now);
-    await invalidateCache(db, memory, cacheAdapter, "monthly-base", now);
+    await Promise.all([
+      invalidateCache(db, memory, cacheAdapter, "monthly-settings", now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-base", now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-company:SCL", now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-all", now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-machine-counts", now),
+    ]);
     return { success: true, settings: await readMonthlySettings({ refresh: true }) };
   }
 

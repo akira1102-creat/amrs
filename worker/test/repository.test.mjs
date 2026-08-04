@@ -229,6 +229,55 @@ test("implements all 13 GET action contracts against synthetic Sheets", async ()
   assert.equal((await repository.getAction({ action: "aaTags", company: "MGM" })).tags[0].aaTag, "TAE0051");
 });
 
+test("shares monthly statistics for ten minutes across Worker instances", async () => {
+  const harness = createSheetsHarness(companyData);
+  let nowMs = Date.parse("2026-08-04T04:00:00Z");
+  let valuesReads = 0;
+  const sheetsClient = {
+    ...harness.client,
+    async valuesGet(options) {
+      valuesReads += 1;
+      return harness.client.valuesGet(options);
+    },
+  };
+  const entries = new Map();
+  const cacheAdapter = {
+    async get(key) {
+      const entry = entries.get(key);
+      if (!entry || entry.expiresAt <= nowMs) return null;
+      return entry.value;
+    },
+    async put(key, value, ttlMs) {
+      entries.set(key, { value, expiresAt: nowMs + ttlMs });
+    },
+  };
+  const firstRepository = createRepository({}, {
+    config,
+    sheetsClient,
+    cacheAdapter,
+    memoryCache: new Map(),
+    now: () => nowMs,
+  });
+
+  await firstRepository.getAction({ action: "monthlyStats", month: "2608" });
+  const readsAfterFirstLoad = valuesReads;
+  assert.ok(readsAfterFirstLoad > 0);
+
+  nowMs += 20_000;
+  const secondRepository = createRepository({}, {
+    config,
+    sheetsClient,
+    cacheAdapter,
+    memoryCache: new Map(),
+    now: () => nowMs,
+  });
+  await secondRepository.getAction({ action: "monthlyStats", month: "2608" });
+  assert.equal(valuesReads, readsAfterFirstLoad);
+
+  await secondRepository.getAction({ action: "monthlyStats", month: "2608", refresh: "1" });
+  assert.ok(valuesReads > readsAfterFirstLoad);
+});
+
 test("uses hidden submission IDs to make repeated submissions idempotent", async () => {
   const harness = createSheetsHarness(companyData);
   const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z"), uuid: () => "generated-id-1" });
