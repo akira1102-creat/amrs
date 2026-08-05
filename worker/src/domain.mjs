@@ -212,6 +212,37 @@ export function recordFromRow(row, rowDate, rowNumber, company, recordId = "") {
   return record;
 }
 
+function calendarOrdinal(value, timeZone = DEFAULT_TIME_ZONE) {
+  const normalized = normalizeDateParam(value, timeZone);
+  if (!normalized) return null;
+  const [year, month, day] = normalized.split("/").map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
+export function getDuplicateFaultsFromRows(rows, params = {}) {
+  const timeZone = timeZoneOf(params.timeZone);
+  const reason = gasString(params.reason).trim();
+  if (!reason || reason.toUpperCase() === "PM") return {};
+  const serialNos = new Set((Array.isArray(params.serialNos) ? params.serialNos : gasString(params.serialNos).split(","))
+    .map((value) => gasString(value).trim())
+    .filter(Boolean));
+  if (!serialNos.size) return {};
+  const endOrdinal = calendarOrdinal(params.date, timeZone);
+  if (endOrdinal == null) return {};
+  const targetReason = reason.toUpperCase();
+  const counts = {};
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const serialNo = gasString(rowValue(row, 4)).trim();
+    if (!serialNos.has(serialNo)) return;
+    const rowReason = gasString(rowValue(row, normalizeCompany(params.company) === "GEG" ? 7 : 5)).trim();
+    if (rowReason.toUpperCase() !== targetReason || rowReason.toUpperCase() === "PM") return;
+    const rowOrdinal = calendarOrdinal(rowValue(row, 1), timeZone);
+    if (rowOrdinal == null || rowOrdinal <= endOrdinal - 30 || rowOrdinal > endOrdinal) return;
+    counts[serialNo] = (counts[serialNo] || 0) + 1;
+  });
+  return counts;
+}
+
 export function recordToValues(record, company) {
   const value = record || {};
   const common = [

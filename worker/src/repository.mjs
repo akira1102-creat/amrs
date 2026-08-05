@@ -18,6 +18,7 @@ import {
   formatSheetDate,
   getBrokenPartsPage,
   getDashboardRecords,
+  getDuplicateFaultsFromRows,
   getMonthlyScheduleFromRows,
   getMonthlyStatsSubsetFromData,
   monthlyCompanyStatsCacheKey,
@@ -57,6 +58,20 @@ function own(object, key) {
 
 function text(value) {
   return String(value == null ? "" : value).trim();
+}
+
+function hasRecordValue(value) {
+  return Array.isArray(value) ? value.length > 0 : text(value) !== "";
+}
+
+function needsBrokenPartsWrite(record = {}) {
+  return [
+    "brokenParts",
+    "bpUodActivationDate",
+    "bpUodUnlockDay",
+    "bpHoldDate",
+    "bpHoldReleaseDate",
+  ].some((field) => hasRecordValue(record[field]));
 }
 
 function nowMs(now) {
@@ -659,6 +674,19 @@ export function createRepository(env = {}, dependencies = {}) {
     return { records };
   }
 
+  async function getDuplicateFaults(params = {}) {
+    const company = normalizeCompany(params.company);
+    const reason = text(params.reason);
+    const date = normalizeDateParam(params.date, config.timeZone);
+    if (!date) throw Object.assign(new Error("Invalid date"), { status: 400 });
+    const serialNos = text(params.serialNos).split(",").map((value) => text(value)).filter(Boolean);
+    const main = await mainRowsForCompany(company, { refresh: true, cache: false });
+    return {
+      success: true,
+      duplicates: getDuplicateFaultsFromRows(main.rows, { company, serialNos, reason, date, timeZone: config.timeZone }),
+    };
+  }
+
   async function getBrokenParts(params = {}) {
     const company = normalizeCompany(params.company);
     const table = await readBrokenTable(company, { refresh: text(params.refresh) === "1" });
@@ -745,6 +773,7 @@ export function createRepository(env = {}, dependencies = {}) {
     const action = text(params.action);
     if (action === "ping") return { success: true };
     if (action === "today") return getToday(params);
+    if (action === "duplicateFault") return getDuplicateFaults(params);
     if (action === "dashboard") return getDashboard(params);
     if (action === "parts") return { parts: await readParts({ refresh: text(params.refresh) === "1" }) };
     if (action === "template") return { success: true, mappings: await readTemplate(params.company, { refresh: text(params.refresh) === "1" }) };
@@ -1008,20 +1037,23 @@ export function createRepository(env = {}, dependencies = {}) {
         await appendValues(main.spreadsheetId, main.sheet.title, main.idColumn, rows);
         inserted += fresh.length;
       }
-      const broken = await readBrokenTable(company, { refresh: true, cache: false });
-      const existingBroken = new Set((broken.rows || []).map((row) => text(arrayValue(row, broken.idColumn))).filter(Boolean));
-      const brokenRows = [];
-      for (const record of companyRecords) {
-        const unlock = record.bpUodUnlockDate || record.bpUodUnlockDay || "";
-        if (!record.brokenParts && !record.bpUodActivationDate && !unlock && !record.bpHoldDate && !record.bpHoldReleaseDate) continue;
-        if (existingBroken.has(text(record.submissionId))) continue;
-        const values = brokenPartsRecordToValues({ ...record, date: record.date || today });
-        while (values.length < broken.idColumn) values.push("");
-        values[broken.idColumn - 1] = text(record.submissionId);
-        brokenRows.push(values);
-        existingBroken.add(text(record.submissionId));
+      const brokenRecords = companyRecords.filter(needsBrokenPartsWrite);
+      if (brokenRecords.length) {
+        const broken = await readBrokenTable(company, { refresh: true, cache: false });
+        const existingBroken = new Set((broken.rows || []).map((row) => text(arrayValue(row, broken.idColumn))).filter(Boolean));
+        const brokenRows = [];
+        for (const record of brokenRecords) {
+          const unlock = record.bpUodUnlockDate || record.bpUodUnlockDay || "";
+          if (!record.brokenParts && !record.bpUodActivationDate && !unlock && !record.bpHoldDate && !record.bpHoldReleaseDate) continue;
+          if (existingBroken.has(text(record.submissionId))) continue;
+          const values = brokenPartsRecordToValues({ ...record, date: record.date || today });
+          while (values.length < broken.idColumn) values.push("");
+          values[broken.idColumn - 1] = text(record.submissionId);
+          brokenRows.push(values);
+          existingBroken.add(text(record.submissionId));
+        }
+        if (brokenRows.length) await appendValues(broken.spreadsheetId, broken.sheet.title, broken.idColumn, brokenRows);
       }
-      if (brokenRows.length) await appendValues(broken.spreadsheetId, broken.sheet.title, broken.idColumn, brokenRows);
       await invalidateCompany(company);
     }
     return {
@@ -1091,6 +1123,7 @@ export function createRepository(env = {}, dependencies = {}) {
     postAction,
     getDashboard,
     getToday,
+    getDuplicateFaults,
     getBrokenParts,
     monthlyBase,
     monthlyCompany,

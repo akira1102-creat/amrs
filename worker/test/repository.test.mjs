@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCloudflareCacheAdapter, createRepository } from "../src/repository.mjs";
+import { getDuplicateFaultsFromRows } from "../src/domain.mjs";
 
 test("Cloudflare cache adapter keeps short-lived Sheet payloads outside D1", async () => {
   const entries = new Map();
@@ -195,12 +196,13 @@ const companyData = {
   schedule: [{ title: "2026-AUG", values: [["Day", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S"], [4, "VML", "", "", "", "", "", "", "", "", "", "", "LON", "", "", "", "", "", ""]] }],
 };
 
-test("implements all 13 GET action contracts against synthetic Sheets", async () => {
+test("implements all 14 GET action contracts against synthetic Sheets", async () => {
   const harness = createSheetsHarness(companyData);
   const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
   const actions = [
     ["ping", {}],
     ["today", { company: "SCL" }],
+    ["duplicateFault", { company: "SCL", serialNos: "1234", reason: "Hardware Problem", date: "2026/08/04" }],
     ["dashboard", { company: "SCL", page: "1", pageSize: "10", serialNo: "1234" }],
     ["parts", {}],
     ["template", { company: "SCL" }],
@@ -227,6 +229,59 @@ test("implements all 13 GET action contracts against synthetic Sheets", async ()
   }
   assert.equal((await repository.getAction({ action: "parts" })).parts.length, 2);
   assert.equal((await repository.getAction({ action: "aaTags", company: "MGM" })).tags[0].aaTag, "TAE0051");
+});
+
+test("finds same non-PM serial and reason within the requested 30-day window", () => {
+  const rows = [
+    ["Venetian", "2026/08/04", "2608", "SAE", "1234", "Hardware Problem", "Repair", "", "", ""],
+    ["Venetian", "2026/07/06", "2607", "SAE", "1234", "Hardware Problem", "Repair", "", "", ""],
+    ["Venetian", "2026/07/05", "2607", "SAE", "1234", "Hardware Problem", "Repair", "", "", ""],
+    ["Venetian", "2026/07/20", "2607", "SAE", "1234", "PM", "Preventive Maintenance", "", "", ""],
+    ["Venetian", "2026/07/20", "2607", "SAE", "9999", "Hardware Problem", "Repair", "", "", ""],
+  ];
+  assert.deepEqual(getDuplicateFaultsFromRows(rows, {
+    company: "SCL",
+    serialNos: ["1234", "9999"],
+    reason: "Hardware Problem",
+    date: "2026/08/04",
+    timeZone: "Asia/Hong_Kong",
+  }), { "1234": 2, "9999": 1 });
+  assert.deepEqual(getDuplicateFaultsFromRows(rows, {
+    company: "SCL",
+    serialNos: ["1234"],
+    reason: "PM",
+    date: "2026/08/04",
+    timeZone: "Asia/Hong_Kong",
+  }), {});
+});
+
+test("does not read the Broken Parts List for a normal submission", async () => {
+  const harness = createSheetsHarness(companyData);
+  let brokenReads = 0;
+  const sheetsClient = {
+    ...harness.client,
+    async valuesGet(options) {
+      if (String(options.range).includes("Broken Parts List")) brokenReads += 1;
+      return harness.client.valuesGet(options);
+    },
+  };
+  const repository = createRepository({}, { config, sheetsClient, uuid: () => "normal-submission-id" });
+  const result = await repository.postAction({
+    action: "submitRecords",
+    records: [{
+      submissionId: "normal-submission-id",
+      company: "SCL",
+      casino: "Venetian",
+      date: "2026/08/04",
+      poNumber: "",
+      model: "SAE",
+      serialNo: "2345",
+      reason: "PM",
+      actionTaken: "Preventive Maintenance",
+    }],
+  });
+  assert.equal(result.success, true);
+  assert.equal(brokenReads, 0);
 });
 
 test("shares monthly statistics for ten minutes across Worker instances", async () => {

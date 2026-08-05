@@ -1473,8 +1473,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.05-01';
-const _APP_VERSION='v1.056';
+const _APP_BUMP='2026.08.05-02';
+const _APP_VERSION='v1.057';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2976,6 +2976,7 @@ document.getElementById('model').addEventListener('change',function(){localStora
 document.getElementById('poNumber').addEventListener('input',function(){saveCompanyPoNumber(activeCompany,this.value);syncPoQuickFillButton(false);});
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='',_batchMode=false;
 let _queueAddBusy=false;
+let _submitCheckBusy=false;
 function setQueueAddBusy(busy,batch=false){
   _queueAddBusy=busy;
   const singleBtn=document.getElementById('addQueueBtn');
@@ -3808,8 +3809,8 @@ function duplicateItemKey(item){return `${String(item?.sn||'')}\u0000${String(it
 function scheduleQueueDuplicateCheck(){renderQueueDuplicateNotice();}
 function syncSubmitButtonState(){
   const btn=document.getElementById('submitBtn');if(!btn||isSubmitting)return;
-  btn.disabled=queue.length===0;
-  btn.textContent='全部提交';
+  btn.disabled=queue.length===0||_submitCheckBusy;
+  btn.textContent=_submitCheckBusy?'檢查重複記錄中...':'全部提交';
 }
 function collectQueueDuplicateWarnings(){
   const faultItems=queue.filter(isDuplicateCheckItem);
@@ -3834,6 +3835,47 @@ function renderQueueDuplicateNotice(){
   }else{
     notice.className='';notice.textContent='';
   }
+}
+
+async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=fmtDate(document.getElementById('date').value)){
+  const normalizedReason=String(reason||'').trim();
+  if(!normalizedReason||normalizedReason.toUpperCase()==='PM')return {};
+  const url=getScriptUrl();
+  if(!url)throw new Error('尚未設定網站代號');
+  const params=new URLSearchParams({
+    action:'duplicateFault',
+    company:String(company||activeCompany),
+    serialNos:[...new Set(serialNos.map(value=>String(value||'').trim()).filter(Boolean))].join(','),
+    reason:normalizedReason,
+    date:String(date||'')
+  });
+  const data=await fetchJsonWithTimeout(`${url}?${params.toString()}`,{},60000);
+  if(!data?.success)throw new Error(data?.message||'無法檢查最近 30 日重複記錄');
+  return data.duplicates||{};
+}
+function duplicateCount(value){return Array.isArray(value)?value.length:Number(value)||0;}
+async function collectRecentDuplicateWarnings(){
+  const groups=new Map();
+  queue.filter(isDuplicateCheckItem).forEach(item=>{
+    const company=item.company||activeCompany;
+    const reason=String(item.reason||'').trim();
+    const date=item.date||fmtDate(document.getElementById('date').value);
+    const key=`${company}\u0000${reason}\u0000${date}`;
+    if(!groups.has(key))groups.set(key,{company,reason,date,serialNos:new Set()});
+    groups.get(key).serialNos.add(String(item.sn||'').trim());
+  });
+  const warnings=[];
+  for(const group of groups.values()){
+    const serialNos=[...group.serialNos].filter(Boolean);
+    for(let offset=0;offset<serialNos.length;offset+=50){
+      const duplicates=await fetchDuplicateFaults(serialNos.slice(offset,offset+50),group.reason,group.company,group.date);
+      Object.entries(duplicates).forEach(([serialNo,value])=>{
+        const count=duplicateCount(value);
+        if(count>0)warnings.push(`S/N ${serialNo} 最近 30 日已有 ${count} 筆相同非 PM 記錄（${group.reason}）`);
+      });
+    }
+  }
+  return [...new Set(warnings)];
 }
 
 let _poRepairMode=false,_poRepairRecords=[],_poRepairSelected=null,_poRepairLanguage='jp',_poRepairToken=0,_poSnTimer=null;
@@ -4823,6 +4865,20 @@ async function submitAll(){
   });
   if(errors.length){showToast(errors[0],'err');return;}
   warnings.push(...collectQueueDuplicateWarnings());
+  if(_submitCheckBusy)return;
+  _submitCheckBusy=true;
+  syncSubmitButtonState();
+  const duplicateCheckToken=showLoadingProgress('正在檢查最近 30 日重複記錄，請稍等...');
+  try{
+    warnings.push(...await collectRecentDuplicateWarnings());
+  }catch(error){
+    showToast(error.message||'無法完成重複檢查，暫未開啟提交確認','err');
+    return;
+  }finally{
+    hideLoadingProgress(duplicateCheckToken);
+    _submitCheckBusy=false;
+    syncSubmitButtonState();
+  }
   const seals=queue.map(item=>item.voidSeal).filter(Boolean);const repeatedSeals=[...new Set(seals.filter((seal,i)=>seals.indexOf(seal)!==i))];if(repeatedSeals.length)warnings.push(`Void Seal 重複：${repeatedSeals.join('、')}`);
   const queueCasinos=[...new Set(queue.map(item=>item.casino||casino))];
   const queueDates=[...new Set(queue.map(item=>item.date||fmtDate(date)))];
