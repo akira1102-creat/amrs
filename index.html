@@ -697,6 +697,8 @@
     .parts-list-summary{font-size:12px;color:#8b949e}
     .parts-list-refresh{flex:0 0 auto;padding:8px 12px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .parts-list-refresh:disabled{color:#484f58;cursor:not-allowed}
+    .parts-list-search{margin-bottom:12px}
+    .parts-list-search input{font-size:14px;padding:10px 12px;border-radius:10px}
     .parts-list-index{display:none}
     .parts-list-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
     .parts-list-group{min-width:0;scroll-margin-top:72px}
@@ -1384,6 +1386,9 @@
 <div id="partsListPage" class="app-page">
   <div class="card" id="partsListCard">
     <div class="card-title">零件列表</div>
+    <div class="parts-list-search">
+      <input id="partsListSearch" type="search" placeholder="搜尋日文、英文或零件編號..." autocomplete="off" oninput="filterPartsListPage(this.value)">
+    </div>
     <div class="parts-list-toolbar">
       <div class="parts-list-summary" id="partsListSummary">載入零件資料中...</div>
       <button class="parts-list-refresh" id="partsListRefreshBtn" onclick="refreshPartsListPage()" type="button">重新整理</button>
@@ -1473,8 +1478,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.05-02';
-const _APP_VERSION='v1.057';
+const _APP_BUMP='2026.08.07-01';
+const _APP_VERSION='v1.058';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3153,24 +3158,31 @@ function setPartsLanguage(language){
   if(input?.value.trim())_comboRegistry.itemCode?.render();
 }
 function partCodeSort(a,b){return String(a.code||'').localeCompare(String(b.code||''),undefined,{numeric:true,sensitivity:'base'});}
+function filterPartsListPage(value){
+  const input=document.getElementById('partsListSearch');
+  if(input&&input.value!==String(value??''))input.value=String(value??'');
+  renderPartsListPage();
+}
 function renderPartsListPage(){
   const root=document.getElementById('partsListColumns');
   const summary=document.getElementById('partsListSummary');
   if(!root||!summary)return;
+  const query=String(document.getElementById('partsListSearch')?.value||'').trim().toLowerCase();
+  const filteredParts=query?_partsCodes.filter(part=>[part.code,part.desc,part.colC].some(value=>String(value||'').toLowerCase().includes(query))):_partsCodes;
   const groups=[
-    {id:'partsGroupAe',title:'AE- 零件',items:_partsCodes.filter(p=>/^AE-/i.test(String(p.code||'')))},
-    {id:'partsGroupTae',title:'TAE- 零件',items:_partsCodes.filter(p=>/^TAE-/i.test(String(p.code||'')))},
-    {id:'partsGroupOther',title:'其他',items:_partsCodes.filter(p=>!/^AE-/i.test(String(p.code||''))&&!/^TAE-/i.test(String(p.code||'')))}
+    {id:'partsGroupAe',title:'AE- 零件',items:filteredParts.filter(p=>/^AE-/i.test(String(p.code||'')))},
+    {id:'partsGroupTae',title:'TAE- 零件',items:filteredParts.filter(p=>/^TAE-/i.test(String(p.code||'')))},
+    {id:'partsGroupOther',title:'其他',items:filteredParts.filter(p=>!/^AE-/i.test(String(p.code||''))&&!/^TAE-/i.test(String(p.code||'')))}
   ];
   groups.forEach(group=>group.items.sort(partCodeSort));
-  summary.textContent=_partsCodes.length?`共 ${_partsCodes.length} 項零件`:'沒有零件資料';
+  summary.textContent=query?`找到 ${filteredParts.length} / ${_partsCodes.length} 項零件`:(_partsCodes.length?`共 ${_partsCodes.length} 項零件`:'沒有零件資料');
   root.innerHTML=groups.map(group=>`<section class="parts-list-group" id="${group.id}">
     <div class="parts-list-heading"><span>${group.title}</span><span class="parts-list-count">${group.items.length} 項</span></div>
     ${group.items.length?group.items.map(part=>`<div class="parts-list-row">
       <div class="parts-list-code">${esc(part.code||'')}</div>
       <div class="parts-list-jp">${esc(part.desc||'—')}</div>
       <div class="parts-list-en">${esc(part.colC||'—')}</div>
-    </div>`).join(''):'<div class="parts-list-empty">沒有項目</div>'}
+    </div>`).join(''):`<div class="parts-list-empty">${query?'沒有符合的零件':'沒有項目'}</div>`}
   </section>`).join('');
 }
 function scrollPartsListGroup(id){document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});}
