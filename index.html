@@ -1246,7 +1246,7 @@
 </div>
 
 <div class="card" id="statsCard" style="display:none">
-  <div class="card-title">今日統計</div>
+  <div class="card-title">今日統計 · <span id="statsCompany">SCL</span></div>
   <div id="statsList"></div>
 </div>
 
@@ -1478,8 +1478,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.07-01';
-const _APP_VERSION='v1.058';
+const _APP_BUMP='2026.08.07-02';
+const _APP_VERSION='v1.059';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3023,6 +3023,7 @@ function switchQueueCompany(company){
   loadCompanyPoNumber(company);
   queue=loadCompanyQueue(company);selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;
   if(document.getElementById('queueList'))renderQueue();
+  _renderStats();
 }
 queue=loadCompanyQueue(activeCompany);
 function makeSubmissionId(){
@@ -3040,10 +3041,23 @@ function ensureSubmissionIds(items){
 if(ensureSubmissionIds(queue))saveQueue();
 
 // ── Local Log & Stats ──────────────────────────────────────
-function _todayLogKey(){const t=new Date();return `_ml_log_${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;}
+function _todayLogDate(){const t=new Date();return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;}
+function _todayLogKey(company=activeCompany){return `_ml_log_${String(company||activeCompany)}_${_todayLogDate()}`;}
+function _legacyTodayLogKey(){return `_ml_log_${_todayLogDate()}`;}
+function _readLocalLog(key){try{const log=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(log)?log:[];}catch(e){return[];}}
+function _getLocalLog(company=activeCompany){
+  const scoped=_readLocalLog(_todayLogKey(company));
+  const legacy=_readLocalLog(_legacyTodayLogKey()).filter(record=>String(record.company||'').toLowerCase()===String(company||'').toLowerCase());
+  const seen=new Set();
+  return [...legacy,...scoped].filter(record=>{
+    if(!record?.submissionId)return true;
+    if(seen.has(record.submissionId))return false;
+    seen.add(record.submissionId);return true;
+  });
+}
 function _appendLocalLog(records){
-  const key=_todayLogKey();let log=[];
-  try{log=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
+  const company=String(records?.[0]?.company||activeCompany);
+  const key=_todayLogKey(company),log=_readLocalLog(key);
   const existingIds=new Set(log.map(record=>record.submissionId).filter(Boolean));
   const fresh=(records||[]).filter(record=>{
     if(!record.submissionId)return true;
@@ -3053,12 +3067,12 @@ function _appendLocalLog(records){
   localStorage.setItem(key,JSON.stringify(log.concat(fresh)));
   _renderStats();
 }
-function _getLocalLog(){try{return JSON.parse(localStorage.getItem(_todayLogKey())||'[]');}catch(e){return[];}}
 function _renderStats(){
-  const log=_getLocalLog();
+  const log=_getLocalLog(activeCompany);
   const card=document.getElementById('statsCard');
   if(!log.length){card.style.display='none';return;}
   card.style.display='block';
+  const companyEl=document.getElementById('statsCompany');if(companyEl)companyEl.textContent=activeCompany;
   const counts={};log.forEach(r=>{counts[r.reason]=(counts[r.reason]||0)+1;});
   const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1])
     .map(([r,c])=>`<div class="stat-row"><span>${esc(r)}</span><span class="stat-count">${c}</span></div>`).join('');
