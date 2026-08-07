@@ -634,6 +634,15 @@
     .schedule-page-head,.schedule-week-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .schedule-page-head{margin-bottom:18px}
     .schedule-page-title{font-size:20px;font-weight:900;color:#e6edf3}
+    .schedule-controls{display:grid;grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) minmax(180px,1.2fr) auto;align-items:end;gap:10px;margin-bottom:18px}
+    .schedule-control{display:flex;flex-direction:column;gap:5px;min-width:0;color:#8b949e;font-size:11px;font-weight:800}
+    .schedule-control input,.schedule-control select{width:100%;min-width:0;height:38px;padding:0 10px;border:1px solid #30363d;border-radius:9px;background:#0d1117;color:#e6edf3;font:inherit;font-size:12px}
+    .schedule-filter-clear{height:38px;padding:0 12px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+    .schedule-period-content{display:grid;grid-template-columns:minmax(140px,.34fr) minmax(0,1fr);gap:10px;align-items:start;margin-top:9px}
+    .schedule-period-content:not(.has-remark) .schedule-items{grid-column:1/-1}
+    .schedule-period-content .schedule-items{margin-top:0}
+    .schedule-period-remark{min-width:0;padding:9px 10px;border:1px solid #30363d;border-radius:9px;background:#0d1117;color:#c9d1d9;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+    .schedule-period-remark-label{display:block;margin-bottom:4px;color:#f2cc60;font-size:10px;font-weight:900}
     .schedule-refresh,.schedule-week-btn{height:38px;padding:0 13px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
     .schedule-refresh:disabled,.schedule-week-btn:disabled{opacity:.55;cursor:not-allowed}
     .schedule-focus{padding:18px 0 22px;border-top:1px solid #21262d;border-bottom:1px solid #30363d}
@@ -755,7 +764,12 @@
     .mob .monthly-month-btn{flex:1;min-width:0}
     .mob .schedule-page-title{font-size:16px}
     .mob .schedule-page-head{align-items:center}
+    .mob .schedule-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+    .mob .schedule-control:first-child{grid-column:1/-1}
+    .mob .schedule-filter-clear{grid-column:1/-1;width:100%}
     .mob .schedule-focus{padding-top:14px}
+    .mob .schedule-period-content{display:block}
+    .mob .schedule-period-remark{margin-bottom:9px}
     .mob .schedule-items{grid-template-columns:1fr}
     .mob .schedule-week-head{align-items:flex-start;flex-direction:column}
     .mob .schedule-week-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -766,7 +780,12 @@
     @media (max-width:600px){
       .schedule-page-title{font-size:16px}
       .schedule-page-head{align-items:center}
+      .schedule-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px}
+      .schedule-control:first-child{grid-column:1/-1}
+      .schedule-filter-clear{grid-column:1/-1;width:100%}
       .schedule-focus{padding-top:14px}
+      .schedule-period-content{display:block}
+      .schedule-period-remark{margin-bottom:9px}
       .schedule-items{grid-template-columns:minmax(0,1fr)}
       .schedule-week-head{align-items:flex-start;flex-direction:column}
       .schedule-week-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -1346,6 +1365,12 @@
       <div class="schedule-page-title">工作安排</div>
       <button class="schedule-refresh" id="scheduleRefreshBtn" onclick="loadScheduleOverview(true)" type="button">重新整理</button>
     </div>
+    <div class="schedule-controls" aria-label="工作安排篩選">
+      <label class="schedule-control"><span>月份</span><input id="scheduleMonthPicker" type="month" onchange="changeScheduleMonth(this.value)"></label>
+      <label class="schedule-control"><span>公司</span><select id="scheduleCompanyFilter" onchange="changeScheduleCompanyFilter(this.value)"><option value="">全部公司</option></select></label>
+      <label class="schedule-control"><span>地點</span><select id="scheduleVenueFilter" onchange="changeScheduleVenueFilter(this.value)"><option value="">全部地點</option></select></label>
+      <button class="schedule-filter-clear" id="scheduleFilterClearBtn" onclick="clearScheduleFilters()" type="button">清除篩選</button>
+    </div>
     <section class="schedule-focus">
       <div class="schedule-kicker" id="scheduleFocusLabel">今日工作</div>
       <div class="schedule-focus-date" id="scheduleFocusDate">正在載入...</div>
@@ -1478,8 +1503,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.07-02';
-const _APP_VERSION='v1.059';
+const _APP_BUMP='2026.08.07-03';
+const _APP_VERSION='v1.060';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -1888,7 +1913,7 @@ function showPage(page){
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
 }
-const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v2_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v1',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
+const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v3_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v2',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
 const SCHEDULE_INITIAL_DAYS=8,SCHEDULE_EXTENDED_DAYS=35;
 const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
 let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null,_scheduleCutoffTimer=null;
@@ -1934,11 +1959,49 @@ function scheduleDateLabel(iso){
   const date=scheduleDateObject(iso),weekdays=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
   return `${date.getMonth()+1}月${date.getDate()}日 ${weekdays[date.getDay()]}`;
 }
+let _scheduleSelectedMonth='',_scheduleFilterCompany='',_scheduleFilterVenue='';
+function scheduleCurrentMonthValue(){const now=new Date();return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;}
+function scheduleMonthStart(value){return /^\d{4}-\d{2}$/.test(String(value||''))?`${value}-01`:'';}
+function scheduleMonthCodeFromValue(value){return String(value||'').replace('-','').slice(2,6);}
+function scheduleDayHasContent(day){return !!(day&&(day.items||[]).some(item=>item.am?.length||item.pm?.length)||day.remarks?.am||day.remarks?.pm);}
+function scheduleItemMatches(item){
+  if(!item)return false;
+  if(_scheduleFilterCompany&&(!item.linked||item.company!==_scheduleFilterCompany))return false;
+  if(_scheduleFilterVenue&&(!item.linked||normalizeScheduleVenue(item.company,item.venue)!==_scheduleFilterVenue))return false;
+  return true;
+}
 function scheduleVisibleDays(days){
   return (days||[]).filter(day=>{
     const weekday=scheduleDateObject(day.date).getDay();
-    return weekday!==0&&weekday!==6;
-  }).map(day=>({...day,items:(day.items||[]).filter(item=>!/資料輸入\s*\/\s*緊急任務/.test(String(item.title||'')))}));
+    return weekday!==0&&weekday!==6&&(!_scheduleSelectedMonth||String(day.date).startsWith(_scheduleSelectedMonth));
+  }).map(day=>({...day,items:(day.items||[]).filter(item=>!/資料輸入\s*\/\s*緊急任務/.test(String(item.title||''))&&scheduleItemMatches(item))}));
+}
+function syncScheduleVenueFilterOptions(){
+  const select=document.getElementById('scheduleVenueFilter');if(!select)return;
+  const company=_scheduleFilterCompany,values=company?casinoOptionsForCompany(company):getCompanyOrder().flatMap(item=>casinoOptionsForCompany(item));
+  const unique=[...new Set(values)];
+  if(_scheduleFilterVenue&&!unique.includes(_scheduleFilterVenue))_scheduleFilterVenue='';
+  select.innerHTML='<option value="">全部地點</option>'+unique.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join('');
+  select.value=_scheduleFilterVenue;
+}
+function syncScheduleControls(){
+  const picker=document.getElementById('scheduleMonthPicker'),companySelect=document.getElementById('scheduleCompanyFilter');
+  if(picker)picker.value=_scheduleSelectedMonth||scheduleCurrentMonthValue();
+  if(companySelect){companySelect.innerHTML='<option value="">全部公司</option>'+getCompanyOrder().map(company=>`<option value="${esc(company)}">${esc(company)}</option>`).join('');companySelect.value=_scheduleFilterCompany;}
+  syncScheduleVenueFilterOptions();
+}
+function changeScheduleCompanyFilter(value){_scheduleFilterCompany=String(value||'');syncScheduleVenueFilterOptions();renderSchedulePage();}
+function changeScheduleVenueFilter(value){_scheduleFilterVenue=String(value||'');renderSchedulePage();}
+function clearScheduleFilters(){_scheduleFilterCompany='';_scheduleFilterVenue='';syncScheduleControls();renderSchedulePage();}
+function changeScheduleMonth(value){
+  const normalized=/^\d{4}-\d{2}$/.test(String(value||''))?String(value):scheduleCurrentMonthValue();
+  _scheduleSelectedMonth=normalized===scheduleCurrentMonthValue()?'':normalized;
+  _scheduleAnchor=_scheduleSelectedMonth?scheduleMonthStart(_scheduleSelectedMonth):scheduleLocalIso();
+  _scheduleTodayData=null;_scheduleWeekDays=[];syncScheduleControls();loadScheduleOverview(true);
+}
+function shiftSelectedScheduleMonth(delta){
+  const value=_scheduleSelectedMonth||scheduleCurrentMonthValue(),date=scheduleDateObject(`${value}-01`);date.setMonth(date.getMonth()+Number(delta));
+  changeScheduleMonth(`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`);
 }
 function scheduleWeekRange(days,anchor){
   const start=scheduleAddDays(anchor,1),end=scheduleAddDays(anchor,7);
@@ -1998,7 +2061,7 @@ function hydrateScheduleMachineCountsFromCache(monthCode){
 }
 async function loadScheduleVisibleMachineCounts(days,force=false){
   const today=scheduleLocalIso();
-  const monthCode=today.slice(2,4)+today.slice(5,7),monthPrefix=today.slice(0,7);
+  const monthPrefix=_scheduleSelectedMonth||today.slice(0,7),monthCode=scheduleMonthCodeFromValue(monthPrefix);
   const companies=[...new Set((days||[]).filter(day=>day?.date?.startsWith(monthPrefix)).flatMap(day=>day.items||[]).filter(item=>item.linked&&(item.company==='SCL'||item.company==='GEG')).map(item=>item.company))];
   if(!companies.length)return;
   const now=Date.now(),hasAllCompanies=companies.every(company=>_scheduleMachineCountCompanies.has(company));
@@ -2036,35 +2099,62 @@ function renderScheduleAssignment(item,date,shift,showMachineCount=false){
     <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div></div></div>
   </article>`;
 }
-function renderSchedulePeriod(label,shift,items,date,showMachineCount=false){
+function renderSchedulePeriod(label,shift,items,date,showMachineCount=false,remark=''){
   const shiftItems=(items||[]).filter(item=>item[shift]?.length);
-  if(!shiftItems.length)return '';
-  return `<section class="schedule-period"><div class="schedule-period-head">${label}</div><div class="schedule-items">${shiftItems.map(item=>renderScheduleAssignment(item,date,shift,showMachineCount)).join('')}</div></section>`;
+  if(!shiftItems.length&&!remark)return '';
+  const remarkHtml=remark?`<div class="schedule-period-remark"><span class="schedule-period-remark-label">備忘</span>${esc(remark)}</div>`:'';
+  const itemsHtml=shiftItems.length?shiftItems.map(item=>renderScheduleAssignment(item,date,shift,showMachineCount)).join(''):'<div class="schedule-empty">沒有安排</div>';
+  return `<section class="schedule-period"><div class="schedule-period-head">${label}</div><div class="schedule-period-content${remark?' has-remark':''}">${remarkHtml}<div class="schedule-items">${itemsHtml}</div></div></section>`;
 }
-function renderScheduleItems(items,date,showMachineCount=false){
-  const periods=renderSchedulePeriod('上午','am',items,date,showMachineCount)+renderSchedulePeriod('下午','pm',items,date,showMachineCount);
+function renderScheduleItems(items,date,showMachineCount=false,remarks={}){
+  const periods=renderSchedulePeriod('上午','am',items,date,showMachineCount,remarks?.am||'')+renderSchedulePeriod('下午','pm',items,date,showMachineCount,remarks?.pm||'');
   return periods||'<div class="schedule-empty">沒有安排</div>';
 }
 function renderScheduleFocus(){
   const label=document.getElementById('scheduleFocusLabel'),dateEl=document.getElementById('scheduleFocusDate'),itemsEl=document.getElementById('scheduleFocusItems');
-  const today=scheduleLocalIso(),days=scheduleVisibleDays(_scheduleTodayData?.days).filter(day=>day.date>=today);
-  let focus=days[0]?.items?.length?days[0]:days.slice(1).find(day=>day.items?.length);
-  if(!focus){label.textContent='工作安排';dateEl.textContent=`未來 ${SCHEDULE_INITIAL_DAYS-1} 日沒有安排`;itemsEl.innerHTML='';return;}
+  const today=scheduleLocalIso(),visible=scheduleVisibleDays(_scheduleTodayData?.days),days=_scheduleSelectedMonth?visible:visible.filter(day=>day.date>=today);
+  const focus=days.find(scheduleDayHasContent);
+  if(!focus){label.textContent=_scheduleSelectedMonth?'選定月份安排':'工作安排';dateEl.textContent=_scheduleSelectedMonth?`${_scheduleSelectedMonth} 沒有安排`:`未來 ${SCHEDULE_INITIAL_DAYS-1} 日沒有安排`;itemsEl.innerHTML='';return;}
   const isToday=focus.date===scheduleLocalIso();
-  label.textContent=isToday?'今日工作':'下一個工作日';dateEl.textContent=scheduleDateLabel(focus.date);
-  const currentMonth=scheduleLocalIso().slice(0,7),showMachineCount=focus.date.startsWith(currentMonth);
+  label.textContent=_scheduleSelectedMonth?'選定月份安排':(isToday?'今日工作':'下一個工作日');dateEl.textContent=scheduleDateLabel(focus.date);
+  const currentMonth=_scheduleSelectedMonth||scheduleLocalIso().slice(0,7),showMachineCount=focus.date.startsWith(currentMonth);
   if(showMachineCount){const monthCode=focus.date.slice(2,4)+focus.date.slice(5,7);if(_scheduleMachineCountsMonth!==monthCode)hydrateScheduleMachineCountsFromCache(monthCode);}
-  itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date,showMachineCount);
+  itemsEl.innerHTML=renderScheduleItems(focus.items,focus.date,showMachineCount,focus.remarks);
   void loadScheduleVisibleMachineCounts([focus,..._scheduleWeekDays]);
 }
 function renderScheduleWeek(){
-  const today=scheduleLocalIso(),days=scheduleVisibleDays(_scheduleWeekDays).filter(day=>day.date!==today);
+  const today=scheduleLocalIso(),rawDays=scheduleVisibleDays(_scheduleWeekDays),days=_scheduleSelectedMonth?rawDays:rawDays.filter(day=>day.date!==today);
+  document.querySelector('.schedule-week-title').textContent=_scheduleSelectedMonth?'選定月份安排':'未來七日安排';
   if(days.length){document.getElementById('scheduleWeekRange').textContent=`${scheduleDateLabel(days[0].date)} 至 ${scheduleDateLabel(days[days.length-1].date)}`;}
   else document.getElementById('scheduleWeekRange').textContent='';
-  document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day"><div class="schedule-day-date">${scheduleDateLabel(day.date)}</div><div class="schedule-periods">${renderScheduleItems(day.items,day.date,true)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
+  document.getElementById('scheduleTimeline').innerHTML=days.length?days.map(day=>`<div class="schedule-day"><div class="schedule-day-date">${scheduleDateLabel(day.date)}</div><div class="schedule-periods">${renderScheduleItems(day.items,day.date,true,day.remarks)}</div></div>`).join(''):'<div class="schedule-empty">沒有安排資料</div>';
 }
-function renderSchedulePage(){renderScheduleFocus();renderScheduleWeek();scheduleMachineCountCutoffRefresh();}
+function renderSchedulePage(){syncScheduleControls();renderScheduleFocus();renderScheduleWeek();scheduleMachineCountCutoffRefresh();}
+async function loadSelectedScheduleMonth(force=false){
+  const month=_scheduleSelectedMonth,from=scheduleMonthStart(month);if(!from)return;
+  const entry=readScheduleCacheEntry(from,SCHEDULE_EXTENDED_DAYS),cached=entry?.data;
+  if(cached){_scheduleTodayData=cached;_scheduleWeekDays=cached.days||[];}
+  syncScheduleControls();renderSchedulePage();
+  const fresh=!!entry?.savedAt&&Date.now()-entry.savedAt<SCHEDULE_FRESH_MS;
+  if(!force&&fresh){const btn=document.getElementById('scheduleRefreshBtn');btn.disabled=false;btn.textContent='重新整理';return;}
+  _scheduleRequest?.abort();const controller=new AbortController();_scheduleRequest=controller;
+  const hasImmediate=Array.isArray(_scheduleTodayData?.days),btn=document.getElementById('scheduleRefreshBtn');
+  btn.disabled=true;btn.textContent=hasImmediate?'背景更新中...':'載入中...';
+  const loadingToken=showLoadingProgress(hasImmediate?'工作安排背景更新中，請稍等...':'工作安排載入中，請稍等...');
+  try{
+    const data=await requestScheduleRange(from,SCHEDULE_EXTENDED_DAYS,force,controller.signal);
+    if(_scheduleSelectedMonth!==month)return;
+    _scheduleTodayData=data;_scheduleWeekDays=data.days||[];renderSchedulePage();
+  }catch(error){
+    if(error.name==='AbortError')return;
+    if(!hasImmediate){document.getElementById('scheduleFocusItems').innerHTML=`<div class="schedule-error">${esc(error.message||'工作安排載入失敗')}</div>`;document.getElementById('scheduleTimeline').innerHTML='';}
+  }finally{
+    hideLoadingProgress(loadingToken);
+    if(_scheduleRequest===controller){_scheduleRequest=null;btn.disabled=false;btn.textContent='重新整理';}
+  }
+}
 async function loadScheduleOverview(force=false,weekOnly=false){
+  if(_scheduleSelectedMonth)return loadSelectedScheduleMonth(force);
   const today=scheduleLocalIso();if(!_scheduleAnchor)_scheduleAnchor=today;
   const weekFrom=scheduleAddDays(_scheduleAnchor,1);
   const todayEntry=readScheduleCacheEntry(today,SCHEDULE_INITIAL_DAYS)||readScheduleCacheEntry(today,SCHEDULE_EXTENDED_DAYS),weekEntry=_scheduleAnchor===today?todayEntry:readScheduleCacheEntry(weekFrom,7);
@@ -2103,8 +2193,8 @@ async function loadScheduleOverview(force=false,weekOnly=false){
     if(_scheduleRequest===controller){_scheduleRequest=null;btn.disabled=false;btn.textContent='重新整理';}
   }
 }
-function changeScheduleWeek(direction){_scheduleAnchor=scheduleAddDays(_scheduleAnchor||scheduleLocalIso(),Number(direction)*7);loadScheduleOverview(false,true);}
-function returnScheduleToday(){_scheduleAnchor=scheduleLocalIso();loadScheduleOverview(false,true);}
+function changeScheduleWeek(direction){if(_scheduleSelectedMonth){shiftSelectedScheduleMonth(direction);return;}_scheduleAnchor=scheduleAddDays(_scheduleAnchor||scheduleLocalIso(),Number(direction)*7);loadScheduleOverview(false,true);}
+function returnScheduleToday(){_scheduleSelectedMonth='';_scheduleAnchor=scheduleLocalIso();syncScheduleControls();loadScheduleOverview(false,true);}
 function openScheduleInputFromButton(button){
   const {company,date}=button.dataset,venue=normalizeScheduleVenue(company,button.dataset.venue);
   if(!company||!venue||!date)return;

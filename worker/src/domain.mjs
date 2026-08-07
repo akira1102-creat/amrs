@@ -744,7 +744,7 @@ export function scheduleOverviewFromRows(params = {}, scheduleSheets = {}) {
     if (dayOfWeek === 0 || dayOfWeek === 6) continue;
     const iso = scheduleIsoDate(date, params.timeZone || DEFAULT_TIME_ZONE);
     const monthCode = scheduleMonthCode(date, params.timeZone || DEFAULT_TIME_ZONE);
-    requestedDates.push({ date: iso, day: date.getUTCDate(), monthCode, items: [] });
+    requestedDates.push({ date: iso, day: date.getUTCDate(), monthCode, items: [], remarks: { am: "", pm: "" } });
     monthCodes[monthCode] = true;
   }
   const missingSheets = [];
@@ -759,12 +759,33 @@ export function scheduleOverviewFromRows(params = {}, scheduleSheets = {}) {
     requestedDates.forEach((item) => {
       if (item.monthCode === monthCode) wantedDays[item.day] = item;
     });
+    const markerColumns = headers
+      .map((header, index) => ({ header: gasString(header).trim().toLowerCase(), index }))
+      .filter(({ header }) => header === "marco")
+      .map(({ index }) => index);
+    const amStart = markerColumns.length >= 2 ? markerColumns[0] : 1;
+    const pmStart = markerColumns.length >= 2 ? markerColumns[1] : 12;
+    const shiftRanges = {
+      am: { start: amStart, end: Math.max(amStart, pmStart) },
+      pm: { start: pmStart, end: markerColumns.length >= 2 ? headers.length : Math.min(headers.length, 20) },
+    };
+    const remarkColumnFor = ({ start, end }) => {
+      for (let column = start; column < end; column += 1) {
+        if (gasString(rowValue(headers, column)).trim().toLowerCase() === "remark") return column;
+      }
+      return -1;
+    };
     rows.forEach((row) => {
       const day = Number(gasString(rowValue(row, 0)).trim());
       const dayResult = wantedDays[day];
       if (!dayResult) return;
+      Object.entries(shiftRanges).forEach(([shift, range]) => {
+        const remarkColumn = remarkColumnFor(range);
+        if (remarkColumn >= 0) dayResult.remarks[shift] = gasString(rowValue(row, remarkColumn)).trim();
+      });
       const itemMap = {};
       const addAssignment = (column, shift) => {
+        if (column === remarkColumnFor(shiftRanges[shift])) return;
         const raw = gasString(rowValue(row, column)).trim();
         const person = gasString(rowValue(headers, column)).trim();
         if (!raw || !person) return;
@@ -803,8 +824,9 @@ export function scheduleOverviewFromRows(params = {}, scheduleSheets = {}) {
           itemMap[entry.key][shift].push({ name: person, assignment: visibleRaw });
         });
       };
-      for (let column = 1; column <= 8; column += 1) addAssignment(column, "am");
-      for (let column = 12; column <= 19; column += 1) addAssignment(column, "pm");
+      Object.entries(shiftRanges).forEach(([shift, range]) => {
+        for (let column = range.start; column < range.end; column += 1) addAssignment(column, shift);
+      });
       dayResult.items = Object.keys(itemMap).map((key) => {
         const item = itemMap[key];
         ["am", "pm"].forEach((shift) => {

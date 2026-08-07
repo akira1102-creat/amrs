@@ -314,6 +314,15 @@ test("builds the weekday schedule overview contract from table rows", () => {
   assert.deepEqual(overview.days[0].items[0].machineCountExcluded, { am: false, pm: true });
 });
 
+test("maps separate AM and PM schedule remarks from their sections", () => {
+  const headers = ["Day", "Marco", "Alex", "Remark", "Marco", "Bea", "Remark"];
+  const monday = ["3", "VML", "VML", "Morning note", "VML", "VML", "Afternoon note"];
+  const overview = scheduleOverviewFromRows({ from: "2026/08/03", days: 1 }, { "2608": [headers, monday] });
+  assert.deepEqual(overview.days[0].remarks, { am: "Morning note", pm: "Afternoon note" });
+  assert.deepEqual(overview.days[0].items[0].am.map((person) => person.name), ["Marco", "Alex"]);
+  assert.deepEqual(overview.days[0].items[0].pm.map((person) => person.name), ["Marco", "Bea"]);
+});
+
 test("combines monthly counts, targets, and schedule visits", () => {
   assert.equal(normalizeMonthlyCode("2608"), "2608");
   assert.throws(() => normalizeMonthlyCode("2613"), { message: "Invalid month" });
@@ -364,4 +373,3 @@ test("maps monthly schedule rows and applies venue-specific completion cutoffs",
   const completed = getMonthlyScheduleFromRows(rows, "2608", new Date("2026-08-03T05:00:00.000Z"), "2026-AUG");
   assert.equal(completed.venues.Venetian.completedVisits, 1);
 });
-
