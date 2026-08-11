@@ -297,6 +297,9 @@ test("parses schedule venue aliases and links them to companies", () => {
     { venue: "Londoner", machineCountExcluded: true },
     { venue: "Galaxy", machineCountExcluded: false },
   ]);
+  assert.deepEqual(scheduleVenueEntriesInText("Londoner*"), [
+    { venue: "Londoner", machineCountExcluded: true },
+  ]);
   assert.deepEqual(scheduleVenueLink("Venetian"), { company: "SCL", venue: "Venetian" });
   assert.deepEqual(scheduleVenueLink("Galaxy"), { company: "GEG", venue: "Galaxy" });
   assert.equal(scheduleVenueLink("Unknown"), null);

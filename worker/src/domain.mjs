@@ -30,6 +30,22 @@ export const SCL_MONTHLY_TARGET_CELLS = {
 export const GEG_MONTHLY_TARGETS = { Galaxy: 421, StarWorld: 129 };
 
 export const SCHEDULE_VENUE_ALIASES = {
+  "GRAND LISBOA PALACE": "Grand Lisboa Palace",
+  "MGM COTAI": "MGM Cotai",
+  "WYNN PALACE": "Wynn Palace",
+  "WYNN MACAU": "Wynn",
+  "GRAND LISBOA": "Grand Lisboa",
+  "JAI ALAI": "Jai Alai",
+  "LONDONER": "Londoner",
+  "VENETIAN": "Venetian",
+  "PARISIAN": "Parisian",
+  "STARWORLD": "StarWorld",
+  "OCEANUS": "Oceanus",
+  "LISBOA": "Lisboa",
+  "SANDS": "Sands",
+  "PLAZA": "Plaza",
+  "GALAXY": "Galaxy",
+  "MGM MACAU": "MGM Macau",
   LON: "Londoner",
   VML: "Venetian",
   PAR: "Parisian",
@@ -42,13 +58,11 @@ export const SCHEDULE_VENUE_ALIASES = {
   SC: "SC",
   SW: "StarWorld",
   GX: "Galaxy",
-  GALAXY: "Galaxy",
   GL: "Grand Lisboa",
   GLP: "Grand Lisboa Palace",
   WYNN: "Wynn",
   WP: "Wynn Palace",
   OCN: "Oceanus",
-  LISBOA: "Lisboa",
   "L'ARC": "L’Arc",
 };
 
