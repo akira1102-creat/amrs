@@ -423,3 +423,63 @@ test("writes the edited UOD unlock date instead of the stale alias", async () =>
   assert.equal(result.success, true);
   assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][11], "2026/08/11");
 });
+
+test("bulk updates the requested Broken Parts fields for every selected snapshot", async () => {
+  const data = structuredClone(companyData);
+  data.scl[1].values.push(["Londoner", "TAE", "5678", "TAE-1", "部品2", "PART2", "1", "Waiting", "2026/08/05", "", "", "Wait for Unlock", "", ""]);
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-11T04:00:00Z") });
+  const page = await repository.getAction({ action: "brokenPartsList", company: "SCL", page: "1", pageSize: "10", sort: "oldest" });
+
+  const result = await repository.postAction({
+    action: "bulkUpdateBrokenPartsRecords",
+    company: "SCL",
+    records: page.records,
+    changes: { bpRepairDay: "2026/08/11", bpRemark: "completed" },
+  });
+
+  const rows = harness.sheets.get("scl:Broken Parts List").values;
+  assert.deepEqual(result, { success: true, saved: 2 });
+  assert.equal(rows[1][7], "2026/08/11");
+  assert.equal(rows[2][7], "2026/08/11");
+  assert.equal(rows[1][9], "completed");
+  assert.equal(rows[2][9], "completed");
+});
+
+test("bulk Broken Parts update rejects Serial No changes", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-11T04:00:00Z") });
+  const page = await repository.getAction({ action: "brokenPartsList", company: "SCL", page: "1", pageSize: "10" });
+
+  await assert.rejects(
+    repository.postAction({
+      action: "bulkUpdateBrokenPartsRecords",
+      company: "SCL",
+      records: page.records,
+      changes: { serialNo: "9999" },
+    }),
+    /Unsupported Broken Parts field/,
+  );
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][2], "1234");
+});
+
+test("bulk Broken Parts update rejects stale snapshots before writing any row", async () => {
+  const data = structuredClone(companyData);
+  data.scl[1].values.push(["Londoner", "TAE", "5678", "TAE-1", "部品2", "PART2", "1", "Waiting", "2026/08/05", "", "", "", "", ""]);
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-11T04:00:00Z") });
+  const page = await repository.getAction({ action: "brokenPartsList", company: "SCL", page: "1", pageSize: "10", sort: "oldest" });
+  harness.sheets.get("scl:Broken Parts List").values[2][9] = "changed in Sheet";
+
+  await assert.rejects(
+    repository.postAction({
+      action: "bulkUpdateBrokenPartsRecords",
+      company: "SCL",
+      records: page.records,
+      changes: { bpRepairDay: "2026/08/11" },
+    }),
+    /Broken Parts record changed; please reload/,
+  );
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][7], "Waiting");
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[2][7], "Waiting");
+});

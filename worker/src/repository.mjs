@@ -13,6 +13,7 @@ import {
 } from "./config.mjs";
 import {
   aaTagsFromRows,
+  brokenPartsRecordFromRow,
   brokenPartsRecordToValues,
   combineMonthlyStats,
   formatSheetDate,
@@ -936,6 +937,69 @@ export function createRepository(env = {}, dependencies = {}) {
     };
   }
 
+  async function bulkUpdateBrokenPartsRecords(payload) {
+    const company = normalizeCompany(payload.company);
+    const records = Array.isArray(payload.records) ? payload.records : [];
+    if (!records.length) throw new Error("No records supplied");
+    const requested = payload.changes || {};
+    const allowed = new Set([
+      "casino", "model", "brokenParts", "bpDesc", "bpColC", "bpQty",
+      "bpRepairDay", "date", "bpRemark", "bpUodActivationDate",
+      "bpUodUnlockDate", "bpUodUnlockDay", "bpHoldDate", "bpHoldReleaseDate",
+    ]);
+    const suppliedKeys = Object.keys(requested).filter((key) => text(requested[key]) !== "");
+    const unsupported = suppliedKeys.find((key) => !allowed.has(key));
+    if (unsupported) throw new Error(`Unsupported Broken Parts field: ${unsupported}`);
+    if (!suppliedKeys.length) return { success: false, message: "No changes supplied" };
+
+    const changes = {};
+    suppliedKeys.forEach((key) => { changes[key] = requested[key]; });
+    if (own(changes, "bpUodUnlockDay")) {
+      changes.bpUodUnlockDate = changes.bpUodUnlockDay;
+      delete changes.bpUodUnlockDay;
+    }
+    const normalizeDateChange = (key, waitingPattern = null) => {
+      if (!own(changes, key)) return;
+      const value = text(changes[key]);
+      if (waitingPattern?.test(value)) {
+        changes[key] = value;
+        return;
+      }
+      const normalized = normalizeDateParam(value, config.timeZone);
+      if (!normalized) throw new Error(`Invalid Broken Parts date: ${key}`);
+      changes[key] = normalized;
+    };
+    normalizeDateChange("bpRepairDay", /^waiting$/i);
+    normalizeDateChange("date");
+    normalizeDateChange("bpUodActivationDate");
+    normalizeDateChange("bpUodUnlockDate", /^wait for unlock$/i);
+    normalizeDateChange("bpHoldDate");
+    normalizeDateChange("bpHoldReleaseDate");
+    if (own(changes, "model") && !["SAE", "TAE"].includes(text(changes.model).toUpperCase())) throw new Error("Invalid model");
+    if (own(changes, "model")) changes.model = text(changes.model).toUpperCase();
+    if (own(changes, "bpQty") && (!/^\d+$/.test(text(changes.bpQty)) || Number(changes.bpQty) < 1)) throw new Error("Invalid parts quantity");
+
+    const table = await readBrokenTable(company, { refresh: true, cache: false });
+    const seen = new Set();
+    const targets = records.map((candidate) => {
+      const rowNumber = Number.parseInt(candidate.rowNumber, 10);
+      if (rowNumber < 2 || rowNumber > table.values.length || seen.has(rowNumber)) throw new Error("Invalid or duplicate Broken Parts row number");
+      seen.add(rowNumber);
+      const current = brokenPartsRecordFromRow(table.values[rowNumber - 1] || [], rowNumber, config.timeZone);
+      const currentValues = brokenPartsRecordToValues(current).map(text);
+      const candidateValues = brokenPartsRecordToValues(candidate).map(text);
+      if (currentValues.some((value, index) => value !== candidateValues[index])) throw new Error("Broken Parts record changed; please reload");
+      const after = { ...current, ...changes, rowNumber };
+      if (own(changes, "bpUodUnlockDate")) after.bpUodUnlockDay = changes.bpUodUnlockDate;
+      validateHoldDates(after);
+      return { rowNumber, values: brokenPartsRecordToValues(after) };
+    });
+    const data = targets.map(({ rowNumber, values }) => writeValueRangeForRow(table.sheet.title, rowNumber, values));
+    await sheets.valuesBatchUpdate({ spreadsheetId: table.spreadsheetId, data, valueInputOption: "USER_ENTERED" });
+    await invalidateCompany(company);
+    return { success: true, saved: targets.length };
+  }
+
   async function updateMonthlySettings(payload) {
     const settings = payload.settings || {};
     const poNumber = text(settings.poNumber);
@@ -1073,6 +1137,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!Array.isArray(payload) && payload.action === "bulkDeleteRecords") return bulkDeleteRecords(payload);
     if (!Array.isArray(payload) && payload.action === "updateTemplate") return updateTemplate(payload);
     if (!Array.isArray(payload) && payload.action === "updateBrokenPartsList") return updateBrokenPartsList(payload);
+    if (!Array.isArray(payload) && payload.action === "bulkUpdateBrokenPartsRecords") return bulkUpdateBrokenPartsRecords(payload);
     if (!Array.isArray(payload) && payload.action === "ensureBrokenPartsSchema") return ensureBrokenPartsSchema();
     if (!Array.isArray(payload) && payload.action === "updateMonthlySettings") return updateMonthlySettings(payload);
     if (!Array.isArray(payload) && payload.action === "bulkUpdateRecords") return bulkUpdateRecords(payload);
