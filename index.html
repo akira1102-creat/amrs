@@ -634,7 +634,14 @@
     .schedule-page-head,.schedule-week-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
     .schedule-page-head{margin-bottom:18px}
     .schedule-page-title{font-size:20px;font-weight:900;color:#e6edf3}
-    .schedule-controls{display:grid;grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) minmax(180px,1.2fr) auto;align-items:end;gap:10px;margin-bottom:18px}
+    .schedule-filter-panel{margin-bottom:18px}
+    .schedule-filter-toggle{width:100%;min-height:42px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 12px;border:1px solid #30363d;border-radius:9px;background:#161b22;color:#e6edf3;font-size:12px;font-weight:900;text-align:left;cursor:pointer}
+    .schedule-filter-toggle-main{display:flex;align-items:center;gap:9px;min-width:0}
+    .schedule-filter-toggle-summary{min-width:0;overflow:hidden;color:#8b949e;font-size:11px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
+    .schedule-filter-chevron{color:#8b949e;font-size:15px;line-height:1;transition:transform .2s ease}
+    .schedule-filter-panel.is-open .schedule-filter-chevron{transform:rotate(180deg)}
+    .schedule-controls{display:none;grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) minmax(180px,1.2fr) auto;align-items:end;gap:10px;margin-top:10px}
+    .schedule-filter-panel.is-open .schedule-controls{display:grid}
     .schedule-control{display:flex;flex-direction:column;gap:5px;min-width:0;color:#8b949e;font-size:11px;font-weight:800}
     .schedule-control input,.schedule-control select{width:100%;min-width:0;height:38px;padding:0 10px;border:1px solid #30363d;border-radius:9px;background:#0d1117;color:#e6edf3;font:inherit;font-size:12px}
     .schedule-filter-clear{height:38px;padding:0 12px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
@@ -1365,11 +1372,17 @@
       <div class="schedule-page-title">工作安排</div>
       <button class="schedule-refresh" id="scheduleRefreshBtn" onclick="loadScheduleOverview(true)" type="button">重新整理</button>
     </div>
-    <div class="schedule-controls" aria-label="工作安排篩選">
-      <label class="schedule-control"><span>月份</span><input id="scheduleMonthPicker" type="month" onchange="changeScheduleMonth(this.value)"></label>
-      <label class="schedule-control"><span>公司</span><select id="scheduleCompanyFilter" onchange="changeScheduleCompanyFilter(this.value)"><option value="">全部公司</option></select></label>
-      <label class="schedule-control"><span>地點</span><select id="scheduleVenueFilter" onchange="changeScheduleVenueFilter(this.value)"><option value="">全部地點</option></select></label>
-      <button class="schedule-filter-clear" id="scheduleFilterClearBtn" onclick="clearScheduleFilters()" type="button">清除篩選</button>
+    <div class="schedule-filter-panel" id="scheduleFilterPanel">
+      <button class="schedule-filter-toggle" id="scheduleFilterToggle" onclick="toggleScheduleFilters()" type="button" aria-expanded="false" aria-controls="scheduleControls">
+        <span class="schedule-filter-toggle-main"><span>工作安排篩選</span><span class="schedule-filter-toggle-summary" id="scheduleFilterSummary">未套用篩選</span></span>
+        <span class="schedule-filter-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div class="schedule-controls" id="scheduleControls" aria-label="工作安排篩選">
+        <label class="schedule-control"><span>月份</span><input id="scheduleMonthPicker" type="month" onchange="changeScheduleMonth(this.value)"></label>
+        <label class="schedule-control"><span>公司</span><select id="scheduleCompanyFilter" onchange="changeScheduleCompanyFilter(this.value)"><option value="">全部公司</option></select></label>
+        <label class="schedule-control"><span>地點</span><select id="scheduleVenueFilter" onchange="changeScheduleVenueFilter(this.value)"><option value="">全部地點</option></select></label>
+        <button class="schedule-filter-clear" id="scheduleFilterClearBtn" onclick="clearScheduleFilters()" type="button">清除篩選</button>
+      </div>
     </div>
     <section class="schedule-focus">
       <div class="schedule-kicker" id="scheduleFocusLabel">今日工作</div>
@@ -1503,8 +1516,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.11-01';
-const _APP_VERSION='v1.061';
+const _APP_BUMP='2026.08.11-02';
+const _APP_VERSION='v1.062';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -1984,11 +1997,25 @@ function syncScheduleVenueFilterOptions(){
   select.innerHTML='<option value="">全部地點</option>'+unique.map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join('');
   select.value=_scheduleFilterVenue;
 }
+function toggleScheduleFilters(force){
+  const panel=document.getElementById('scheduleFilterPanel'),toggle=document.getElementById('scheduleFilterToggle');if(!panel||!toggle)return;
+  const open=force==null?!panel.classList.contains('is-open'):!!force;
+  panel.classList.toggle('is-open',open);toggle.setAttribute('aria-expanded',String(open));
+}
+function syncScheduleFilterSummary(){
+  const summary=document.getElementById('scheduleFilterSummary');if(!summary)return;
+  const values=[];
+  if(_scheduleSelectedMonth)values.push(_scheduleSelectedMonth);
+  if(_scheduleFilterCompany)values.push(_scheduleFilterCompany);
+  if(_scheduleFilterVenue)values.push(_scheduleFilterVenue);
+  summary.textContent=values.length?values.join(' · '):'未套用篩選';
+}
 function syncScheduleControls(){
   const picker=document.getElementById('scheduleMonthPicker'),companySelect=document.getElementById('scheduleCompanyFilter');
   if(picker)picker.value=_scheduleSelectedMonth||scheduleCurrentMonthValue();
   if(companySelect){companySelect.innerHTML='<option value="">全部公司</option>'+getCompanyOrder().map(company=>`<option value="${esc(company)}">${esc(company)}</option>`).join('');companySelect.value=_scheduleFilterCompany;}
   syncScheduleVenueFilterOptions();
+  syncScheduleFilterSummary();
 }
 function changeScheduleCompanyFilter(value){_scheduleFilterCompany=String(value||'');syncScheduleVenueFilterOptions();renderSchedulePage();}
 function changeScheduleVenueFilter(value){_scheduleFilterVenue=String(value||'');renderSchedulePage();}
