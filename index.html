@@ -1516,8 +1516,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.11-02';
-const _APP_VERSION='v1.062';
+const _APP_BUMP='2026.08.11-03';
+const _APP_VERSION='v1.063';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3485,13 +3485,13 @@ async function openBrokenPartsListEditor(){
   document.getElementById('bpFilterSort').value='newest';
   await loadBrokenPartsListEditor(1);
 }
-async function loadBrokenPartsListEditor(page=_bpListPage){
+async function loadBrokenPartsListEditor(page=_bpListPage,forceRefresh=false){
   const serialNo=bpListFilterSerial();
   document.getElementById('bpListRows').innerHTML='<div class="bp-list-empty">載入中...</div>';
   _bpListEditingIndex=-1;
   const loadingToken=showLoadingProgress('壞零件/UOD/Hold機 列表載入中，請稍等...');
   try{
-    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize)});
+    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize),...(forceRefresh?{refresh:'1'}:{})});
     const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
     if(!data.success)throw new Error(data.message||'載入失敗');
     _bpListRecords=data.records||[];
@@ -3598,7 +3598,7 @@ async function saveBrokenPartsListRecord(index,btn){
   try{
     const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[record],deletedRowNumbers:[]});
     if(!data.success)throw new Error(data.message||'儲存失敗');
-    showToast('✓ 損壞零件記錄已更新');await loadBrokenPartsListEditor(_bpListPage);
+    showToast('✓ 損壞零件記錄已更新');await loadBrokenPartsListEditor(_bpListPage,true);
   }catch(e){btn.disabled=false;btn.textContent='儲存';showToast(e.message||'儲存失敗','err');}
 }
 async function deleteBrokenPartsListRecord(index,btn){
@@ -3609,7 +3609,7 @@ async function deleteBrokenPartsListRecord(index,btn){
   try{
     const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[],deletedRowNumbers:[Number(record.rowNumber)]});
     if(!data.success)throw new Error(data.message||'刪除失敗');
-    showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsListEditor(_bpListPage);
+    showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsListEditor(_bpListPage,true);
   }catch(e){btn.disabled=false;btn.textContent='刪除';showToast(e.message||'刪除失敗','err');}
 }
 
@@ -3634,7 +3634,13 @@ function brokenPartsEditFieldsHtml(record){
 function collectBrokenPartsCardRecord(card,original){
   const record={...original};
   card.querySelectorAll('[data-bp-card-field]').forEach(input=>{record[input.dataset.bpCardField]=input.value.trim();});
-  card.querySelectorAll('[data-bp-field]').forEach(input=>{const wrap=input.closest('.bp-list-date');record[input.dataset.bpField]=wrap?.dataset.waiting==='true'?wrap.dataset.waitValue:input.value.replace(/-/g,'/');});
+  card.querySelectorAll('[data-bp-field]').forEach(input=>{
+    const wrap=input.closest('.bp-list-date');
+    const value=wrap?.dataset.waiting==='true'?wrap.dataset.waitValue:input.value.replace(/-/g,'/');
+    record[input.dataset.bpField]=value;
+    if(input.dataset.bpField==='bpUodUnlockDay')record.bpUodUnlockDate=value;
+  });
+  if(Object.prototype.hasOwnProperty.call(record,'bpUodUnlockDay'))record.bpUodUnlockDate=record.bpUodUnlockDay;
   return record;
 }
 let _bpPageRecords=[],_bpPage=1,_bpPageTotalPages=1,_bpPageTotalMatches=0,_bpPageSize=10,_bpPageEditingIndex=-1,_bpPageRequest=null,_bpPageCardColumns=1;
@@ -3687,7 +3693,7 @@ function toggleBrokenPartsPageField(key,checked){
   saveListPreferences();
   renderBrokenPartsPageRows();
 }
-async function loadBrokenPartsPage(page=_bpPage){
+async function loadBrokenPartsPage(page=_bpPage,forceRefresh=false){
   if(activePage!=='brokenParts')return;
   const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL){showToast('尚未設定網站代號','err');return;}
   _bpPageRequest?.abort();_bpPageRequest=new AbortController();
@@ -3696,7 +3702,7 @@ async function loadBrokenPartsPage(page=_bpPage){
   document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
   document.getElementById('bpPageSummary').textContent='正在載入資料...';
   const serialNo=document.getElementById('bpPageSerial').value.trim();
-  const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize)});
+  const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize),...(forceRefresh?{refresh:'1'}:{})});
   const loadingToken=showLoadingProgress('壞零件/UOD/Hold機 列表載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:_bpPageRequest.signal},45000);
@@ -3753,7 +3759,7 @@ async function saveBrokenPartsPageRecord(index,btn){
   try{
     const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[record],deletedRowNumbers:[]});
     if(!data.success)throw new Error(data.message||'儲存失敗');
-    showToast('✓ 損壞零件記錄已更新');await loadBrokenPartsPage(_bpPage);
+    showToast('✓ 損壞零件記錄已更新');await loadBrokenPartsPage(_bpPage,true);
   }catch(e){showToast(e.message||'儲存失敗','err');btn.disabled=false;btn.textContent='儲存';}
 }
 async function deleteBrokenPartsPageRecord(index,btn){
@@ -3762,7 +3768,7 @@ async function deleteBrokenPartsPageRecord(index,btn){
   try{
     const data=await postGasJson({action:'updateBrokenPartsList',company:activeCompany,records:[],deletedRowNumbers:[Number(record.rowNumber)]});
     if(!data.success)throw new Error(data.message||'刪除失敗');
-    showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsPage(_bpPage);
+    showToast('✓ 損壞零件記錄已刪除');await loadBrokenPartsPage(_bpPage,true);
   }catch(e){showToast(e.message||'刪除失敗','err');btn.disabled=false;btn.textContent='刪除';}
 }
 function setBrokenPartsPageSize(value){_bpPageSize=[10,30,50,80,100].includes(Number(value))?Number(value):10;document.getElementById('bpPageSize').value=String(_bpPageSize);saveListPreferences();loadBrokenPartsPage(1);}

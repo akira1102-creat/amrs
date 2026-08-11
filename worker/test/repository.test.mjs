@@ -399,3 +399,27 @@ test("writes an edited Broken Parts record as one complete Sheet row", async () 
   assert.equal(result.success, true);
   assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][9], "updated remark");
 });
+
+test("writes the edited UOD unlock date instead of the stale alias", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-11T04:00:00Z") });
+
+  const result = await repository.postAction({
+    action: "updateBrokenPartsList",
+    company: "SCL",
+    records: [{
+      rowNumber: 2,
+      casino: "Venetian",
+      model: "TAE",
+      serialNo: "1234",
+      brokenParts: "",
+      bpUodActivationDate: "2026/07/22",
+      bpUodUnlockDate: "Wait for Unlock",
+      bpUodUnlockDay: "2026/08/11",
+    }],
+    deletedRowNumbers: [],
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][11], "2026/08/11");
+});

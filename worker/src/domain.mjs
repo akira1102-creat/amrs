@@ -422,7 +422,9 @@ export function brokenPartsRecordToValues(record = {}) {
     record.date || "",
     record.bpRemark || "",
     record.bpUodActivationDate || "",
-    record.bpUodUnlockDate || record.bpUodUnlockDay || "",
+    // The editor historically used bpUodUnlockDay while API records may use
+    // bpUodUnlockDate. Prefer the editor value when both aliases are present.
+    record.bpUodUnlockDay || record.bpUodUnlockDate || "",
     record.bpHoldDate || "",
     record.bpHoldReleaseDate || "",
   ];

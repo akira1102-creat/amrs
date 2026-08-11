@@ -208,6 +208,10 @@ test("maps parts rows and broken-part records", () => {
     bpHoldReleaseDate: "2026/08/05",
   });
   assert.deepEqual(brokenPartsRecordToValues(brokenPartsRecordFromRow(row, 9)), row);
+  assert.equal(brokenPartsRecordToValues({
+    bpUodUnlockDate: "Wait for Unlock",
+    bpUodUnlockDay: "2026/08/11",
+  })[11], "2026/08/11");
 });
 
 test("filters, sorts, and paginates broken-part rows by status", () => {

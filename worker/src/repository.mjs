@@ -69,6 +69,7 @@ function needsBrokenPartsWrite(record = {}) {
     "brokenParts",
     "bpUodActivationDate",
     "bpUodUnlockDay",
+    "bpUodUnlockDate",
     "bpHoldDate",
     "bpHoldReleaseDate",
   ].some((field) => hasRecordValue(record[field]));
