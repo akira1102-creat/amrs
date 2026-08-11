@@ -1503,8 +1503,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.07-03';
-const _APP_VERSION='v1.060';
+const _APP_BUMP='2026.08.11-01';
+const _APP_VERSION='v1.061';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2035,7 +2035,7 @@ async function requestScheduleRange(from,days,force,signal){
   saveScheduleCache(from,days,data);return data;
 }
 function normalizeScheduleVenue(company,venue){
-  const value=String(venue||'').trim();
+  const value=schedulePeopleVenue(venue);
   return company==='SJM'&&/^l['’ʼ`´]arc$/i.test(value)?'L’Arc':value;
 }
 function scheduleMachineCountKey(company,venue){return `${company}\u0000${normalizeScheduleVenue(company,venue)}`;}
@@ -2085,16 +2085,17 @@ function renderScheduleAssignment(item,date,shift,showMachineCount=false){
   const count=new Set(people.map(person=>person.name).filter(Boolean)).size;
   const code=String(item.title||'').trim().toUpperCase();
   const leaveLabel=!item.linked&&code==='SL'?'病假':!item.linked&&code==='AL'?'年假':'';
-  const company=item.linked?item.company:(leaveLabel?code:'其他安排');
-  const venue=item.linked?normalizeScheduleVenue(item.company,item.venue):'';
-  const title=leaveLabel||(item.linked&&String(item.title||'').trim()===String(item.venue||'').trim()?venue:item.title);
+  const canonicalItemVenue=schedulePeopleVenue(item.venue||item.title),linked=item.linked||!!schedulePeopleCompany(canonicalItemVenue);
+  const company=linked?(item.company||schedulePeopleCompany(canonicalItemVenue)):(leaveLabel?code:'其他安排');
+  const venue=linked?normalizeScheduleVenue(company,item.venue||canonicalItemVenue):'';
+  const title=leaveLabel||(linked?venue:item.title);
   const itemMonthCode=date.slice(2,4)+date.slice(5,7);
-  const machineCountExcluded=!!item.machineCountExcluded?.[shift];
-  const machines=!machineCountExcluded&&showMachineCount&&item.linked&&itemMonthCode===_scheduleMachineCountsMonth?_scheduleMachineCounts[scheduleMachineCountKey(item.company,venue)]:null;
+  const machineCountExcluded=!!item.machineCountExcluded?.[shift]||/\*\s*$/.test(String(item.title||''));
+  const machines=!machineCountExcluded&&showMachineCount&&linked&&itemMonthCode===_scheduleMachineCountsMonth?_scheduleMachineCounts[scheduleMachineCountKey(company,venue)]:null;
   const staleMachineCount=machines!=null&&scheduleMachineCountIsStale(date,shift);
   const machinesHtml=machines!=null?`<button class="schedule-machine-count${staleMachineCount?' stale':''}" type="button" onclick="showPage('monthlyStats')" aria-label="查看每月統計，餘下每次需做 ${machines} 台"><strong>${machines}</strong> 台</button>`:'';
-  const companyHtml=item.linked?`<button class="schedule-company schedule-company-link" data-company="${esc(item.company)}" data-venue="${esc(venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
-  return `<article class="schedule-assignment ${item.linked?'linked':'unlinked'}">
+  const companyHtml=linked&&!leaveLabel?`<button class="schedule-company schedule-company-link" data-company="${esc(company)}" data-venue="${esc(venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
+  return `<article class="schedule-assignment ${linked?'linked':'unlinked'}">
     <div class="schedule-assignment-head"><div class="schedule-assignment-main">${companyHtml}<div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta">${machinesHtml}<span>${count} 人</span></div></div>
     <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div></div></div>
   </article>`;
@@ -4516,6 +4517,29 @@ function schedulePeopleRecord(source,index){
 function schedulePeopleKey(value){
   return cleanDashValue(value).toLowerCase().replace(/[’']/g,"'").replace(/\s+/g,'');
 }
+const SCHEDULE_PEOPLE_ALIASES={
+  LON:'Londoner',VML:'Venetian',PAR:'Parisian',PLZ:'Plaza',SM:'Sands',
+  MGM:'MGM Macau',MGMC:'MGM Cotai',COD:'COD',ALT:'ALT',SC:'SC',SW:'StarWorld',
+  GX:'Galaxy',GALAXY:'Galaxy',GL:'Grand Lisboa',GLP:'Grand Lisboa Palace',
+  WYNN:'Wynn',WP:'Wynn Palace',OCN:'Oceanus',LISBOA:'Lisboa',
+  LONDONER:'Londoner',VENETIAN:'Venetian',PARISIAN:'Parisian',SANDS:'Sands',PLAZA:'Plaza',
+  STARWORLD:'StarWorld','MGM MACAU':'MGM Macau','MGM COTAI':'MGM Cotai',
+  'GRAND LISBOA':'Grand Lisboa','GRAND LISBOA PALACE':'Grand Lisboa Palace',
+  OCEANUS:'Oceanus','JAI ALAI':'Jai Alai','WYNN MACAU':'Wynn','WYNN PALACE':'Wynn Palace'
+};
+function schedulePeopleVenue(value){
+  const raw=cleanDashValue(value).replace(/[’']/g,"'").replace(/\s*\*+\s*$/,'').trim();
+  return SCHEDULE_PEOPLE_ALIASES[raw.toUpperCase()]||raw;
+}
+function schedulePeopleCompany(venue){
+  const canonical=schedulePeopleKey(venue);
+  return getCompanyOrder().find(company=>casinoOptionsForCompany(company).some(option=>schedulePeopleKey(option)===canonical))||'';
+}
+function schedulePeopleItemMatches(item,company,casino){
+  const itemVenue=schedulePeopleVenue(item?.venue||item?.title),expectedVenue=schedulePeopleVenue(casino);
+  const itemCompany=cleanDashValue(item?.company)||schedulePeopleCompany(itemVenue);
+  return schedulePeopleKey(itemCompany)===schedulePeopleKey(company)&&schedulePeopleKey(itemVenue)===schedulePeopleKey(expectedVenue);
+}
 function closeSchedulePeople(){
   _schedulePeopleRequestToken++;
   _schedulePeopleController?.abort();_schedulePeopleController=null;
@@ -4538,10 +4562,17 @@ async function openSchedulePeople(source,index){
   if(!date||!casino){body.innerHTML='<div class="schedule-people-empty">沒有資料</div>';_schedulePeopleController=null;return;}
   const loadingToken=showLoadingProgress('人員安排載入中，請稍等...');
   try{
-    const data=readScheduleCache(date,1)||await requestScheduleRange(date,1,false,controller.signal);
+    let data=readScheduleCache(date,1),usedCache=!!data;
+    if(!data)data=await requestScheduleRange(date,1,false,controller.signal);
     if(token!==_schedulePeopleRequestToken)return;
-    const day=(data.days||[]).find(item=>item.date===date);
-    const target=(day?.items||[]).find(item=>item.linked&&schedulePeopleKey(item.company)===schedulePeopleKey(company)&&schedulePeopleKey(item.venue)===schedulePeopleKey(casino));
+    let day=(data.days||[]).find(item=>item.date===date);
+    let target=(day?.items||[]).find(item=>schedulePeopleItemMatches(item,company,casino));
+    if(!target&&usedCache){
+      data=await requestScheduleRange(date,1,true,controller.signal);
+      if(token!==_schedulePeopleRequestToken)return;
+      day=(data.days||[]).find(item=>item.date===date);
+      target=(day?.items||[]).find(item=>schedulePeopleItemMatches(item,company,casino));
+    }
     const shifts=target?renderSchedulePeopleShift('上午',target.am)+renderSchedulePeopleShift('下午',target.pm):'';
     body.innerHTML=shifts||'<div class="schedule-people-empty">沒有資料</div>';
   }catch(error){
