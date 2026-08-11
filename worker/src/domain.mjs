@@ -41,6 +41,7 @@ export const SCHEDULE_VENUE_ALIASES = {
   ALT: "ALT",
   SC: "SC",
   SW: "StarWorld",
+  GX: "Galaxy",
   GALAXY: "Galaxy",
   GL: "Grand Lisboa",
   GLP: "Grand Lisboa Palace",
