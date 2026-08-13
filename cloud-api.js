@@ -948,7 +948,8 @@
     async post(payload, options = {}) {
       const normalized = this._normalizeMutation(payload, options);
       const forceGas = options.backend === "gas" || options.forceGas === true;
-      const canUseGas = this._canUseGasFallback();
+      const workerOnly = ["bootstrapAccessToken", "listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"].includes(asString(normalized.body?.action));
+      const canUseGas = this._canUseGasFallback() && !workerOnly;
       let cloudReady = false;
       if (!forceGas) cloudReady = await this.checkCloudHealth({ force: options.forcePreflight === true, signal: options.signal });
       if (!cloudReady || forceGas || !this.cloudflareBaseUrl) {

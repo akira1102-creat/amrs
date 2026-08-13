@@ -139,7 +139,7 @@ export function getCvcsRecordPage(rows = [], params = {}) {
   const model = text(params.model);
   const serialNo = text(params.serialNo);
   const query = text(params.query).toLowerCase();
-  const fuzzy = params.fuzzy === true || /^1|true$/i.test(text(params.fuzzy));
+  const fuzzy = params.fuzzy === true || /^(1|true)$/i.test(text(params.fuzzy));
   const from = params.from ? normalizeDate(params.from, "From date") : "";
   const to = params.to ? normalizeDate(params.to, "To date") : "";
   const records = rows.filter((record) => {

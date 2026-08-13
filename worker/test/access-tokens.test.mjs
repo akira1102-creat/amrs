@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createAccessToken,
+  bootstrapAdministratorToken,
   deleteAccessToken,
   findActiveAccessToken,
   handleAccessTokenAdminAction,
@@ -130,4 +131,14 @@ test("admin actions create, list, suspend, and delete tokens without returning s
   assert.equal(db.rows.get("token-managed").status, "suspended");
   await handleAccessTokenAdminAction(db, { action: "deleteAccessToken", id: "token-managed" });
   assert.equal(db.rows.size, 0);
+});
+
+test("legacy bootstrap creates exactly one administrator token", async () => {
+  const db = createDb();
+  const created = await bootstrapAdministratorToken(db, { label: "System Owner" }, {
+    randomToken: () => "amrs_synthetic_bootstrap_token",
+    randomId: () => "bootstrap-admin",
+  });
+  assert.deepEqual(created.record.permissions, ["schedule", "ae", "cvcs", "admin"]);
+  await assert.rejects(bootstrapAdministratorToken(db, { label: "Another Owner" }), /already/i);
 });

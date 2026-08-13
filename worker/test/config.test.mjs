@@ -21,3 +21,12 @@ test("loads the independent CVCS spreadsheet configuration", () => {
   });
   assert.equal(config.cvcsSheetId, "synthetic-cvcs");
 });
+
+test("prefers the dedicated CVCS spreadsheet secret", () => {
+  const sheets = Object.fromEntries(["Melco", "MGM", "SJM", "SCL", "GEG", "Wynn"].map((company) => [company, `synthetic-${company}`]));
+  const config = loadRuntimeConfig({
+    AMRS_CONFIG: JSON.stringify({ sheets, partsSheetId: "synthetic-parts", scheduleSheetId: "synthetic-schedule", cvcsSheetId: "old-cvcs" }),
+    CVCS_SHEET_ID: "dedicated-cvcs",
+  });
+  assert.equal(config.cvcsSheetId, "dedicated-cvcs");
+});

@@ -5,10 +5,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const gasCode = fs.readFileSync(path.resolve(root, "..", "amrs-gas", "code.js"), "utf8");
+const gasCodePath = path.resolve(root, "..", "amrs-gas", "code.js");
 const gasCvcsPath = path.resolve(root, "..", "amrs-gas", "cvcs.js");
+const gasAvailable = fs.existsSync(gasCodePath) && fs.existsSync(gasCvcsPath);
+const gasCode = gasAvailable ? fs.readFileSync(gasCodePath, "utf8") : "";
 
-test("GAS exposes every CVCS read and write action used by Worker", () => {
+test("GAS exposes every CVCS read and write action used by Worker", { skip: !gasAvailable }, () => {
   assert.equal(fs.existsSync(gasCvcsPath), true);
   const gasCvcs = fs.readFileSync(gasCvcsPath, "utf8");
   const actions = [
@@ -20,7 +22,7 @@ test("GAS exposes every CVCS read and write action used by Worker", () => {
   actions.forEach((action) => assert.ok(gasCode.includes(`'${action}'`) || gasCvcs.includes(`'${action}'`), action));
 });
 
-test("GAS bootstrap declares the approved nine visible CVCS worksheets and hidden identity headers", () => {
+test("GAS bootstrap declares the approved nine visible CVCS worksheets and hidden identity headers", { skip: !gasAvailable }, () => {
   const source = fs.readFileSync(gasCvcsPath, "utf8");
   [
     "CVCS Records", "Sub Location", "Antenna Size", "Antenna Status", "Version",

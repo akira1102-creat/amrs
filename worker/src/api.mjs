@@ -1,5 +1,5 @@
 import { createSession, requireSession } from "./auth.mjs";
-import { handleAccessTokenAdminAction } from "./access-tokens.mjs";
+import { bootstrapAdministratorToken, handleAccessTokenAdminAction } from "./access-tokens.mjs";
 import { apiError, corsHeaders, json } from "./http.mjs";
 import {
   createSubmissionBatch,
@@ -442,12 +442,21 @@ async function route(request, env, dependencies = {}) {
   if (pathname === "/session" && request.method === "POST") return createSession(request, env);
   const now = dependencies.now || (() => Date.now());
   if (pathname === "/api" && request.method === "GET") {
-    await requireSession(request, env, permissionForAction(url.searchParams.get("action")));
+    const params = Object.fromEntries(url.searchParams.entries());
+    const permission = permissionForAction(params.action);
+    await requireSession(request, env, permission);
+    if (permission === "admin") return handleAccessTokenAdminAction(env.DB, params, { now });
     const repository = getRepository(env, dependencies);
-    return repository.getAction(Object.fromEntries(url.searchParams.entries()));
+    return repository.getAction(params);
   }
   if (pathname === "/api" && request.method === "POST") {
     const payload = await parseBody(request);
+    if (text(payload?.action) === "bootstrapAccessToken") {
+      const claims = await requireSession(request, env);
+      if (!claims.legacy) throw Object.assign(new Error("Legacy authentication is required for administrator bootstrap"), { status: 403 });
+      const created = await bootstrapAdministratorToken(env.DB, payload, { now });
+      return { success: true, token: created.token, record: created.record };
+    }
     const permission = permissionForAction(payload?.action);
     await requireSession(request, env, permission);
     if (permission === "admin") return handleAccessTokenAdminAction(env.DB, payload, { now });

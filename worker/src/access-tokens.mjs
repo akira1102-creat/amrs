@@ -169,6 +169,16 @@ export async function deleteAccessToken(db, id) {
   return Number.isFinite(changes) ? changes > 0 : true;
 }
 
+export async function bootstrapAdministratorToken(db, input = {}, options = {}) {
+  const existing = await listAccessTokens(db);
+  if (existing.length) throw Object.assign(new Error("Administrator token has already been initialized"), { status: 409 });
+  return createAccessToken(db, {
+    label: text(input.label) || "System Owner",
+    note: text(input.note) || "Initial administrator token",
+    permissions: ACCESS_PERMISSIONS,
+  }, options);
+}
+
 export async function handleAccessTokenAdminAction(db, payload = {}, options = {}) {
   const action = text(payload.action);
   if (action === "listAccessTokens") return { success: true, tokens: await listAccessTokens(db) };

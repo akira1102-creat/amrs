@@ -147,6 +147,18 @@ test("POST uses GAS only after a preflight proves Cloudflare unavailable", async
   assert.equal(body.requestId, "batch-preflight");
 });
 
+test("legacy administrator bootstrap is Worker-only and never sent to GAS", async () => {
+  const harness = createHarness((call) => {
+    if (call.url === `${CLOUD}/health`) return jsonResponse({ success: false }, 503);
+    if (call.url === GAS) return jsonResponse({ success: true, backend: "gas" });
+    throw new Error(`unexpected URL: ${call.url}`);
+  });
+  const api = createDualTransport(baseOptions(harness.fetchImpl));
+
+  await assert.rejects(api.post({ action: "bootstrapAccessToken", label: "Owner" }), /Cloudflare/i);
+  assert.equal(harness.calls.some((call) => call.url === GAS), false);
+});
+
 test("unknown submit outcome reconciles through /submissions/:batchId and never calls GAS", async () => {
   const harness = createHarness((call) => {
     if (call.url === `${CLOUD}/health`) return jsonResponse({ success: true });

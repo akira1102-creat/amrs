@@ -7,9 +7,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260709b">
+  <link rel="manifest" href="manifest.json?v=20260813a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
+  <link rel="stylesheet" href="cvcs.css?v=20260813a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -46,7 +47,7 @@
     .mob #pinError{font-size:20px;height:24px}
     #setupScreen{position:fixed;inset:0;background:#0d1117;display:none;align-items:center;justify-content:center;z-index:9998}
     #setupScreen.show{display:flex}
-    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #inputPage,body.auth-locked #dashboardPage,body.auth-locked #partsListPage,body.auth-locked #brokenPartsPage,body.auth-locked #monthlyStatsPage,body.auth-locked #schedulePage,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
+    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked .app-page,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
     #setupBox{display:flex;flex-direction:column;gap:20px;padding:40px 32px;background:#161b22;border-radius:24px;border:1px solid #30363d;width:340px}
     #setupTitle{font-size:18px;font-weight:700;color:#e6edf3}
     #setupSub{font-size:13px;color:#8b949e;line-height:1.6}
@@ -879,11 +880,11 @@
 
 <div id="setupScreen">
   <div id="setupBox">
-    <div id="setupTitle">網站代號設定</div>
-    <div id="setupSub">請輸入 Google Apps Script Deploy ID，用作連接維修記錄系統。資料只會儲存在本機。</div>
+    <div id="setupTitle">Token 設定</div>
+    <div id="setupSub">請輸入管理員提供的個人 Token。過渡期間亦可繼續使用原有 Deploy ID；資料只會儲存在本機。</div>
     <div>
-      <label style="margin-bottom:8px">Deploy ID / 網站代號</label>
-      <input type="text" id="gasUrlInput" placeholder="貼上 Deploy ID 或完整 Web App URL" autocomplete="off" spellcheck="false">
+      <label style="margin-bottom:8px">Token</label>
+      <input type="text" id="gasUrlInput" placeholder="貼上個人 Token 或原有 Deploy ID" autocomplete="off" spellcheck="false">
     </div>
     <div id="setupErr"></div>
     <button id="setupTestBtn" onclick="testConnection()" type="button">🔗 測試連線</button>
@@ -1042,19 +1043,25 @@
     <button class="menu-close" onclick="closeMenu()" type="button">✕</button>
   </div>
   <button class="menu-item" id="scheduleMenuBtn" onclick="showPage('schedule')" type="button">工作安排</button>
-  <div class="menu-section">資料輸入</div>
+  <div class="menu-section" id="dataInputMenuSection">資料輸入</div>
   <div class="menu-sub" id="companyMenu"></div>
-  <div class="menu-section">資料查詢</div>
+  <button class="menu-item menu-cvcs-heading" id="cvcsInputMenuBtn" onclick="toggleCvcsPropertyMenu()" type="button" aria-expanded="false"><span>CVCS</span><span class="menu-chevron">▼</span></button>
+  <div class="menu-sub menu-cvcs-properties" id="cvcsPropertyMenu"></div>
+  <div class="menu-section" id="dataQueryMenuSection">資料查詢</div>
   <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
   <button class="menu-item" id="monthlyStatsMenuBtn" onclick="showPage('monthlyStats')" type="button">每月統計</button>
   <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
   <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>壞零件/UOD/Hold機 列表</span><span class="menu-chevron">▼</span></button>
   <div class="menu-sub menu-collapsible" id="brokenPartsCompanyMenu"></div>
+  <button class="menu-item" id="cvcsQueryMenuBtn" onclick="showPage('cvcsQuery')" type="button">CVCS 資料查詢</button>
+  <button class="menu-item" id="cvcsBrokenMenuBtn" onclick="showPage('cvcsBroken')" type="button">CVCS 壞零件 / 跟進</button>
+  <div class="menu-section" id="adminMenuSection" style="display:none">系統管理</div>
+  <button class="menu-item" id="tokenAdminMenuBtn" onclick="showPage('tokenAdmin')" type="button" style="display:none">Token 管理</button>
 </nav>
 
 <div id="appTop">
   <button id="menuBtn" onclick="openMenu()" type="button" aria-label="開啟選單">☰</button>
-  <div id="appTitle">AKiRa Maintain Record System <button class="settings-btn" onclick="openGasSettings()" title="更改網站代號">⚙</button></div>
+  <div id="appTitle">AKiRa Maintain Record System <button class="settings-btn" onclick="openGasSettings()" title="更改 Token">⚙</button></div>
   <div id="activeCompanyLabel">SCL</div>
 </div>
 
@@ -1513,6 +1520,11 @@
   </div>
 </div><!-- /brokenPartsPage -->
 
+<div id="cvcsInputPage" class="app-page"></div>
+<div id="cvcsQueryPage" class="app-page"></div>
+<div id="cvcsBrokenPage" class="app-page"></div>
+<div id="tokenAdminPage" class="app-page"></div>
+
 <div style="height:16px"></div>
 <div id="appVersion"></div>
 <div style="height:8px"></div>
@@ -1555,12 +1567,15 @@
 </div>
 
 <script src="./cloud-api.js"></script>
+<script src="./access-control.js"></script>
+<script src="./cvcs.js"></script>
+<script src="./token-admin.js"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.11-04';
-const _APP_VERSION='v1.064';
+const _APP_BUMP='2026.08.13-01';
+const _APP_VERSION='v1.065';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -1634,6 +1649,7 @@ function currentPoQuickValue(){
 }
 function syncPoQuickFillButton(loadScl=true){
   const btn=document.getElementById('poQuickFillBtn'),input=document.getElementById('poNumber');if(!btn||!input)return;
+  if(hasPersonalToken()&&!hasAccess('ae')){btn.textContent='無權限';btn.disabled=true;btn.classList.remove('active');return;}
   if(activeCompany==='SCL'&&!_sclMonthlySettingsLoaded){
     btn.textContent=getScriptUrl()?'載入中...':'未載入';btn.disabled=true;btn.classList.remove('active');btn.setAttribute('aria-pressed','false');
     if(loadScl&&getScriptUrl())void loadSclMonthlySettings(false,true);
@@ -1732,7 +1748,13 @@ function getDeployId(company){
   const raw=localStorage.getItem(_companyKey(company||activeCompany))||localStorage.getItem('_ml_gas')||'';
   return extractDeployId(raw);
 }
-function getScriptUrl(){const id=getDeployId();return id?'https://script.google.com/macros/s/'+id+'/exec':'';}
+function getAccessToken(){return String(localStorage.getItem('_amrs_access_token_v1')||'').trim();}
+function hasPersonalToken(){return /^amrs_[A-Za-z0-9_-]{20,}$/.test(getAccessToken());}
+function hasCredentialForCompany(company){return hasPersonalToken()||!!getDeployId(company);}
+function getScriptUrl(){
+  if(hasPersonalToken())return _CLOUDFLARE_API_URL+'/api';
+  const id=getDeployId();return id?'https://script.google.com/macros/s/'+id+'/exec':'';
+}
 const GAS_READ_CONCURRENCY=1;
 let _gasReadActive=0,_gasReadSequence=0,_gasReadQueue=[],_gasWriteActive=0,_gasSubmissionTail=Promise.resolve();
 function pumpGasReadQueue(){
@@ -1784,6 +1806,10 @@ function isGasApiUrl(url){
     return parsed.hostname==='script.google.com'&&/^\/macros\/s\/[^/]+\/exec\/?$/i.test(parsed.pathname);
   }catch(e){return false;}
 }
+function isCloudApiUrl(url){
+  try{return new URL(String(url)).origin===new URL(_CLOUDFLARE_API_URL).origin&&new URL(String(url)).pathname==='/api';}
+  catch(e){return false;}
+}
 async function fetchJsonAttempt(url,options={},timeoutMs=60000){
   const controller=new AbortController(),externalSignal=options.signal;
   const abortFromExternal=()=>controller.abort();
@@ -1812,7 +1838,7 @@ async function fetchJsonAttempt(url,options={},timeoutMs=60000){
 async function fetchJsonWithTimeout(url,options={},timeoutMs=60000){
   const {gasPriority='normal',forceGasDirect=false,...requestOptions}=options;
   const method=String(requestOptions.method||'GET').toUpperCase(),attempts=method==='GET'?3:1;
-  if(!forceGasDirect&&method==='GET'&&_dualTransport&&isGasApiUrl(url)){
+  if(!forceGasDirect&&method==='GET'&&_dualTransport&&(isGasApiUrl(url)||isCloudApiUrl(url))){
     const parsed=new URL(String(url));
     return _dualTransport.get({query:parsed.searchParams,signal:requestOptions.signal,timeoutMs});
   }
@@ -1853,8 +1879,8 @@ async function postSubmissionJson(payload,timeoutMs=90000){
     throw lastError||new Error('提交結果未確認');
   });
 }
-function hasAnyDeployId(){return getCompanyOrder().some(c=>!!getDeployId(c));}
-function firstConfiguredCompany(){return getCompanyOrder().find(c=>!!getDeployId(c))||'';}
+function hasAnyDeployId(){return hasPersonalToken()||getCompanyOrder().some(c=>!!getDeployId(c));}
+function firstConfiguredCompany(){return hasPersonalToken()?(activeCompany||'SCL'):(getCompanyOrder().find(c=>!!getDeployId(c))||'');}
 function unlockApp(){document.body.classList.remove('auth-locked');}
 function normalizeDeployInput(id){const deployId=extractDeployId(id);return deployId?'https://script.google.com/macros/s/'+deployId+'/exec':'';}
 function companyParam(){return 'company='+encodeURIComponent(activeCompany);}
@@ -1873,17 +1899,20 @@ function resetSetupVerification(){
   const res=document.getElementById('setupTestResult');
   res.className='';res.textContent='';res.style.display='none';
 }
-function saveSetup(){
-  const input=document.getElementById('gasUrlInput').value.trim(),id=extractDeployId(input);
-  if(!id){document.getElementById('setupErr').textContent='請輸入有效 Deploy ID 或完整 /exec 網址。';return;}
-  if(setupVerifiedId!==normalizeDeployInput(input)){document.getElementById('setupErr').textContent='請先測試連線成功，再儲存。';return;}
-  localStorage.setItem('_ml_gas',id);
-  COMPANIES.forEach(c=>localStorage.setItem(_companyKey(c),id));
+async function saveSetup(){
+  const input=document.getElementById('gasUrlInput').value.trim(),normalized=normalizeCredentialInput(input);
+  if(!normalized){document.getElementById('setupErr').textContent='請輸入有效個人 Token 或原有 Deploy ID。';return;}
+  if(setupVerifiedId!==normalized){document.getElementById('setupErr').textContent='請先測試連線成功，再儲存。';return;}
+  const saved=window.AmrsAccessControl.saveCredential(localStorage,input);
+  if(saved.kind==='legacy')COMPANIES.forEach(c=>localStorage.setItem(_companyKey(c),saved.value));
+  else COMPANIES.forEach(c=>localStorage.removeItem(_companyKey(c)));
   if(_dualTransport)_dualTransport.clearSession();
   document.getElementById('setupScreen').classList.remove('show');
   setupReturnState=null;setupVerifiedId='';
   _sclMonthlySettingsLoaded=false;
-  unlockApp();syncCompanySpecificFields();syncCasinoOptions();showPage('schedule');renderCompanyMenu();
+  unlockApp();syncCompanySpecificFields();syncCasinoOptions();renderCompanyMenu();
+  await refreshAccessSession();
+  showFirstPermittedPage();
 }
 function cancelSetup(){
   document.getElementById('setupScreen').classList.remove('show');
@@ -1897,19 +1926,21 @@ function cancelSetup(){
   renderCompanyMenu();
 }
 async function testConnection(){
-  const input=document.getElementById('gasUrlInput').value.trim(),base=normalizeDeployInput(input);
+  const input=document.getElementById('gasUrlInput').value.trim(),normalized=normalizeCredentialInput(input);
   const res=document.getElementById('setupTestResult');
-  if(!base){res.className='setupTestResult err';res.textContent='請輸入有效 Deploy ID 或完整 /exec 網址';res.style.display='block';return;}
-  const url=base+(base.includes('?')?'&':'?')+'action=ping';
+  if(!normalized){res.className='setupTestResult err';res.textContent='請輸入有效個人 Token 或原有 Deploy ID';res.style.display='block';return;}
   const btn=document.getElementById('setupTestBtn');
   btn.textContent='測試中…';btn.disabled=true;
   res.className='';res.style.display='none';
   try{
-    const data=await fetchJsonWithTimeout(url,{forceGasDirect:true},30000);
+    const kind=window.AmrsAccessControl.credentialKind(input);
+    const legacyId=kind==='legacy'?extractDeployId(input):'';
+    const tester=window.createDualTransport({cloudflareBaseUrl:_CLOUDFLARE_API_URL,fetchImpl:transportFetch,storage:null,accessToken:kind==='personal'?input:'',deployId:legacyId,gasUrl:legacyId?'https://script.google.com/macros/s/'+legacyId+'/exec':''});
+    const data=kind==='personal'?(await tester.ensureSession(),{success:true}):await tester.get('action=ping',{timeoutMs:30000});
     if(data.success===true){
       res.className='setupTestResult ok';
       res.textContent='✓ 連接成功！';
-      setupVerifiedId=base;
+      setupVerifiedId=normalized;
       document.getElementById('setupSaveBtn').disabled=false;
     }else{
       res.className='setupTestResult err';
@@ -1919,7 +1950,7 @@ async function testConnection(){
     }
   }catch(e){
     res.className='setupTestResult err';
-    res.textContent='✗ '+(e.message||'連接失敗，請確認 Deploy ID 正確');
+    res.textContent='✗ '+(e.message||'連接失敗，請確認 Token 正確');
     setupVerifiedId='';
     document.getElementById('setupSaveBtn').disabled=true;
   }
@@ -1928,19 +1959,80 @@ async function testConnection(){
 }
 function openGasSettings(opts={}){
   setupReturnState=opts.returnState||null;
-  const cur=getDeployId();
+  const cur=getAccessToken()||getDeployId();
   document.getElementById('gasUrlInput').value=cur;
   document.getElementById('setupErr').textContent='';
-  document.getElementById('setupTitle').textContent='請輸入 Deploy ID';
+  document.getElementById('setupTitle').textContent='請輸入 Token';
   resetSetupVerification();
   document.getElementById('setupCancelBtn').style.display=(setupReturnState||cur)?'block':'none';
   document.getElementById('setupScreen').classList.add('show');
 }
+function normalizeCredentialInput(value){
+  const raw=String(value||'').trim();if(!raw)return '';
+  if(window.AmrsAccessControl.credentialKind(raw)==='personal')return raw;
+  return normalizeDeployInput(raw);
+}
 function openMenu(){renderCompanyMenu();document.getElementById('menuOverlay').classList.add('show');document.getElementById('sideMenu').classList.add('show');}
 function closeMenu(){document.getElementById('menuOverlay').classList.remove('show');document.getElementById('sideMenu').classList.remove('show');}
+let _accessPermissions=hasPersonalToken()?[]:['schedule','ae','cvcs'];
+let _cvcsApp=null,_tokenAdminApp=null,_cvcsMenuOpen=false;
+function hasAccess(permission){return window.AmrsAccessControl.hasPermission(_accessPermissions,permission);}
+function ensureFeatureApps(){
+  if(!_cvcsApp&&window.AmrsCvcs)_cvcsApp=window.AmrsCvcs.createApplication({transport:_dualTransport,storage:localStorage,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
+  if(!_tokenAdminApp&&window.AmrsTokenAdmin)_tokenAdminApp=window.AmrsTokenAdmin.createApplication({transport:_dualTransport,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
+  _cvcsApp?.mount();
+}
+async function refreshAccessSession(){
+  if(!_dualTransport)return false;
+  try{
+    await _dualTransport.ensureSession({forceRefresh:true});
+    _accessPermissions=_dualTransport.getState().permissions||[];
+    applyAccessPermissions();
+    if(hasAccess('ae'))void loadTemplateMappings();
+    return true;
+  }catch(error){
+    if(!hasPersonalToken()){
+      _accessPermissions=['schedule','ae','cvcs'];applyAccessPermissions();return true;
+    }
+    _accessPermissions=[];applyAccessPermissions();
+    if(hasPersonalToken()){
+      document.body.classList.add('auth-locked');
+      openGasSettings();
+      const result=document.getElementById('setupTestResult');result.className='setupTestResult err';result.textContent='Token 已失效或暫時無法驗證，請聯絡管理員。';result.style.display='block';
+    }
+    return false;
+  }
+}
+function applyAccessPermissions(){
+  const ae=hasAccess('ae'),cvcs=hasAccess('cvcs'),schedule=hasAccess('schedule'),admin=hasAccess('admin')||_dualTransport?.getState().legacy===true;
+  document.getElementById('scheduleMenuBtn').style.display=schedule?'':'none';
+  document.getElementById('companyMenu').style.display=ae?'':'none';
+  ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
+  document.getElementById('cvcsInputMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsPropertyMenu').style.display=cvcs?'':'none';
+  document.getElementById('cvcsQueryMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsBrokenMenuBtn').style.display=cvcs?'':'none';
+  document.getElementById('dataInputMenuSection').style.display=(ae||cvcs)?'':'none';document.getElementById('dataQueryMenuSection').style.display=(ae||cvcs)?'':'none';
+  document.getElementById('adminMenuSection').style.display=admin?'':'none';document.getElementById('tokenAdminMenuBtn').style.display=admin?'':'none';
+  renderCvcsPropertyMenu();
+}
+function renderCvcsPropertyMenu(){
+  const host=document.getElementById('cvcsPropertyMenu');if(!host||!window.AmrsCvcs)return;
+  host.innerHTML=window.AmrsCvcs.PROPERTIES.map(property=>`<button class="menu-item ${activePage==='cvcsInput'&&_cvcsApp?.activeProperty===property?'active':''}" onclick="selectCvcsProperty('${property}')" type="button">${property}</button>`).join('');
+  host.classList.toggle('open',_cvcsMenuOpen||activePage==='cvcsInput');document.getElementById('cvcsInputMenuBtn').setAttribute('aria-expanded',String(_cvcsMenuOpen||activePage==='cvcsInput'));
+}
+function toggleCvcsPropertyMenu(){_cvcsMenuOpen=!_cvcsMenuOpen;renderCvcsPropertyMenu();}
+function selectCvcsProperty(property){ensureFeatureApps();_cvcsApp?.setProperty(property);_cvcsMenuOpen=true;showPage('cvcsInput');}
+function showFirstPermittedPage(){
+  if(hasAccess('schedule'))showPage('schedule');
+  else if(hasAccess('ae'))showPage('input');
+  else if(hasAccess('cvcs'))selectCvcsProperty(window.AmrsCvcs?.PROPERTIES?.[0]||'Venetian');
+  else if(hasAccess('admin'))showPage('tokenAdmin');
+}
 function showPage(page){
-  if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'){
-    if(!hasAnyDeployId()){showToast('請先設定並測試其中一個網站代號','err');openGasSettings();return;}
+  const permission=window.AmrsAccessControl.pagePermission(page);
+  const legacyAdmin=page==='tokenAdmin'&&_dualTransport?.getState().legacy===true;
+  if(!hasAccess(permission)&&!legacyAdmin){showToast('此 Token 沒有使用這項功能的權限','err');return;}
+  if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'||page==='cvcsInput'||page==='cvcsQuery'||page==='cvcsBroken'||page==='tokenAdmin'){
+    if(!hasAnyDeployId()){showToast('請先設定並測試 Token','err');openGasSettings();return;}
     if(!getDeployId())switchQueueCompany(firstConfiguredCompany());
     if(page==='dashboard')syncCasinoOptions();
     if(page==='brokenParts')syncBrokenPartsVenueOptions();
@@ -1950,24 +2042,31 @@ function showPage(page){
   if(page!=='input'&&document.getElementById('snPad').classList.contains('show'))hideSnPad();
   activePage=page;
   document.body.classList.toggle('dashboard-view',page!=='input');
-  document.getElementById('inputPage').classList.toggle('active',page==='input');
-  document.getElementById('dashboardPage').classList.toggle('active',page==='dashboard');
-  document.getElementById('schedulePage').classList.toggle('active',page==='schedule');
-  document.getElementById('monthlyStatsPage').classList.toggle('active',page==='monthlyStats');
-  document.getElementById('partsListPage').classList.toggle('active',page==='partsList');
-  document.getElementById('brokenPartsPage').classList.toggle('active',page==='brokenParts');
+  const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage'};
+  Object.entries(pageIds).forEach(([name,id])=>document.getElementById(id).classList.toggle('active',page===name));
   document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
   document.getElementById('scheduleMenuBtn').classList.toggle('active',page==='schedule');
   document.getElementById('monthlyStatsMenuBtn').classList.toggle('active',page==='monthlyStats');
   document.getElementById('partsListMenuBtn').classList.toggle('active',page==='partsList');
   document.getElementById('brokenPartsMenuBtn').classList.toggle('active',page==='brokenParts');
+  document.getElementById('cvcsQueryMenuBtn').classList.toggle('active',page==='cvcsQuery');
+  document.getElementById('cvcsBrokenMenuBtn').classList.toggle('active',page==='cvcsBroken');
+  document.getElementById('tokenAdminMenuBtn').classList.toggle('active',page==='tokenAdmin');
   renderCompanyMenu();
+  renderCvcsPropertyMenu();
   closeMenu();
   if(page==='dashboard')initDashboardFilters();
   if(page==='schedule')loadScheduleOverview(scheduleShouldForceDailyRefresh());
   if(page==='monthlyStats')loadMonthlyStats();
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
+  if(page.startsWith('cvcs')){
+    ensureFeatureApps();
+    if(page==='cvcsInput')_cvcsApp.renderInput();
+    if(page==='cvcsQuery')_cvcsApp.loadRecords(1);
+    if(page==='cvcsBroken')_cvcsApp.loadBroken(1);
+  }
+  if(page==='tokenAdmin'){ensureFeatureApps();_tokenAdminApp.mount();}
 }
 const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v3_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v2',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
 const SCHEDULE_INITIAL_DAYS=8,SCHEDULE_EXTENDED_DAYS=35;
@@ -2465,7 +2564,7 @@ function selectCompany(company){
   syncCasinoOptions();
   loadTemplateMappings();
   showPage('input');renderCompanyMenu();
-  if(!getDeployId(company))openGasSettings({returnState:prev});else loadTodayRecords();
+  if(!hasCredentialForCompany(company))openGasSettings({returnState:prev});else loadTodayRecords();
 }
 function renderCompanyMenu(){
   const el=document.getElementById('companyMenu');if(!el)return;
@@ -2635,7 +2734,8 @@ async function _checkPin(){
     if(!hasAnyDeployId()){openGasSettings();}
     else{
       if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);renderCompanyMenu();}
-      unlockApp();showPage('schedule');
+      unlockApp();
+      if(await refreshAccessSession())showFirstPermittedPage();
     }
   }else{
     _pin='';_pinBusy=false;_updateDots();
@@ -5373,13 +5473,14 @@ if('serviceWorker' in navigator){
 restoreListPreferences();
 renderCompanyMenu();
 syncCompanySpecificFields();
-loadTemplateMappings();
+if(!hasPersonalToken())loadTemplateMappings();
 if(localStorage.getItem('_ml_auth')===_PH){
   document.getElementById('pinScreen').style.display='none';
   if(!hasAnyDeployId()){openGasSettings();}
   else{
     if(!getDeployId()){switchQueueCompany(firstConfiguredCompany());renderCompanyMenu();syncCompanySpecificFields();}
-    unlockApp();showPage('schedule');
+    unlockApp();
+    void refreshAccessSession().then(ok=>{if(ok)showFirstPermittedPage();});
   }
 }
 initDashboardFilters();
