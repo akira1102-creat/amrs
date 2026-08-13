@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { companySchema, normalizeCompany } from "../src/config.mjs";
+import { companySchema, loadRuntimeConfig, normalizeCompany } from "../src/config.mjs";
 
 test("normalizes known companies and defaults unknown values", () => {
   assert.equal(normalizeCompany("mgm"), "MGM");
@@ -14,3 +14,10 @@ test("preserves company-specific worksheet widths", () => {
   assert.equal(companySchema("GEG").fields[11], "inspector");
 });
 
+test("loads the independent CVCS spreadsheet configuration", () => {
+  const sheets = Object.fromEntries(["Melco", "MGM", "SJM", "SCL", "GEG", "Wynn"].map((company) => [company, `synthetic-${company}`]));
+  const config = loadRuntimeConfig({
+    AMRS_CONFIG: JSON.stringify({ sheets, partsSheetId: "synthetic-parts", scheduleSheetId: "synthetic-schedule", cvcsSheetId: "synthetic-cvcs" }),
+  });
+  assert.equal(config.cvcsSheetId, "synthetic-cvcs");
+});

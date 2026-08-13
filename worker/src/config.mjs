@@ -69,7 +69,7 @@ export function loadRuntimeConfig(env) {
     sheets,
     partsSheetId: parsed.partsSheetId,
     scheduleSheetId: parsed.scheduleSheetId,
+    cvcsSheetId: String(parsed.cvcsSheetId || "").trim(),
     timeZone: parsed.timeZone || "Asia/Hong_Kong",
   };
 }
-
