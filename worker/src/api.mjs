@@ -1,4 +1,5 @@
 import { createSession, requireSession } from "./auth.mjs";
+import { handleAccessTokenAdminAction } from "./access-tokens.mjs";
 import { apiError, corsHeaders, json } from "./http.mjs";
 import {
   createSubmissionBatch,
@@ -18,6 +19,17 @@ const repositoryByEnv = new WeakMap();
 const OPERATION_PROCESSING = "processing";
 const OPERATION_COMPLETED = "completed";
 const OPERATION_FAILED = "failed";
+
+const SCHEDULE_ACTIONS = new Set(["scheduleOverview", "scheduleMachineCounts"]);
+const ADMIN_ACTIONS = new Set(["listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"]);
+
+export function permissionForAction(action) {
+  const value = String(action || "").trim();
+  if (ADMIN_ACTIONS.has(value)) return "admin";
+  if (/cvcs/i.test(value)) return "cvcs";
+  if (SCHEDULE_ACTIONS.has(value)) return "schedule";
+  return "ae";
+}
 
 function text(value) {
   return String(value == null ? "" : value).trim();
@@ -422,15 +434,21 @@ async function route(request, env, dependencies = {}) {
   const pathname = url.pathname.replace(/\/+$/, "") || "/";
   if (pathname === "/health" && request.method === "GET") return { success: true, service: "amrs-api" };
   if (pathname === "/session" && request.method === "POST") return createSession(request, env);
-  await requireSession(request, env);
-  const repository = getRepository(env, dependencies);
   const now = dependencies.now || (() => Date.now());
   if (pathname === "/api" && request.method === "GET") {
+    await requireSession(request, env, permissionForAction(url.searchParams.get("action")));
+    const repository = getRepository(env, dependencies);
     return repository.getAction(Object.fromEntries(url.searchParams.entries()));
   }
   if (pathname === "/api" && request.method === "POST") {
-    return executeMutation(await parseBody(request), request, env, dependencies);
+    const payload = await parseBody(request);
+    const permission = permissionForAction(payload?.action);
+    await requireSession(request, env, permission);
+    if (permission === "admin") return handleAccessTokenAdminAction(env.DB, payload, { now });
+    return executeMutation(payload, request, env, dependencies);
   }
+  await requireSession(request, env);
+  const repository = getRepository(env, dependencies);
   const operationMatch = pathname.match(/^\/operations\/([^/]+)$/);
   if (operationMatch && request.method === "GET") {
     const operation = await operationStatus(env.DB, repository, decodeURIComponent(operationMatch[1]), now);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sha256Base64Url } from "../src/crypto.mjs";
-import { handleRequest } from "../src/api.mjs";
+import { handleRequest, permissionForAction } from "../src/api.mjs";
 import { withWriteLock } from "../src/state.mjs";
 
 function createD1Harness() {
@@ -159,6 +159,14 @@ function request(url, token, init = {}) {
     },
   });
 }
+
+test("maps every API action to its server-enforced permission group", () => {
+  assert.equal(permissionForAction("scheduleOverview"), "schedule");
+  assert.equal(permissionForAction("submitRecords"), "ae");
+  assert.equal(permissionForAction("cvcsRecords"), "cvcs");
+  assert.equal(permissionForAction("submitCvcsRecords"), "cvcs");
+  assert.equal(permissionForAction("createAccessToken"), "admin");
+});
 
 test("returns a pollable top-level processing status for an existing operation", async () => {
   const { env, token } = await createAuthenticatedContext();
