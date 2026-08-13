@@ -340,6 +340,34 @@ test("uses the global D1 lock for a multi-company submission batch", async () =>
   assert.ok(env.DB.calls.some((call) => call.sql.includes("INSERT INTO write_locks") && call.bindings[0] === "amrs-sheets-write:global"));
 });
 
+test("tracks CVCS submissions as idempotent batches under a dedicated write lock", async () => {
+  const { env, token } = await createAuthenticatedContext();
+  const repository = {
+    findSubmissionIds: async (items) => Object.fromEntries(items.map((item) => [item.submissionId, { company: "cvcs" }])),
+    postAction: async () => ({
+      success: true,
+      inserted: 1,
+      skipped: 0,
+      insertedSubmissionIds: ["cvcs-id"],
+      skippedSubmissionIds: [],
+    }),
+  };
+  const response = await handleRequest(request("/api", token, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "submitCvcsRecords",
+      requestId: "cvcs-lock-test",
+      records: [{ property: "Venetian", submissionId: "cvcs-id" }],
+    }),
+  }), env, { repository });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.batchId, "cvcs-lock-test");
+  assert.equal(env.DB.items.get("cvcs-id").company, "cvcs");
+  assert.ok(env.DB.calls.some((call) => call.sql.includes("INSERT INTO write_locks") && call.bindings[0] === "amrs-sheets-write:cvcs"));
+});
+
 test("advances a dynamic clock while waiting for a D1 write lock", async () => {
   const { env } = await createAuthenticatedContext();
   const scope = "amrs-sheets-write:dynamic-clock";

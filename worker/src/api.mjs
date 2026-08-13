@@ -19,6 +19,7 @@ const repositoryByEnv = new WeakMap();
 const OPERATION_PROCESSING = "processing";
 const OPERATION_COMPLETED = "completed";
 const OPERATION_FAILED = "failed";
+const SUBMISSION_ACTIONS = new Set(["submitRecords", "submitCvcsRecords", "submitCvcsBrokenParts"]);
 
 const SCHEDULE_ACTIONS = new Set(["scheduleOverview", "scheduleMachineCounts"]);
 const ADMIN_ACTIONS = new Set(["listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"]);
@@ -29,6 +30,10 @@ export function permissionForAction(action) {
   if (/cvcs/i.test(value)) return "cvcs";
   if (SCHEDULE_ACTIONS.has(value)) return "schedule";
   return "ae";
+}
+
+function isSubmissionAction(action) {
+  return SUBMISSION_ACTIONS.has(text(action));
 }
 
 function text(value) {
@@ -173,7 +178,7 @@ function resultWithOperation(result, operation, batchId = "") {
 }
 
 async function prepareSubmission(db, payload, requestId, now) {
-  if (!payload || payload.action !== "submitRecords") return null;
+  if (!payload || !isSubmissionAction(payload.action)) return null;
   const records = Array.isArray(payload.records) ? payload.records : [];
   const batchId = text(payload.batchId) || requestId;
   const batch = await createSubmissionBatch(db, {
@@ -187,7 +192,7 @@ async function prepareSubmission(db, payload, requestId, now) {
     await createSubmissionItem(db, {
       submissionId: text(record.submissionId),
       batchId,
-      company: text(record.company) || "SCL",
+      company: payload.action === "submitCvcsBrokenParts" ? "cvcs-broken" : payload.action === "submitCvcsRecords" ? "cvcs" : text(record.company) || "SCL",
       status: SUBMISSION_ITEM_STATUS.PENDING,
       now: nowValue(now),
     });
@@ -278,6 +283,7 @@ function mutationCompanies(payload) {
   const records = Array.isArray(payload) ? payload : payload?.records;
   if (Array.isArray(records)) records.forEach((record) => add(record?.company));
   if (!Array.isArray(payload)) {
+    if (/cvcs/i.test(text(payload.action))) return ["cvcs"];
     add(payload.company);
     add(payload.record?.company);
     if (Array.isArray(payload.brokenPartsRepairs)) payload.brokenPartsRepairs.forEach((item) => add(item?.company || item?.record?.company));
@@ -321,7 +327,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   if (!started.created && operation?.status === OPERATION_FAILED) {
     operation = await updateOperation(db, requestId, { status: OPERATION_PROCESSING, result: null }, now);
   }
-  const submissionBatchId = action === "submitRecords"
+  const submissionBatchId = isSubmissionAction(action)
     ? text(payload?.batchId) || requestId
     : "";
   let prepared = null;
@@ -388,7 +394,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
 async function operationStatus(db, repository, requestId, now) {
   let operation = await getOperation(db, requestId);
   if (!operation) throw Object.assign(new Error("Operation not found"), { status: 404 });
-  if (operation.status === OPERATION_PROCESSING && operation.action === "submitRecords") {
+  if (operation.status === OPERATION_PROCESSING && isSubmissionAction(operation.action)) {
     const reconciled = await reconcileBatch(db, repository, requestId, now);
     if (reconciled?.batch?.status === SUBMISSION_BATCH_STATUS.COMPLETED) {
       operation = await updateOperation(db, requestId, {

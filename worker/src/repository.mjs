@@ -41,6 +41,7 @@ import {
   validateIncomingRecord,
 } from "./domain.mjs";
 import { createGoogleAccessTokenProvider } from "./google.mjs";
+import { createCvcsRepository } from "./cvcs-repository.mjs";
 import {
   a1Range,
   columnNumberToA1,
@@ -293,6 +294,27 @@ export function createRepository(env = {}, dependencies = {}) {
   const memory = dependencies.memoryCache || new Map();
   const cacheAdapter = dependencies.cacheAdapter || dependencies.responseCache || createCloudflareCacheAdapter();
   const metadataMemory = new Map();
+  let cvcsRepository;
+
+  function getCvcsRepository() {
+    if (cvcsRepository) return cvcsRepository;
+    cvcsRepository = createCvcsRepository({
+      loadTable: loadCvcsTable,
+      appendRows: async (table, rows) => appendValues(table.spreadsheetId, table.sheet.title, table.idColumn || table.headers.length, rows),
+      writeRows: async (table, rows) => {
+        const data = rows.map(({ rowNumber, values }) => ({
+          range: `${quoteSheetName(table.sheet.title)}!A${rowNumber}:${columnNumberToA1(values.length)}${rowNumber}`,
+          values: [values],
+        }));
+        if (data.length) await sheets.valuesBatchUpdate({ spreadsheetId: table.spreadsheetId, data, valueInputOption: "USER_ENTERED" });
+      },
+      deleteRows: async (table, rows) => deleteRows(table.spreadsheetId, table.sheet.sheetId, rows),
+      replaceSheet: replaceCvcsSheet,
+      invalidate: async (scopes) => Promise.all(scopes.map((scope) => invalidateCache(db, memory, cacheAdapter, scope, now))),
+      uuid,
+    });
+    return cvcsRepository;
+  }
 
   async function spreadsheetMetadata(spreadsheetId, options = {}) {
     const key = String(spreadsheetId);
@@ -511,6 +533,50 @@ export function createRepository(env = {}, dependencies = {}) {
       () => readValues(spreadsheetId, sheet.title, range),
       { refresh: options.refresh, cache: options.cache !== false, ttlMs: options.ttlMs || DEFAULT_CACHE_TTL_MS, now });
     return { spreadsheetId, sheet, values };
+  }
+
+  async function loadCvcsTable(title, headers, options = {}) {
+    const spreadsheetId = text(config.cvcsSheetId);
+    if (!spreadsheetId) throw Object.assign(new Error("CVCS spreadsheet is not configured"), { status: 503 });
+    const sheet = await ensureSheet(spreadsheetId, title, { create: true, refresh: options.refresh || options.cache === false });
+    if (!sheet) throw Object.assign(new Error(`CVCS worksheet not found: ${title}`), { status: 502 });
+    const scope = options.scope || `cvcs:${title}`;
+    const readColumns = Math.min(MAX_READ_COLUMNS, Math.max(26, Number(sheet.gridProperties?.columnCount || 0), headers.length + 1));
+    let values = await cached(memory, db, cacheAdapter, scope, `${spreadsheetId}:${title}`,
+      () => readValues(spreadsheetId, title, `A1:${columnNumberToA1(readColumns)}`),
+      { refresh: options.refresh, cache: options.cache !== false, ttlMs: DEFAULT_CACHE_TTL_MS, now });
+    const currentHeaders = values[0] || [];
+    if (headers.some((header, index) => text(currentHeaders[index]) !== header)) {
+      await writeValues(spreadsheetId, title, `A1:${columnNumberToA1(headers.length)}1`, [headers]);
+      values = [headers.slice(), ...values.slice(1)];
+      await invalidateCache(db, memory, cacheAdapter, scope, now);
+    }
+    let identity = { values, idColumn: 0 };
+    if (options.identity) {
+      identity = await ensureIdentity(spreadsheetId, sheet, values, headers.length + 1, scope);
+      if (identity.values !== values) await invalidateCache(db, memory, cacheAdapter, scope, now);
+    }
+    return {
+      spreadsheetId,
+      sheet,
+      headers,
+      values: identity.values,
+      rows: identity.values.slice(1),
+      idColumn: identity.idColumn,
+    };
+  }
+
+  async function replaceCvcsSheet(title, rows, width) {
+    const spreadsheetId = text(config.cvcsSheetId);
+    if (!spreadsheetId) throw Object.assign(new Error("CVCS spreadsheet is not configured"), { status: 503 });
+    const sheet = await ensureSheet(spreadsheetId, title, { create: true, refresh: true });
+    const current = await readValues(spreadsheetId, title, `A1:${columnNumberToA1(width)}`);
+    const rowCount = Math.max(current.length, rows.length, 1);
+    const padded = rows.map((row) => Array.from({ length: width }, (_, index) => row[index] ?? ""));
+    while (padded.length < rowCount) padded.push(Array(width).fill(""));
+    await writeValues(spreadsheetId, title, `A1:${columnNumberToA1(width)}${rowCount}`, padded);
+    metadataMemory.delete(spreadsheetId);
+    return sheet;
   }
 
   async function readBrokenTable(company, options = {}) {
@@ -773,6 +839,8 @@ export function createRepository(env = {}, dependencies = {}) {
 
   async function getAction(params = {}) {
     const action = text(params.action);
+    const cvcsResult = await getCvcsRepository().getAction(params);
+    if (cvcsResult) return cvcsResult;
     if (action === "ping") return { success: true };
     if (action === "today") return getToday(params);
     if (action === "duplicateFault") return getDuplicateFaults(params);
@@ -1132,6 +1200,10 @@ export function createRepository(env = {}, dependencies = {}) {
   }
 
   async function postAction(payload = {}) {
+    if (!Array.isArray(payload)) {
+      const cvcsResult = await getCvcsRepository().postAction(payload);
+      if (cvcsResult) return cvcsResult;
+    }
     if (!Array.isArray(payload) && payload.action === "updateRecord") return updateRecord(payload);
     if (!Array.isArray(payload) && payload.action === "deleteRecord") return deleteRecord(payload);
     if (!Array.isArray(payload) && payload.action === "bulkDeleteRecords") return bulkDeleteRecords(payload);
@@ -1151,13 +1223,16 @@ export function createRepository(env = {}, dependencies = {}) {
   }
 
   async function findSubmissionIds(items = []) {
+    const cvcsItems = items.filter((item) => /^cvcs(?:-broken)?$/i.test(text(item.company)));
+    const regularItems = items.filter((item) => !/^cvcs(?:-broken)?$/i.test(text(item.company)));
     const groups = new Map();
-    items.forEach((item) => {
+    regularItems.forEach((item) => {
       const company = normalizeCompany(item.company);
       if (!groups.has(company)) groups.set(company, []);
       groups.get(company).push(text(item.submissionId));
     });
     const found = {};
+    if (cvcsItems.length) Object.assign(found, await getCvcsRepository().findSubmissionIds(cvcsItems));
     for (const [company, ids] of groups) {
       const main = await mainRowsForCompany(company, { refresh: true, cache: false, ensureIdentity: false });
       const wanted = new Set(ids.filter(Boolean));

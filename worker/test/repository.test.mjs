@@ -178,6 +178,7 @@ const config = {
   sheets: { Melco: "melco", MGM: "mgm", SJM: "sjm", SCL: "scl", GEG: "geg", Wynn: "wynn" },
   partsSheetId: "parts",
   scheduleSheetId: "schedule",
+  cvcsSheetId: "cvcs",
   timeZone: "Asia/Hong_Kong",
 };
 
@@ -194,6 +195,17 @@ const companyData = {
   wynn: [{ title: "Worksheet", values: [commonHeaders, ["Wynn", "2026/08/04", "2608", "SAE", "5", "PM", "Preventive Maintenance", "", "", ""]] }],
   parts: [{ title: "Parts List", values: [["AE-1", "部品", "PART"], ["TAE-1", "部品2", "PART2"]] }],
   schedule: [{ title: "2026-AUG", values: [["Day", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S"], [4, "VML", "", "", "", "", "", "", "", "", "", "", "LON", "", "", "", "", "", ""]] }],
+  cvcs: [
+    { title: "CVCS Records", values: [["Property", "Date", "Location", "Sub Location", "Quarter", "Model", "S/N", "Antenna Size", "Antenna Status", "Version", "Reason", "Action Taken & Notes", "Parts Change"], ["Venetian", "2026/08/04", "Cage", "North", "Q1", "SOT", "1234", "Large", "Active", "1.0", "PM", "Inspection", "Cable"]] },
+    { title: "Sub Location", values: [["Option"], ["North"], ["South"]] },
+    { title: "Antenna Size", values: [["Option"], ["Large"]] },
+    { title: "Antenna Status", values: [["Option"], ["Active"]] },
+    { title: "Version", values: [["Option"], ["1.0"]] },
+    { title: "Reason Action Mapping", values: [["Reason", "Action Taken & Notes"], ["PM", "Inspection"]] },
+    { title: "Parts Change", values: [["Option"], ["Cable"]] },
+    { title: "CVCS Broken Parts", values: [["Property", "Model", "S/N", "Parts No.", "Required Parts (EN)", "Qty", "Repair Day", "Found Day", "Remark", "Request Follow-up Date", "Follow-up Completed Date"], ["Venetian", "SOT", "1234", "", "", "", "", "2026/08/04", "", "2026/08/04", ""]] },
+    { title: "CVCS Parts List", values: [["Parts No.", "Required Parts (EN)"], ["CV-1", "Cable"]] },
+  ],
 };
 
 test("implements all 14 GET action contracts against synthetic Sheets", async () => {
@@ -253,6 +265,91 @@ test("finds same non-PM serial and reason within the requested 30-day window", (
     date: "2026/08/04",
     timeZone: "Asia/Hong_Kong",
   }), {});
+});
+
+test("loads shared CVCS options and server-paged record and follow-up results", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => "synthetic-generated-id" });
+  const options = await repository.getAction({ action: "cvcsOptions" });
+  assert.deepEqual(options.options.subLocation, ["North", "South"]);
+  assert.deepEqual(options.options.reasonAction, [{ reason: "PM", actionTakenNotes: "Inspection" }]);
+  assert.deepEqual(options.parts, [{ partsNo: "CV-1", requiredPartsEn: "Cable" }]);
+  const records = await repository.getAction({ action: "cvcsRecords", serialNo: "1234", page: "1", pageSize: "10" });
+  assert.equal(records.total, 1);
+  assert.equal(records.records[0].property, "Venetian");
+  const broken = await repository.getAction({ action: "cvcsBrokenParts", status: "Following Up", page: "1", pageSize: "10" });
+  assert.equal(broken.total, 1);
+  assert.equal(broken.records[0].serialNo, "1234");
+});
+
+test("submits CVCS records idempotently and keeps Property queues separate", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => "synthetic-generated-id" });
+  const payload = {
+    action: "submitCvcsRecords",
+    records: [{
+      submissionId: "cvcs-submission-new",
+      property: "Plaza",
+      date: "2026/08/05",
+      location: "TG",
+      model: "Reader",
+      serialNo: "7777",
+      reason: "PM",
+      actionTakenNotes: "Inspection",
+    }],
+  };
+  const first = await repository.postAction(payload);
+  const second = await repository.postAction(payload);
+  assert.equal(first.inserted, 1);
+  assert.equal(second.inserted, 0);
+  assert.equal(second.skipped, 1);
+  const rows = harness.sheets.get("cvcs:CVCS Records").values.filter((row) => row[6] === "7777");
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0][0], "Plaza");
+});
+
+test("updates CVCS option lists without adding custom record text automatically", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => "synthetic-option-id" });
+  await repository.postAction({ action: "updateCvcsOptions", key: "subLocation", options: ["East", "West"] });
+  const options = await repository.getAction({ action: "cvcsOptions", refresh: "1" });
+  assert.deepEqual(options.options.subLocation, ["East", "West"]);
+  assert.equal(options.options.subLocation.includes("Custom record value"), false);
+});
+
+test("edits, bulk edits, and deletes CVCS records with stale snapshot protection", async () => {
+  const harness = createSheetsHarness(companyData);
+  let id = 0;
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => `synthetic-record-id-${++id}` });
+  const loaded = await repository.getAction({ action: "cvcsRecords", serialNo: "1234", refresh: "1" });
+  const original = loaded.records[0];
+  await repository.postAction({ action: "updateCvcsRecord", record: original, changes: { reason: "Fault", actionTakenNotes: "Reset" } });
+  const edited = (await repository.getAction({ action: "cvcsRecords", serialNo: "1234", refresh: "1" })).records[0];
+  assert.equal(edited.reason, "Fault");
+  await assert.rejects(repository.postAction({ action: "updateCvcsRecord", record: original, changes: { reason: "Stale" } }), /changed/i);
+  await repository.postAction({ action: "bulkUpdateCvcsRecords", records: [edited], changes: { quarter: "Q4" } });
+  const bulkEdited = (await repository.getAction({ action: "cvcsRecords", serialNo: "1234", refresh: "1" })).records[0];
+  assert.equal(bulkEdited.quarter, "Q4");
+  const deleted = await repository.postAction({ action: "deleteCvcsRecord", record: bulkEdited });
+  assert.equal(deleted.deleted, 1);
+  assert.equal((await repository.getAction({ action: "cvcsRecords", serialNo: "1234", refresh: "1" })).total, 0);
+});
+
+test("submits and completes CVCS follow-up records without requiring a part", async () => {
+  const harness = createSheetsHarness(companyData);
+  let id = 0;
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => `synthetic-broken-id-${++id}` });
+  const payload = {
+    action: "submitCvcsBrokenParts",
+    records: [{ submissionId: "follow-up-new", property: "Sands", model: "SCP", serialNo: "2222", requestFollowUpDate: "2026/08/05" }],
+  };
+  assert.equal((await repository.postAction(payload)).inserted, 1);
+  assert.equal((await repository.postAction(payload)).skipped, 1);
+  const waiting = (await repository.getAction({ action: "cvcsBrokenParts", serialNo: "2222", refresh: "1" })).records[0];
+  assert.equal(waiting.partsNo, "");
+  await repository.postAction({ action: "updateCvcsBrokenPart", record: waiting, changes: { followUpCompletedDate: "2026/08/06" } });
+  const completed = (await repository.getAction({ action: "cvcsBrokenParts", status: "Follow-up Completed", serialNo: "2222", refresh: "1" })).records[0];
+  assert.equal(completed.followUpCompletedDate, "2026/08/06");
 });
 
 test("does not read the Broken Parts List for a normal submission", async () => {
