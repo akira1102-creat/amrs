@@ -11,6 +11,7 @@
   // This is intentionally a non-production placeholder. The deployed Worker URL is configurable.
   const DEFAULT_CLOUDFLARE_BASE_URL = "https://amrs-api.example.invalid";
   const DEFAULT_DEPLOY_ID_KEYS = ["_ml_gas", "gasDeployId", "deployId"];
+  const DEFAULT_ACCESS_TOKEN_KEYS = ["_amrs_access_token_v1", "amrsAccessToken"];
   const DEFAULT_SESSION_STORAGE_KEY = "_amrs_cloud_session_v1";
   const DEFAULT_TIMEOUT_MS = 45000;
   const DEFAULT_SESSION_TIMEOUT_MS = 15000;
@@ -296,7 +297,14 @@
   function isSubmissionPayload(payload) {
     if (Array.isArray(payload)) return true;
     const action = asString(payload?.action).trim().toLowerCase();
-    return action === "submitrecords" || action === "submit_records";
+    return [
+      "submitrecords",
+      "submit_records",
+      "submitcvcsrecords",
+      "submit_cvcs_records",
+      "submitcvcsbrokenparts",
+      "submit_cvcs_broken_parts",
+    ].includes(action);
   }
 
   function clonePayload(payload) {
@@ -318,11 +326,16 @@
       })();
       this.deployId = options.deployId;
       this.getDeployId = options.getDeployId;
+      this.accessToken = options.accessToken;
+      this.getAccessToken = options.getAccessToken;
       this.gasUrl = options.gasUrl;
       this.getGasUrl = options.getGasUrl;
       this.deployIdKeys = Array.isArray(options.deployIdKeys) && options.deployIdKeys.length
         ? options.deployIdKeys.slice()
         : DEFAULT_DEPLOY_ID_KEYS.slice();
+      this.accessTokenKeys = Array.isArray(options.accessTokenKeys) && options.accessTokenKeys.length
+        ? options.accessTokenKeys.slice()
+        : DEFAULT_ACCESS_TOKEN_KEYS.slice();
       this.sessionStorageKey = options.sessionStorageKey || DEFAULT_SESSION_STORAGE_KEY;
       this.now = options.now || (() => Date.now());
       this.sleep = options.sleep || sleep;
@@ -362,6 +375,35 @@
       return "";
     }
 
+    _readStoredAccessToken() {
+      if (typeof this.getAccessToken === "function") {
+        try {
+          const value = asString(this.getAccessToken()).trim();
+          if (value) return value;
+        } catch {
+          // Fall back to the normal local-storage lookup.
+        }
+      }
+      const configured = asString(this.accessToken).trim();
+      if (configured) return configured;
+      for (const key of this.accessTokenKeys) {
+        const value = asString(readStorage(this.storage, key)).trim();
+        if (value) return value;
+      }
+      return "";
+    }
+
+    _readCredential() {
+      const token = this._readStoredAccessToken();
+      if (token) return { type: "personal", value: token };
+      const deployId = this._readStoredDeployId();
+      return deployId ? { type: "legacy", value: deployId } : null;
+    }
+
+    _canUseGasFallback() {
+      return this._readCredential()?.type === "legacy";
+    }
+
     _resolveGasUrl() {
       const value = typeof this.getGasUrl === "function" ? this.getGasUrl() : this.gasUrl;
       if (value) return deployIdToGasUrl(value).startsWith("https://script.google.com/") && !/^https?:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(String(value))
@@ -377,8 +419,17 @@
       if (!raw) return null;
       try {
         const value = JSON.parse(raw);
-        if (value?.token && Number(value.expiresAt) > this.now() + 30000) {
-          this._session = { token: String(value.token), expiresAt: Number(value.expiresAt) };
+        const credential = this._readCredential();
+        const storedType = value?.credentialType || (value?.legacy === false ? "personal" : "legacy");
+        if (value?.token && Number(value.expiresAt) > this.now() + 30000 && credential?.type === storedType) {
+          this._session = {
+            token: String(value.token),
+            expiresAt: Number(value.expiresAt),
+            permissions: Array.isArray(value.permissions) ? value.permissions.map(String) : [],
+            legacy: storedType === "legacy",
+            label: asString(value.label),
+            credentialType: storedType,
+          };
           return this._session;
         }
       } catch {
@@ -388,7 +439,7 @@
       return null;
     }
 
-    _saveSession(token, responseBody) {
+    _saveSession(token, responseBody, credentialType) {
       const now = this.now();
       const expiresIn = Number(responseBody?.expiresIn ?? responseBody?.expires_in);
       const explicitExpiresAt = Number(responseBody?.expiresAt ?? responseBody?.expires_at);
@@ -402,6 +453,10 @@
       const session = {
         token: String(token),
         expiresAt: tokenExpiry(token, responseExpiresAt, now),
+        permissions: Array.isArray(responseBody?.permissions) ? responseBody.permissions.map(String) : [],
+        legacy: credentialType === "legacy",
+        label: asString(responseBody?.label),
+        credentialType,
       };
       this._session = session;
       writeStorage(this.storage, this.sessionStorageKey, JSON.stringify(session));
@@ -414,11 +469,15 @@
     }
 
     getState() {
+      const session = this._readStoredSession();
       return {
         backend: this.lastBackend,
         cloudflare: { ...this._cloudAvailability },
-        hasSession: Boolean(this._readStoredSession()),
-        hasGasFallback: Boolean(this._resolveGasUrl()),
+        hasSession: Boolean(session),
+        permissions: session?.permissions ? session.permissions.slice() : [],
+        legacy: session ? Boolean(session.legacy) : this._readCredential()?.type === "legacy",
+        label: session?.label || "",
+        hasGasFallback: this._canUseGasFallback() && Boolean(this._resolveGasUrl()),
       };
     }
 
@@ -511,9 +570,9 @@
           retryable: false,
         });
       }
-      const deployId = this._readStoredDeployId();
-      if (!deployId) {
-        throw new AmrsTransportError("GAS Deploy ID is not configured", {
+      const credential = this._readCredential();
+      if (!credential) {
+        throw new AmrsTransportError("Access Token is not configured", {
           backend: "cloudflare",
           kind: "session-unavailable",
           phase: "session",
@@ -527,7 +586,9 @@
             {
               method: "POST",
               headers: { "content-type": "application/json", accept: "application/json" },
-              body: JSON.stringify({ deployId }),
+              body: JSON.stringify(credential.type === "personal"
+                ? { token: credential.value }
+                : { deployId: credential.value }),
               signal,
             },
             { backend: "cloudflare", phase: "session", timeoutMs: this.sessionTimeoutMs },
@@ -542,7 +603,7 @@
               retryable: false,
             });
           }
-          return this._saveSession(token, body).token;
+          return this._saveSession(token, body, credential.type).token;
         } catch (error) {
           const wrapped = asTransportError(error, {
             backend: "cloudflare",
@@ -673,7 +734,7 @@
       try {
         return await this._cloudGet(query, options);
       } catch (cloudError) {
-        if (options.signal?.aborted || !this._shouldFallbackGet(cloudError)) throw cloudError;
+        if (options.signal?.aborted || !this._canUseGasFallback() || !this._shouldFallbackGet(cloudError)) throw cloudError;
         try {
           return await this._gasGet(query, options);
         } catch (gasError) {
@@ -887,9 +948,20 @@
     async post(payload, options = {}) {
       const normalized = this._normalizeMutation(payload, options);
       const forceGas = options.backend === "gas" || options.forceGas === true;
+      const canUseGas = this._canUseGasFallback();
       let cloudReady = false;
       if (!forceGas) cloudReady = await this.checkCloudHealth({ force: options.forcePreflight === true, signal: options.signal });
       if (!cloudReady || forceGas || !this.cloudflareBaseUrl) {
+        if (!canUseGas) {
+          throw new AmrsTransportError("Cloudflare is required for personal Access Tokens", {
+            backend: "cloudflare",
+            kind: "cloud-unavailable",
+            phase: "preflight",
+            operationId: normalized.requestId,
+            batchId: normalized.batchId,
+            retryable: true,
+          });
+        }
         return this._gasPost(normalized, options);
       }
       try {
@@ -900,6 +972,7 @@
         if (error?.unknownOutcome || error?.phase === "api" || error?.apiAttempted) throw error;
         // Session negotiation failed before /api started, so GAS is a safe fallback.
         this._cloudAvailability = { state: "unavailable", checkedAt: this.now(), error: error?.kind || "session" };
+        if (!canUseGas) throw error;
         return this._gasPost(normalized, options);
       }
     }

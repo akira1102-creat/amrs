@@ -10,6 +10,7 @@ const {
 const CLOUD = "https://cloud.synthetic.invalid";
 const GAS = "https://gas.synthetic.invalid/exec";
 const DEPLOY_ID = "synthetic-deploy-id-1234567890";
+const ACCESS_TOKEN = "amrs_synthetic-personal-token";
 
 class MemoryStorage {
   #values = new Map();
@@ -87,6 +88,44 @@ test("GET returns the Cloudflare primary response without touching GAS", async (
   assert.equal(harness.calls[1].init.headers.authorization, "Bearer token-primary");
 });
 
+test("personal access token is preferred and its permissions are cached with the session", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("_amrs_access_token_v1", ACCESS_TOKEN);
+  const harness = createHarness((call) => {
+    if (call.url === `${CLOUD}/session`) {
+      assert.deepEqual(requestBody(call), { token: ACCESS_TOKEN });
+      return jsonResponse({
+        success: true,
+        token: "session-personal",
+        expiresIn: 3600,
+        permissions: ["schedule", "cvcs"],
+        legacy: false,
+        label: "Technician A",
+      });
+    }
+    throw new Error(`unexpected URL: ${call.url}`);
+  });
+  const api = createDualTransport(baseOptions(harness.fetchImpl, { storage }));
+
+  assert.equal(await api.ensureSession(), "session-personal");
+  assert.deepEqual(api.getState().permissions, ["schedule", "cvcs"]);
+  assert.equal(api.getState().legacy, false);
+  assert.equal(api.getState().label, "Technician A");
+});
+
+test("personal access token never falls back to GAS when Cloudflare is unavailable", async () => {
+  const harness = createHarness((call) => {
+    if (call.url === `${CLOUD}/session`) return jsonResponse({ success: true, token: "session-personal" });
+    if (call.url.startsWith(`${CLOUD}/api?`)) throw new TypeError("synthetic network failure");
+    if (call.url.startsWith(GAS)) return jsonResponse({ success: true, backend: "gas" });
+    throw new Error(`unexpected URL: ${call.url}`);
+  });
+  const api = createDualTransport(baseOptions(harness.fetchImpl, { accessToken: ACCESS_TOKEN }));
+
+  await assert.rejects(api.get("action=cvcsRecords"), (error) => error?.backend === "cloudflare");
+  assert.equal(harness.calls.some((call) => call.url.startsWith(GAS)), false);
+});
+
 test("POST uses GAS only after a preflight proves Cloudflare unavailable", async () => {
   const harness = createHarness((call) => {
     if (call.url === `${CLOUD}/health`) return jsonResponse({ success: false }, 503);
@@ -127,6 +166,24 @@ test("unknown submit outcome reconciles through /submissions/:batchId and never 
   assert.equal(requestBody(harness.calls[2]).requestId, "batch-submit");
   assert.equal(harness.calls[3].url, `${CLOUD}/submissions/batch-submit`);
 });
+
+for (const action of ["submitCvcsRecords", "submitCvcsBrokenParts"]) {
+  test(`${action} reconciles through the submission endpoint`, async () => {
+    const harness = createHarness((call) => {
+      if (call.url === `${CLOUD}/health`) return jsonResponse({ success: true });
+      if (call.url === `${CLOUD}/session`) return jsonResponse({ success: true, token: "token-cvcs-submit" });
+      if (call.url === `${CLOUD}/api`) throw new TypeError("synthetic timeout after submit");
+      if (call.url === `${CLOUD}/submissions/batch-cvcs`) return jsonResponse({ success: true, status: "completed", inserted: 1 });
+      throw new Error(`unexpected URL: ${call.url}`);
+    });
+    const api = createDualTransport(baseOptions(harness.fetchImpl));
+
+    const result = await api.post({ action, records: [{ submissionId: "cvcs-1" }] }, { batchId: "batch-cvcs" });
+
+    assert.equal(result.status, "completed");
+    assert.equal(harness.calls.at(-1).url, `${CLOUD}/submissions/batch-cvcs`);
+  });
+}
 
 test("unknown non-submit mutation reconciles through /operations/:requestId", async () => {
   const harness = createHarness((call) => {
