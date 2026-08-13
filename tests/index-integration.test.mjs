@@ -51,3 +51,15 @@ test("CVCS input shows one Property badge below its title", () => {
   assert.doesNotMatch(renderInput, /<p>\$\{escapeHtml\(this\.activeProperty\)\}<\/p>/);
   assert.equal((renderInput.match(/cvcs-property-badge/g) || []).length, 1);
 });
+
+test("all frontend assets use one release URL so an old worker cannot mix JavaScript versions", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const worker = fs.readFileSync(new URL("../sw.js", import.meta.url), "utf8");
+  const urls = [...html.matchAll(/(?:href|src)="\.\/(?:cvcs\.css|cloud-api\.js|access-control\.js|cvcs\.js|token-admin\.js)\?v=([^"]+)"/g)];
+  assert.equal(urls.length, 5);
+  assert.equal(new Set(urls.map((match) => match[1])).size, 1);
+  const release = urls[0][1];
+  for (const asset of ["cvcs.css", "cloud-api.js", "access-control.js", "cvcs.js", "token-admin.js"]) {
+    assert.match(worker, new RegExp(`${asset.replace(".", "\\.")}\\?v=${release}`));
+  }
+});
