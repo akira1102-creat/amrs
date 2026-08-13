@@ -1,5 +1,5 @@
 import { createSession, requireSession } from "./auth.mjs";
-import { bootstrapAdministratorToken, handleAccessTokenAdminAction } from "./access-tokens.mjs";
+import { handleAccessTokenAdminAction } from "./access-tokens.mjs";
 import { apiError, corsHeaders, json } from "./http.mjs";
 import {
   createSubmissionBatch,
@@ -22,7 +22,7 @@ const OPERATION_FAILED = "failed";
 const SUBMISSION_ACTIONS = new Set(["submitRecords", "submitCvcsRecords", "submitCvcsBrokenParts"]);
 
 const SCHEDULE_ACTIONS = new Set(["scheduleOverview", "scheduleMachineCounts"]);
-const ADMIN_ACTIONS = new Set(["listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"]);
+const ADMIN_ACTIONS = new Set(["bootstrapAccessToken", "listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"]);
 
 export function permissionForAction(action) {
   const value = String(action || "").trim();
@@ -451,12 +451,6 @@ async function route(request, env, dependencies = {}) {
   }
   if (pathname === "/api" && request.method === "POST") {
     const payload = await parseBody(request);
-    if (text(payload?.action) === "bootstrapAccessToken") {
-      const claims = await requireSession(request, env);
-      if (!claims.legacy) throw Object.assign(new Error("Legacy authentication is required for administrator bootstrap"), { status: 403 });
-      const created = await bootstrapAdministratorToken(env.DB, payload, { now });
-      return { success: true, token: created.token, record: created.record };
-    }
     const permission = permissionForAction(payload?.action);
     await requireSession(request, env, permission);
     if (permission === "admin") return handleAccessTokenAdminAction(env.DB, payload, { now });

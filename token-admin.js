@@ -31,18 +31,8 @@
     constructor(options = {}) { this.transport = options.transport; this.toast = options.toast || (() => {}); this.showLoading = options.showLoading || (() => null); this.hideLoading = options.hideLoading || (() => {}); this.records = []; }
     mount() {
       const host = root?.document?.getElementById("tokenAdminPage"); if (!host) return;
-      if (this.transport?.getState?.().legacy) {
-        host.innerHTML = `<div class="cvcs-shell"><div class="cvcs-page-head"><div><h2>Token 管理初始化</h2><p>先建立第一個管理員 Token，之後請用新 Token 重新登入。</p></div></div><section class="cvcs-panel"><p class="cvcs-overlay-note">這個步驟只可執行一次。完整 Token 只會顯示一次。</p><button class="cvcs-primary" id="token-bootstrap" type="button">建立管理員 Token</button></section></div>`;
-        root.document.getElementById("token-bootstrap").addEventListener("click", () => this.bootstrap());
-        return;
-      }
       host.innerHTML = `<div class="cvcs-shell"><div class="cvcs-page-head"><div><h2>Token 管理</h2><p>管理同事權限；完整 Token 只會在新增後顯示一次。</p></div><button class="cvcs-primary" id="token-create" type="button">＋ 新增 Token</button></div><section class="cvcs-panel"><div class="cvcs-toolbar"><button id="token-refresh" type="button">重新整理</button></div><div id="token-list" class="token-list"><div class="cvcs-empty">載入中...</div></div></section></div>`;
       root.document.getElementById("token-create").addEventListener("click", () => this.openForm()); root.document.getElementById("token-refresh").addEventListener("click", () => this.load()); this.load();
-    }
-    async bootstrap() {
-      if (!root.confirm("確定建立第一個管理員 Token？")) return;
-      const loading = this.showLoading("管理員 Token 建立中，請稍等...");
-      try { const data = await this.transport.post({ action: "bootstrapAccessToken", label: "System Owner" }); if (!data?.success || !data.token) throw new Error(data?.message || "建立失敗"); this.showCreatedToken(data.token, data.record); } catch (error) { this.toast(error.message || "管理員 Token 建立失敗", "err"); } finally { this.hideLoading(loading); }
     }
     async load() {
       if (!this.transport) return; const loading = this.showLoading("Token 資料載入中，請稍等...");
@@ -69,7 +59,7 @@
     showCreatedToken(token, record) {
       this.openModal("Token 已建立", `<p class="cvcs-overlay-note">請立即交給對應同事並妥善保存。關閉後系統無法再次顯示完整 Token。</p><div class="token-created"><code id="created-token">${esc(token)}</code><button id="copy-created-token" type="button">複製</button></div><strong>${esc(record?.label)}</strong>`, `<button class="cvcs-primary" id="token-created-done" type="button">我已保存</button>`);
       root.document.getElementById("copy-created-token").addEventListener("click", async () => { try { await root.navigator.clipboard.writeText(token); this.toast("Token 已複製", "ok"); } catch { this.toast("無法自動複製，請手動選取", "err"); } });
-      root.document.getElementById("token-created-done").addEventListener("click", () => { this.closeModal(); if (this.transport?.getState?.().legacy) { this.toast("請按右上設定，改用新管理員 Token 登入", "ok"); this.mount(); } else this.load(); });
+      root.document.getElementById("token-created-done").addEventListener("click", () => { this.closeModal(); this.load(); });
     }
     async update(record, changes, close = false) {
       const loading = this.showLoading("Token 更新中，請稍等..."); try { const data = await this.transport.post({ action: "updateAccessToken", id: record.id, ...changes }); if (!data?.success) throw new Error(data?.message || "更新失敗"); if (close) this.closeModal(); this.toast("Token 已更新", "ok"); this.load(); } catch (error) { this.toast(error.message || "更新 Token 失敗", "err"); } finally { this.hideLoading(loading); }

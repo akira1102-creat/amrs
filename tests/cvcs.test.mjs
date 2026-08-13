@@ -45,6 +45,26 @@ test("broken-part builder permits follow-up without a part", () => {
   assert.throws(() => cvcs.buildBrokenPart({ property: "Venetian", model: "SCP", serialNo: "17" }), /part or follow-up/i);
 });
 
+test("new follow-up requests cannot be completed during data entry", () => {
+  const followUp = cvcs.buildBrokenPart({
+    property: "Venetian",
+    model: "SCP",
+    serialNo: "17",
+    requestFollowUpDate: "2026-08-13",
+    followUpCompletedDate: "2026-08-13",
+  });
+  assert.equal(followUp.followUpCompletedDate, "");
+});
+
+test("reason selection uses the action from the same mapping row", () => {
+  const mappings = [
+    { reason: "PM", actionTakenNotes: "Inspection" },
+    { reason: "Reader Error", actionTakenNotes: "Reset reader" },
+  ];
+  assert.equal(cvcs.actionForReason("reader error", mappings), "Reset reader");
+  assert.equal(cvcs.actionForReason("reader", mappings), null);
+});
+
 test("CVCS filters serialize exact and fuzzy searches explicitly", () => {
   const exact = cvcs.buildRecordQuery({ property: "", serialNo: "123", fuzzy: false, page: 2, pageSize: 30 });
   assert.equal(exact.get("action"), "cvcsRecords");

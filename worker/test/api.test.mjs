@@ -168,18 +168,14 @@ test("maps every API action to its server-enforced permission group", () => {
   assert.equal(permissionForAction("createAccessToken"), "admin");
 });
 
-test("legacy authentication can bootstrap the first administrator token", async () => {
+test("legacy authentication cannot bootstrap an administrator token", async () => {
   const { env, token } = await createAuthenticatedContext();
   const response = await handleRequest(request("/api", token, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ action: "bootstrapAccessToken", label: "System Owner" }),
   }), env);
-  const body = await response.json();
-  assert.equal(response.status, 200);
-  assert.equal(body.success, true);
-  assert.match(body.token, /^amrs_/);
-  assert.deepEqual(body.record.permissions, ["schedule", "ae", "cvcs", "admin"]);
+  assert.equal(response.status, 403);
 });
 
 test("returns a pollable top-level processing status for an existing operation", async () => {

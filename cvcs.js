@@ -53,6 +53,12 @@
       return { value, index, match, used: Number(usage[value]) || 0 };
     }).sort((left, right) => left.match - right.match || right.used - left.used || left.index - right.index).map((item) => item.value);
   }
+  function actionForReason(reason, mappings = []) {
+    const normalized = text(reason).toLowerCase();
+    if (!normalized) return null;
+    const match = (Array.isArray(mappings) ? mappings : []).find((item) => text(item.reason).toLowerCase() === normalized);
+    return match ? text(match.actionTakenNotes) : null;
+  }
   function createDefaultForm(property, now = new Date()) {
     return {
       property: PROPERTIES.includes(property) ? property : PROPERTIES[0], date: todayIso(now), location: LOCATIONS[0],
@@ -88,7 +94,7 @@
       property: requiredChoice(input.property, PROPERTIES, "Property"), model: requiredChoice(input.model, MODELS, "Model"),
       serialNo: text(input.serialNo), partsNo: text(input.partsNo), requiredPartsEn: text(input.requiredPartsEn), qty: text(input.qty),
       repairDay: text(input.repairDay), foundDay: dateInput(input.foundDay), remark: text(input.remark),
-      requestFollowUpDate: dateInput(input.requestFollowUpDate), followUpCompletedDate: dateInput(input.followUpCompletedDate),
+      requestFollowUpDate: dateInput(input.requestFollowUpDate), followUpCompletedDate: "",
       submissionId: text(input.submissionId) || text(idFactory()),
     };
     if (!record.serialNo) throw new Error("S/N is required");
@@ -212,9 +218,9 @@
             ${this.comboField("antennaStatus", "天線狀態 / Antenna Status", form.antennaStatus)}
             ${this.comboField("version", "版本 / Version", form.version)}
           </div></section>
-          <section class="cvcs-panel"><h3>維修資料</h3><div class="cvcs-grid cvcs-grid-3">
-            ${this.comboField("reason", "原因 / Reason *", form.reason)}
-            ${this.comboField("actionTakenNotes", "處理方法及備註 / Action Taken & Notes", form.actionTakenNotes, true)}
+          <section class="cvcs-panel"><div class="cvcs-section-head cvcs-maintenance-head"><h3>維修資料</h3><button type="button" data-option-edit="reasonAction">編輯原因 / 處理方法</button></div><div class="cvcs-grid cvcs-grid-3">
+            ${this.comboField("reason", "原因 / Reason *", form.reason, false, false)}
+            ${this.comboField("actionTakenNotes", "處理方法及備註 / Action Taken & Notes", form.actionTakenNotes, true, false)}
             ${this.comboField("partsChange", "更換零件 / Parts Change", form.partsChange)}
           </div></section>
           ${this.renderBrokenInput(form)}
@@ -227,8 +233,8 @@
       </div>`;
       this.bindInput();
     }
-    comboField(key, label, value, wide = false) {
-      return `<label class="${wide ? "cvcs-wide" : ""}"><span>${escapeHtml(label)}</span><div class="cvcs-inline">${this.comboInput(key, value)}<button type="button" data-option-edit="${key}" title="編輯清單">編輯</button></div></label>`;
+    comboField(key, label, value, wide = false, editable = true) {
+      return `<label class="${wide ? "cvcs-wide" : ""}"><span>${escapeHtml(label)}</span><div class="cvcs-inline">${this.comboInput(key, value)}${editable ? `<button type="button" data-option-edit="${key}" title="編輯清單">編輯</button>` : ""}</div></label>`;
     }
     comboInput(key, value) {
       return `<span class="cvcs-combo"><input id="cvcs-${key}" data-cvcs-combo="${key}" value="${escapeHtml(value)}" autocomplete="off"><span class="cvcs-suggestion-menu" id="cvcs-${key}-menu"></span></span>`;
@@ -241,7 +247,7 @@
         <label id="cvcs-repair-field"><span>維修日 / Repair Day</span><div class="cvcs-inline"><input id="cvcs-repair-day" type="date"><button id="cvcs-wait-parts" type="button">等待零件</button></div></label>
         <label><span>發現日 / Found Day</span><input id="cvcs-found-day" type="date" value="${escapeHtml(form.date)}"></label>
         <label class="cvcs-wide"><span>備註 / Remark</span><input id="cvcs-part-remark"></label>
-      </div><div class="cvcs-follow-row"><button id="cvcs-follow-toggle" type="button" aria-pressed="false">要求跟進 / Request Following Up</button><label><span>完成跟進日期</span><input id="cvcs-follow-completed" type="date"></label></div></details>`;
+      </div><div class="cvcs-follow-row"><div class="cvcs-follow-control"><button id="cvcs-follow-toggle" type="button" aria-pressed="false">要求跟進 / Request Following Up</button><span>點擊按鈕以標記需要後續跟進</span></div></div></details>`;
     }
     queueCards(queue) {
       if (!queue.length) return `<div class="cvcs-empty">未有待提交資料</div>`;
@@ -256,7 +262,7 @@
       const follow = root.document.getElementById("cvcs-follow-toggle")?.getAttribute("aria-pressed") === "true";
       const partsNo = value("cvcs-part-no");
       if (!partsNo && !follow) return null;
-      return buildBrokenPart({ property: main.property, model: main.model, serialNo: main.serialNo, partsNo, requiredPartsEn: value("cvcs-part-name"), qty: value("cvcs-part-qty"), repairDay: value("cvcs-repair-day"), foundDay: value("cvcs-found-day") || main.date, remark: value("cvcs-part-remark"), requestFollowUpDate: follow ? main.date : "", followUpCompletedDate: value("cvcs-follow-completed") });
+      return buildBrokenPart({ property: main.property, model: main.model, serialNo: main.serialNo, partsNo, requiredPartsEn: value("cvcs-part-name"), qty: value("cvcs-part-qty"), repairDay: value("cvcs-repair-day"), foundDay: value("cvcs-found-day") || main.date, remark: value("cvcs-part-remark"), requestFollowUpDate: follow ? main.date : "" });
     }
     bindInput() {
       const doc = root.document;
@@ -265,8 +271,12 @@
       this.bindPartsCombo();
       doc.querySelectorAll("[data-option-edit]").forEach((button) => button.addEventListener("click", () => this.openOptionEditor(button.dataset.optionEdit)));
       doc.getElementById("cvcs-reason")?.addEventListener("change", (event) => {
-        const match = this.options.reasonAction.find((item) => text(item.reason).toLowerCase() === text(event.target.value).toLowerCase());
-        if (match) doc.getElementById("cvcs-actionTakenNotes").value = match.actionTakenNotes;
+        const action = actionForReason(event.target.value, this.options.reasonAction);
+        if (action !== null) {
+          const input = doc.getElementById("cvcs-actionTakenNotes");
+          input.value = action;
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        }
       });
       doc.getElementById("cvcs-part-no")?.addEventListener("input", (event) => {
         const match = this.parts.find((item) => text(item.partsNo).toLowerCase() === text(event.target.value).toLowerCase());
@@ -324,7 +334,7 @@
       const doc = root.document;
       if (item.broken) {
         doc.querySelector(".cvcs-details").open = true;
-        doc.getElementById("cvcs-part-no").value = item.broken.partsNo || ""; doc.getElementById("cvcs-part-name").value = item.broken.requiredPartsEn || ""; doc.getElementById("cvcs-part-qty").value = item.broken.qty || ""; doc.getElementById("cvcs-found-day").value = dateInput(item.broken.foundDay); doc.getElementById("cvcs-part-remark").value = item.broken.remark || ""; doc.getElementById("cvcs-follow-completed").value = dateInput(item.broken.followUpCompletedDate);
+        doc.getElementById("cvcs-part-no").value = item.broken.partsNo || ""; doc.getElementById("cvcs-part-name").value = item.broken.requiredPartsEn || ""; doc.getElementById("cvcs-part-qty").value = item.broken.qty || ""; doc.getElementById("cvcs-found-day").value = dateInput(item.broken.foundDay); doc.getElementById("cvcs-part-remark").value = item.broken.remark || "";
         if (/^waiting parts$/i.test(item.broken.repairDay || "")) doc.getElementById("cvcs-wait-parts").click(); else doc.getElementById("cvcs-repair-day").value = dateInput(item.broken.repairDay);
         if (item.broken.requestFollowUpDate) doc.getElementById("cvcs-follow-toggle").click();
       }
@@ -364,12 +374,44 @@
     openOptionEditor(key) {
       const actualKey = key === "reason" || key === "actionTakenNotes" ? "reasonAction" : key;
       const paired = actualKey === "reasonAction";
-      const rows = paired ? this.options.reasonAction.map((item) => `${item.reason}\t${item.actionTakenNotes}`).join("\n") : this.optionValues(actualKey).join("\n");
-      this.openEditor({ title: paired ? "編輯原因及處理方法" : `編輯 ${key}`, note: paired ? "每行格式：原因 [Tab] 處理方法及備註" : "每行一個選項，可自行排序。", value: rows, onSave: async (value) => {
-        const options = paired ? value.split(/\r?\n/).map((line) => { const [reason, ...action] = line.split(/\t|\s*\|\s*/); return { reason: text(reason), actionTakenNotes: text(action.join(" ")) }; }).filter((item) => item.reason || item.actionTakenNotes) : uniqueStrings(value.split(/\r?\n/));
-        const loading = this.showLoading("清單儲存中，請稍等...");
-        try { const data = await this.transport.post({ action: "updateCvcsOptions", key: actualKey, options }); if (!data?.success) throw new Error(data?.message || "儲存失敗"); this.options[actualKey] = data.options || options; this.optionsLoaded = true; this.closeOverlay(); this.renderInput(); this.toast("清單已更新", "ok"); } catch (error) { this.toast(error.message || "清單儲存失敗", "err"); } finally { this.hideLoading(loading); }
+      if (paired) return this.openReasonActionEditor();
+      this.openEditor({ title: `編輯 ${key}`, note: "每行一個選項，可自行排序。", value: this.optionValues(actualKey).join("\n"), onSave: async (value) => {
+        await this.saveOptions(actualKey, uniqueStrings(value.split(/\r?\n/)));
       } });
+    }
+    async saveOptions(key, options) {
+      const loading = this.showLoading("清單儲存中，請稍等...");
+      try { const data = await this.transport.post({ action: "updateCvcsOptions", key, options }); if (!data?.success) throw new Error(data?.message || "儲存失敗"); this.options[key] = data.options || options; this.optionsLoaded = true; this.closeOverlay(); this.renderInput(); this.toast("清單已更新", "ok"); } catch (error) { this.toast(error.message || "清單儲存失敗", "err"); } finally { this.hideLoading(loading); }
+    }
+    openReasonActionEditor() {
+      const rows = this.options.reasonAction.length ? this.options.reasonAction : [{ reason: "", actionTakenNotes: "" }];
+      const body = `<p class="cvcs-overlay-note">左欄原因會自動配對同一列的處理方法及備註。可拖拉調整順序。</p><div id="cvcs-reason-action-rows" class="cvcs-paired-list">${rows.map((item, index) => this.reasonActionRow(item, index)).join("")}</div>`;
+      this.openOverlay("編輯原因 / 處理方法", body, `<button id="cvcs-paired-add" type="button">＋ 新增一行</button><button id="cvcs-paired-sort" type="button">A–Z 排列</button><button data-close type="button">取消</button><button class="cvcs-primary" id="cvcs-paired-save" type="button">儲存</button>`);
+      this.bindReasonActionRows();
+      root.document.getElementById("cvcs-paired-add").addEventListener("click", () => { const host = root.document.getElementById("cvcs-reason-action-rows"); host.insertAdjacentHTML("beforeend", this.reasonActionRow({}, host.children.length)); this.bindReasonActionRows(); host.querySelector(".cvcs-paired-row:last-child input")?.focus(); });
+      root.document.getElementById("cvcs-paired-sort").addEventListener("click", () => { const values = this.collectReasonActionRows().sort((a, b) => a.reason.localeCompare(b.reason, "en", { sensitivity: "base" })); root.document.getElementById("cvcs-reason-action-rows").innerHTML = values.map((item, index) => this.reasonActionRow(item, index)).join(""); this.bindReasonActionRows(); });
+      root.document.getElementById("cvcs-paired-save").addEventListener("click", () => this.saveOptions("reasonAction", this.collectReasonActionRows()));
+    }
+    reasonActionRow(item = {}, index = 0) {
+      return `<div class="cvcs-paired-row" data-paired-index="${index}"><button class="cvcs-paired-drag" type="button" draggable="true" aria-label="拖拉排序" title="拖拉排序">☰</button><input data-paired-field="reason" value="${escapeHtml(item.reason)}" placeholder="原因 / Reason"><input data-paired-field="action" value="${escapeHtml(item.actionTakenNotes)}" placeholder="處理方法及備註 / Action Taken & Notes"><button class="cvcs-paired-delete danger" type="button" aria-label="刪除">×</button></div>`;
+    }
+    collectReasonActionRows() {
+      return [...root.document.querySelectorAll("#cvcs-reason-action-rows .cvcs-paired-row")].map((row) => ({ reason: text(row.querySelector('[data-paired-field="reason"]')?.value), actionTakenNotes: text(row.querySelector('[data-paired-field="action"]')?.value) })).filter((item) => item.reason || item.actionTakenNotes);
+    }
+    bindReasonActionRows() {
+      const host = root.document.getElementById("cvcs-reason-action-rows"); if (!host) return;
+      let dragged = null;
+      host.querySelectorAll(".cvcs-paired-delete").forEach((button) => { button.onclick = () => { button.closest(".cvcs-paired-row")?.remove(); if (!host.children.length) host.innerHTML = this.reasonActionRow(); this.bindReasonActionRows(); }; });
+      host.querySelectorAll(".cvcs-paired-row").forEach((row) => {
+        const handle = row.querySelector(".cvcs-paired-drag");
+        handle.ondragstart = (event) => { dragged = row; row.classList.add("dragging"); event.dataTransfer.effectAllowed = "move"; };
+        handle.ondragend = () => { row.classList.remove("dragging"); dragged = null; };
+        row.ondragover = (event) => { if (!dragged || dragged === row) return; event.preventDefault(); const rect = row.getBoundingClientRect(); host.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? row : row.nextSibling); };
+        handle.onpointerdown = (event) => { if (event.pointerType === "mouse") return; dragged = row; row.classList.add("dragging"); handle.setPointerCapture(event.pointerId); event.preventDefault(); };
+        handle.onpointermove = (event) => { if (!dragged || event.pointerType === "mouse") return; const target = root.document.elementFromPoint(event.clientX, event.clientY)?.closest(".cvcs-paired-row"); if (!target || target === dragged || !host.contains(target)) return; const rect = target.getBoundingClientRect(); host.insertBefore(dragged, event.clientY < rect.top + rect.height / 2 ? target : target.nextSibling); };
+        const finish = () => { if (dragged) dragged.classList.remove("dragging"); dragged = null; };
+        handle.onpointerup = finish; handle.onpointercancel = finish;
+      });
     }
 
     renderQueryShell() {
@@ -521,6 +563,6 @@
   return {
     BROKEN_FIELDS, LOCATIONS, MODELS, PAGE_SIZES, PROPERTIES, QUARTERS, RECORD_FIELDS,
     CvcsApplication, brokenStatuses, buildBrokenPart, buildBrokenQuery, buildRecord, buildRecordQuery,
-    createApplication, createDefaultForm, rankOptions, todayIso, visibleFields,
+    actionForReason, createApplication, createDefaultForm, rankOptions, todayIso, visibleFields,
   };
 }));

@@ -1574,8 +1574,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.13-01';
-const _APP_VERSION='v1.065';
+const _APP_BUMP='2026.08.13-02';
+const _APP_VERSION='v1.066';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -1910,9 +1910,11 @@ async function saveSetup(){
   document.getElementById('setupScreen').classList.remove('show');
   setupReturnState=null;setupVerifiedId='';
   _sclMonthlySettingsLoaded=false;
-  unlockApp();syncCompanySpecificFields();syncCasinoOptions();renderCompanyMenu();
-  await refreshAccessSession();
-  showFirstPermittedPage();
+  syncCompanySpecificFields();syncCasinoOptions();renderCompanyMenu();
+  if(await refreshAccessSession()){
+    unlockApp();
+    showFirstPermittedPage();
+  }
 }
 function cancelSetup(){
   document.getElementById('setupScreen').classList.remove('show');
@@ -1936,7 +1938,8 @@ async function testConnection(){
     const kind=window.AmrsAccessControl.credentialKind(input);
     const legacyId=kind==='legacy'?extractDeployId(input):'';
     const tester=window.createDualTransport({cloudflareBaseUrl:_CLOUDFLARE_API_URL,fetchImpl:transportFetch,storage:null,accessToken:kind==='personal'?input:'',deployId:legacyId,gasUrl:legacyId?'https://script.google.com/macros/s/'+legacyId+'/exec':''});
-    const data=kind==='personal'?(await tester.ensureSession(),{success:true}):await tester.get('action=ping',{timeoutMs:30000});
+    await tester.ensureSession({forceRefresh:true});
+    const data={success:true};
     if(data.success===true){
       res.className='setupTestResult ok';
       res.textContent='✓ 連接成功！';
@@ -1974,13 +1977,12 @@ function normalizeCredentialInput(value){
 }
 function openMenu(){renderCompanyMenu();document.getElementById('menuOverlay').classList.add('show');document.getElementById('sideMenu').classList.add('show');}
 function closeMenu(){document.getElementById('menuOverlay').classList.remove('show');document.getElementById('sideMenu').classList.remove('show');}
-let _accessPermissions=hasPersonalToken()?[]:['schedule','ae','cvcs'];
+let _accessPermissions=[];
 let _cvcsApp=null,_tokenAdminApp=null,_cvcsMenuOpen=false;
 function hasAccess(permission){return window.AmrsAccessControl.hasPermission(_accessPermissions,permission);}
 function ensureFeatureApps(){
   if(!_cvcsApp&&window.AmrsCvcs)_cvcsApp=window.AmrsCvcs.createApplication({transport:_dualTransport,storage:localStorage,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
   if(!_tokenAdminApp&&window.AmrsTokenAdmin)_tokenAdminApp=window.AmrsTokenAdmin.createApplication({transport:_dualTransport,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
-  _cvcsApp?.mount();
 }
 async function refreshAccessSession(){
   if(!_dualTransport)return false;
@@ -1991,20 +1993,15 @@ async function refreshAccessSession(){
     if(hasAccess('ae'))void loadTemplateMappings();
     return true;
   }catch(error){
-    if(!hasPersonalToken()){
-      _accessPermissions=['schedule','ae','cvcs'];applyAccessPermissions();return true;
-    }
     _accessPermissions=[];applyAccessPermissions();
-    if(hasPersonalToken()){
-      document.body.classList.add('auth-locked');
-      openGasSettings();
-      const result=document.getElementById('setupTestResult');result.className='setupTestResult err';result.textContent='Token 已失效或暫時無法驗證，請聯絡管理員。';result.style.display='block';
-    }
+    document.body.classList.add('auth-locked');
+    openGasSettings();
+    const result=document.getElementById('setupTestResult');result.className='setupTestResult err';result.textContent='Token 已失效或暫時無法驗證，請聯絡管理員。';result.style.display='block';
     return false;
   }
 }
 function applyAccessPermissions(){
-  const ae=hasAccess('ae'),cvcs=hasAccess('cvcs'),schedule=hasAccess('schedule'),admin=hasAccess('admin')||_dualTransport?.getState().legacy===true;
+  const ae=hasAccess('ae'),cvcs=hasAccess('cvcs'),schedule=hasAccess('schedule'),admin=hasAccess('admin');
   document.getElementById('scheduleMenuBtn').style.display=schedule?'':'none';
   document.getElementById('companyMenu').style.display=ae?'':'none';
   ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
@@ -2029,8 +2026,7 @@ function showFirstPermittedPage(){
 }
 function showPage(page){
   const permission=window.AmrsAccessControl.pagePermission(page);
-  const legacyAdmin=page==='tokenAdmin'&&_dualTransport?.getState().legacy===true;
-  if(!hasAccess(permission)&&!legacyAdmin){showToast('此 Token 沒有使用這項功能的權限','err');return;}
+  if(!hasAccess(permission)){showToast('此 Token 沒有使用這項功能的權限','err');return;}
   if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'||page==='cvcsInput'||page==='cvcsQuery'||page==='cvcsBroken'||page==='tokenAdmin'){
     if(!hasAnyDeployId()){showToast('請先設定並測試 Token','err');openGasSettings();return;}
     if(!getDeployId())switchQueueCompany(firstConfiguredCompany());
@@ -2062,6 +2058,7 @@ function showPage(page){
   if(page==='brokenParts')loadBrokenPartsPage(1);
   if(page.startsWith('cvcs')){
     ensureFeatureApps();
+    _cvcsApp.mount();
     if(page==='cvcsInput')_cvcsApp.renderInput();
     if(page==='cvcsQuery')_cvcsApp.loadRecords(1);
     if(page==='cvcsBroken')_cvcsApp.loadBroken(1);
@@ -2734,8 +2731,10 @@ async function _checkPin(){
     if(!hasAnyDeployId()){openGasSettings();}
     else{
       if(!getDeployId()){activeCompany=firstConfiguredCompany();localStorage.setItem('_ml_company',activeCompany);renderCompanyMenu();}
-      unlockApp();
-      if(await refreshAccessSession())showFirstPermittedPage();
+      if(await refreshAccessSession()){
+        unlockApp();
+        showFirstPermittedPage();
+      }
     }
   }else{
     _pin='';_pinBusy=false;_updateDots();
@@ -5479,8 +5478,7 @@ if(localStorage.getItem('_ml_auth')===_PH){
   if(!hasAnyDeployId()){openGasSettings();}
   else{
     if(!getDeployId()){switchQueueCompany(firstConfiguredCompany());renderCompanyMenu();syncCompanySpecificFields();}
-    unlockApp();
-    void refreshAccessSession().then(ok=>{if(ok)showFirstPermittedPage();});
+    void refreshAccessSession().then(ok=>{if(ok){unlockApp();showFirstPermittedPage();}});
   }
 }
 initDashboardFilters();
