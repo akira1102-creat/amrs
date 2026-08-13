@@ -7,10 +7,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260813a">
+  <link rel="manifest" href="manifest.json?v=20260813b">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="cvcs.css?v=20260813a">
+  <link rel="stylesheet" href="cvcs.css?v=20260813b">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1047,12 +1047,13 @@
   <div class="menu-sub" id="companyMenu"></div>
   <button class="menu-item menu-cvcs-heading" id="cvcsInputMenuBtn" onclick="toggleCvcsPropertyMenu()" type="button" aria-expanded="false"><span>CVCS</span><span class="menu-chevron">▼</span></button>
   <div class="menu-sub menu-cvcs-properties" id="cvcsPropertyMenu"></div>
-  <div class="menu-section" id="dataQueryMenuSection">資料查詢</div>
+  <div class="menu-section" id="dataQueryMenuSection">AE 資料查詢</div>
   <button class="menu-item" id="dashMenuBtn" onclick="showPage('dashboard')" type="button">資料查詢</button>
   <button class="menu-item" id="monthlyStatsMenuBtn" onclick="showPage('monthlyStats')" type="button">每月統計</button>
   <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
   <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>壞零件/UOD/Hold機 列表</span><span class="menu-chevron">▼</span></button>
   <div class="menu-sub menu-collapsible" id="brokenPartsCompanyMenu"></div>
+  <div class="menu-section" id="cvcsQueryMenuSection">CVCS 資料查詢</div>
   <button class="menu-item" id="cvcsQueryMenuBtn" onclick="showPage('cvcsQuery')" type="button">CVCS 資料查詢</button>
   <button class="menu-item" id="cvcsBrokenMenuBtn" onclick="showPage('cvcsBroken')" type="button">CVCS 壞零件 / 跟進</button>
   <div class="menu-section" id="adminMenuSection" style="display:none">系統管理</div>
@@ -1574,8 +1575,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.13-02';
-const _APP_VERSION='v1.066';
+const _APP_BUMP='2026.08.13-03';
+const _APP_VERSION='v1.067';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2007,7 +2008,7 @@ function applyAccessPermissions(){
   ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
   document.getElementById('cvcsInputMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsPropertyMenu').style.display=cvcs?'':'none';
   document.getElementById('cvcsQueryMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsBrokenMenuBtn').style.display=cvcs?'':'none';
-  document.getElementById('dataInputMenuSection').style.display=(ae||cvcs)?'':'none';document.getElementById('dataQueryMenuSection').style.display=(ae||cvcs)?'':'none';
+  document.getElementById('dataInputMenuSection').style.display=(ae||cvcs)?'':'none';document.getElementById('dataQueryMenuSection').style.display=ae?'':'none';document.getElementById('cvcsQueryMenuSection').style.display=cvcs?'':'none';
   document.getElementById('adminMenuSection').style.display=admin?'':'none';document.getElementById('tokenAdminMenuBtn').style.display=admin?'':'none';
   renderCvcsPropertyMenu();
 }

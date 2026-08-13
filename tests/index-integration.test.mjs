@@ -34,3 +34,20 @@ test("Token management has no legacy administrator bootstrap", () => {
   const source = fs.readFileSync(new URL("../token-admin.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /bootstrapAccessToken|token-bootstrap|async bootstrap\(/);
 });
+
+test("sidebar separates AE and CVCS query sections", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /id="dataQueryMenuSection">AE 資料查詢</);
+  assert.match(html, /id="cvcsQueryMenuSection">CVCS 資料查詢</);
+  const cvcsSection = html.indexOf('id="cvcsQueryMenuSection"');
+  assert.ok(cvcsSection > html.indexOf('id="brokenPartsCompanyMenu"'));
+  assert.ok(cvcsSection < html.indexOf('id="cvcsQueryMenuBtn"'));
+});
+
+test("CVCS input shows one Property badge below its title", () => {
+  const source = fs.readFileSync(new URL("../cvcs.js", import.meta.url), "utf8");
+  const renderInput = source.match(/renderInput\(\) \{([\s\S]*?)\n    \}\n    comboField/)?.[1] || "";
+  assert.match(renderInput, /<h2>CVCS 資料輸入<\/h2><span class="cvcs-property-badge">/);
+  assert.doesNotMatch(renderInput, /<p>\$\{escapeHtml\(this\.activeProperty\)\}<\/p>/);
+  assert.equal((renderInput.match(/cvcs-property-badge/g) || []).length, 1);
+});

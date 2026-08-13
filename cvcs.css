@@ -1,7 +1,7 @@
 .cvcs-shell{max-width:1180px;margin:0 auto;color:#e6edf3}
 .cvcs-page-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
 .cvcs-page-head h2{margin:0;font-size:20px;letter-spacing:0}.cvcs-page-head p{margin:5px 0 0;color:#8b949e;font-size:13px}
-.cvcs-property-badge{padding:8px 13px;border:1px solid #388bfd;border-radius:8px;background:#0d2d5a;color:#79c0ff;font-weight:800}
+.cvcs-property-badge{display:inline-flex;margin-top:8px;padding:7px 12px;border:1px solid #388bfd;border-radius:8px;background:#0d2d5a;color:#79c0ff;font-weight:800}
 .cvcs-input-layout{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:18px;align-items:start}
 .cvcs-main-column,.cvcs-queue-column{display:flex;flex-direction:column;gap:14px}.cvcs-queue-column{position:sticky;top:16px}
 .cvcs-panel{padding:16px;border:1px solid #30363d;border-radius:8px;background:#161b22}.cvcs-panel h3{margin:0 0 13px;font-size:14px;color:#e6edf3}

@@ -203,7 +203,7 @@
       const form = this.forms[this.activeProperty] || createDefaultForm(this.activeProperty);
       const queue = this.getQueue();
       host.innerHTML = `<div class="cvcs-shell">
-        <div class="cvcs-page-head"><div><h2>CVCS 資料輸入</h2><p>${escapeHtml(this.activeProperty)}</p></div><span class="cvcs-property-badge">${escapeHtml(this.activeProperty)}</span></div>
+        <div class="cvcs-page-head"><div><h2>CVCS 資料輸入</h2><span class="cvcs-property-badge">${escapeHtml(this.activeProperty)}</span></div></div>
         <div class="cvcs-input-layout"><div class="cvcs-main-column">
           <section class="cvcs-panel"><h3>基本資料</h3><div class="cvcs-grid cvcs-grid-4">
             <label><span>日期 / Date *</span><input id="cvcs-date" type="date" required value="${escapeHtml(form.date)}"></label>

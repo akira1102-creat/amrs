@@ -1,4 +1,4 @@
-const CACHE = 'amrs-v1066';
+const CACHE = 'amrs-v1067';
 const ASSETS = ['./', './index.html', './cloud-api.js', './access-control.js', './cvcs.js', './cvcs.css', './token-admin.js', './manifest.json', './sw.js'];
 
 self.addEventListener('message', e => {
