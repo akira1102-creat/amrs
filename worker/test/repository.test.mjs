@@ -243,6 +243,42 @@ test("implements all 14 GET action contracts against synthetic Sheets", async ()
   assert.equal((await repository.getAction({ action: "aaTags", company: "MGM" })).tags[0].aaTag, "TAE0051");
 });
 
+test("schedule overview keeps an afternoon remark beyond the legacy T-column range", async () => {
+  const headers = Array.from({ length: 23 }, (_, index) => `Person ${index}`);
+  headers[0] = "Day";
+  headers[1] = "Marco";
+  headers[20] = "Marco";
+  headers[22] = "Remark";
+  const row = Array(23).fill("");
+  row[0] = 4;
+  row[20] = "VML";
+  row[22] = "Afternoon note";
+  const harness = createSheetsHarness({ ...companyData, schedule: [{ title: "2026-AUG", values: [[], [], headers, row] }] });
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+
+  const result = await repository.getAction({ action: "scheduleOverview", from: "2026/08/04", days: "1", refresh: "1" });
+
+  assert.equal(result.days[0].remarks.pm, "Afternoon note");
+});
+
+test("updates the requested schedule remark cell and invalidates the schedule read path", async () => {
+  const headers = Array.from({ length: 23 }, (_, index) => `Person ${index}`);
+  headers[0] = "Day";
+  headers[1] = "Marco";
+  headers[20] = "Marco";
+  headers[22] = "Remark";
+  const row = Array(23).fill("");
+  row[0] = 4;
+  row[20] = "VML";
+  const harness = createSheetsHarness({ ...companyData, schedule: [{ title: "2026-AUG", values: [[], [], headers, row] }] });
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+
+  const result = await repository.postAction({ action: "updateScheduleRemark", month: "2608", date: "2026/08/04", shift: "pm", remark: "Updated afternoon note" });
+
+  assert.equal(result.success, true);
+  assert.equal(harness.sheets.get("schedule:2026-AUG").values[3][22], "Updated afternoon note");
+});
+
 test("finds same non-PM serial and reason within the requested 30-day window", () => {
   const rows = [
     ["Venetian", "2026/08/04", "2608", "SAE", "1234", "Hardware Problem", "Repair", "", "", ""],

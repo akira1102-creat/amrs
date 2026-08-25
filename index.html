@@ -666,6 +666,8 @@
     .schedule-period+.schedule-period{margin-top:20px}
     .schedule-period-head{display:flex;align-items:center;gap:8px;color:#c9d1d9;font-size:13px;font-weight:900}
     .schedule-period-head::after{content:"";height:1px;flex:1;background:#30363d}
+    .schedule-period-edit{flex:0 0 auto;padding:4px 7px;border:1px solid #30363d;border-radius:7px;background:#21262d;color:#8b949e;font:inherit;font-size:10px;font-weight:800;cursor:pointer}
+    .schedule-period-edit:hover,.schedule-period-edit:active{border-color:#58a6ff;color:#79c0ff}
     .schedule-period .schedule-items{margin-top:9px}
     .schedule-items{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px;margin-top:14px}
     .schedule-assignment{width:fit-content;max-width:100%;min-width:150px;border:1px solid #30363d;border-radius:9px;background:#161b22;overflow:hidden}
@@ -733,9 +735,14 @@
     .parts-list-jp{color:#e6edf3;margin-top:4px}
     .parts-list-en{color:#8b949e;margin-top:2px}
     .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
-    #bulkEditModal,#bpBulkEditModal,#repeatRecordsModal,#exportModal,#schedulePeopleModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
-    #bulkEditModal.show,#bpBulkEditModal.show,#repeatRecordsModal.show,#exportModal.show,#schedulePeopleModal.show{display:flex}
+    #bulkEditModal,#bpBulkEditModal,#repeatRecordsModal,#exportModal,#schedulePeopleModal,#scheduleRemarkModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #bulkEditModal.show,#bpBulkEditModal.show,#repeatRecordsModal.show,#exportModal.show,#schedulePeopleModal.show,#scheduleRemarkModal.show{display:flex}
     #schedulePeopleModal{z-index:8910}
+    #scheduleRemarkModal{z-index:8920}
+    .schedule-remark-box{width:min(520px,96vw)}
+    .schedule-remark-input{width:100%;min-height:150px;padding:11px 12px;border:1px solid #30363d;border-radius:10px;background:#0d1117;color:#e6edf3;font:inherit;font-size:14px;line-height:1.5;resize:vertical}
+    .schedule-remark-input:focus{outline:none;border-color:#388bfd}
+    .schedule-remark-status{min-height:18px;margin-top:8px;color:#8b949e;font-size:12px}
     .work-modal-box{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
     .export-modal-box{width:min(520px,96vw)}
     .export-select-all{display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#e6edf3;font-size:13px;font-weight:800;cursor:pointer}
@@ -1024,6 +1031,17 @@
     <div class="template-head"><div class="template-title">當日安排人員</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeSchedulePeople()" type="button">關閉</button></div>
     <div class="schedule-people-context" id="schedulePeopleContext"></div>
     <div id="schedulePeopleBody"><div class="schedule-people-empty">載入中...</div></div>
+  </div>
+</div>
+
+<div id="scheduleRemarkModal" onclick="if(event.target===this)closeScheduleRemark()">
+  <div class="work-modal-box schedule-remark-box">
+    <div class="template-head"><div class="template-title" id="scheduleRemarkTitle">修改備忘</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeScheduleRemark()" type="button">關閉</button></div>
+    <div class="template-note" id="scheduleRemarkContext"></div>
+    <label for="scheduleRemarkInput">備忘內容</label>
+    <textarea class="schedule-remark-input" id="scheduleRemarkInput" maxlength="2000" placeholder="可留空以清除備忘"></textarea>
+    <div class="schedule-remark-status" id="scheduleRemarkStatus"></div>
+    <div class="template-actions"><button class="confirm-cancel" onclick="closeScheduleRemark()" type="button">取消</button><button class="template-save" id="scheduleRemarkSaveBtn" onclick="saveScheduleRemark()" type="button">儲存</button></div>
   </div>
 </div>
 
@@ -1575,8 +1593,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.13-04';
-const _APP_VERSION='v1.068';
+const _APP_BUMP='2026.08.25-01';
+const _APP_VERSION='v1.069';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2069,7 +2087,7 @@ function showPage(page){
 const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v3_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v2',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
 const SCHEDULE_INITIAL_DAYS=8,SCHEDULE_EXTENDED_DAYS=35;
 const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
-let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null,_scheduleCutoffTimer=null;
+let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null,_scheduleCutoffTimer=null,_scheduleRemarkContext=null;
 const SCHEDULE_MACHINE_COUNTS_FRESH_MS=5*60*1000;
 let _scheduleMachineCounts={},_scheduleMachineCountsMonth='',_scheduleMachineCountCompanies=new Set(),_scheduleMachineCountsLoadedAt=0,_scheduleMachineCountsRequest=null;
 function scheduleLocalIso(date=new Date()){
@@ -2201,6 +2219,42 @@ async function requestScheduleRange(from,days,force,signal){
   if(!data.success||!Array.isArray(data.days))throw new Error(data.message||'工作安排載入失敗');
   saveScheduleCache(from,days,data);return data;
 }
+function scheduleRemarkFromLoadedData(date,shift){
+  const days=[...(_scheduleTodayData?.days||[]),...(_scheduleWeekDays||[])],day=days.find(item=>item?.date===date);
+  return day?.remarks?.[shift]||'';
+}
+function closeScheduleRemark(){
+  _scheduleRemarkContext=null;
+  document.getElementById('scheduleRemarkModal').classList.remove('show');
+}
+function openScheduleRemark(date,shift){
+  if(!date||!['am','pm'].includes(shift))return;
+  const label=shift==='pm'?'下午':'上午',remark=scheduleRemarkFromLoadedData(date,shift);
+  _scheduleRemarkContext={date,shift};
+  document.getElementById('scheduleRemarkTitle').textContent=`修改${label}備忘`;
+  document.getElementById('scheduleRemarkContext').textContent=`${scheduleDateLabel(date)} · ${label}`;
+  document.getElementById('scheduleRemarkInput').value=remark;
+  document.getElementById('scheduleRemarkStatus').textContent='';
+  document.getElementById('scheduleRemarkSaveBtn').disabled=false;
+  document.getElementById('scheduleRemarkSaveBtn').textContent='儲存';
+  document.getElementById('scheduleRemarkModal').classList.add('show');
+  document.getElementById('scheduleRemarkInput').focus();
+}
+async function saveScheduleRemark(){
+  const context=_scheduleRemarkContext,input=document.getElementById('scheduleRemarkInput'),button=document.getElementById('scheduleRemarkSaveBtn'),status=document.getElementById('scheduleRemarkStatus');
+  if(!context||!input||!button)return;
+  const remark=input.value.trim(),month=scheduleMonthCodeFromValue(context.date.slice(0,7));
+  button.disabled=true;button.textContent='儲存中...';status.textContent='正在更新工作安排...';
+  try{
+    const data=await postGasJson({action:'updateScheduleRemark',month,date:context.date,shift:context.shift,remark});
+    if(!data?.success)throw new Error(data?.message||'備忘更新失敗');
+    closeScheduleRemark();
+    await loadScheduleOverview(true);
+    showToast('✓ 工作安排備忘已更新');
+  }catch(error){
+    button.disabled=false;button.textContent='儲存';status.textContent=error.message||'備忘更新失敗';showToast(status.textContent,'err');
+  }
+}
 function normalizeScheduleVenue(company,venue){
   const value=schedulePeopleVenue(venue);
   return company==='SJM'&&/^l['’ʼ`´]arc$/i.test(value)?'L’Arc':value;
@@ -2272,7 +2326,8 @@ function renderSchedulePeriod(label,shift,items,date,showMachineCount=false,rema
   if(!shiftItems.length&&!remark)return '';
   const remarkHtml=remark?`<div class="schedule-period-remark"><span class="schedule-period-remark-label">備忘</span>${esc(remark)}</div>`:'';
   const itemsHtml=shiftItems.length?shiftItems.map(item=>renderScheduleAssignment(item,date,shift,showMachineCount)).join(''):'<div class="schedule-empty">沒有安排</div>';
-  return `<section class="schedule-period"><div class="schedule-period-head">${label}</div><div class="schedule-period-content${remark?' has-remark':''}">${remarkHtml}<div class="schedule-items">${itemsHtml}</div></div></section>`;
+  const editButton=`<button class="schedule-period-edit" type="button" onclick="openScheduleRemark('${date}','${shift}')">修改備忘</button>`;
+  return `<section class="schedule-period"><div class="schedule-period-head"><span>${label}</span>${editButton}</div><div class="schedule-period-content${remark?' has-remark':''}">${remarkHtml}<div class="schedule-items">${itemsHtml}</div></div></section>`;
 }
 function renderScheduleItems(items,date,showMachineCount=false,remarks={}){
   const periods=renderSchedulePeriod('上午','am',items,date,showMachineCount,remarks?.am||'')+renderSchedulePeriod('下午','pm',items,date,showMachineCount,remarks?.pm||'');

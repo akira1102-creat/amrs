@@ -35,6 +35,7 @@ import {
   recordsMatch,
   scheduleMonthCode,
   scheduleOverviewFromRows,
+  scheduleRemarkColumns,
   scheduleSheetName,
   validateEditedRecord,
   validateHoldDates,
@@ -700,9 +701,16 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!sheet) return null;
     const scope = `schedule:${monthCode}`;
     const values = await cached(memory, db, cacheAdapter, scope, `${config.scheduleSheetId}:${sheet.title}`,
-      () => readValues(config.scheduleSheetId, sheet.title, "A3:T"),
+      () => readValues(config.scheduleSheetId, sheet.title, `A3:${columnNumberToA1(Math.max(20, Number(sheet.gridProperties?.columnCount) || 0))}`),
       { refresh: options.refresh, cache: options.cache !== false, ttlMs: DEFAULT_CACHE_TTL_MS, now });
-    return { sheetName: sheet.title, headers: values[0] || [], rows: values.slice(1) };
+    return {
+      spreadsheetId: config.scheduleSheetId,
+      sheetId: sheet.sheetId,
+      sheetName: sheet.title,
+      headerRow: 3,
+      headers: values[0] || [],
+      rows: values.slice(1),
+    };
   }
 
   async function mainRowsForCompany(company, options = {}) {
@@ -835,6 +843,41 @@ export function createRepository(env = {}, dependencies = {}) {
       now: new Date(nowMs(now)),
       timeZone: config.timeZone,
     }, scheduleSheets);
+  }
+
+  async function invalidateSchedule(monthCode) {
+    await Promise.all([
+      invalidateCache(db, memory, cacheAdapter, `schedule:${monthCode}`, now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-base", now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-all", now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-machine-counts", now),
+    ]);
+  }
+
+  async function updateScheduleRemark(payload = {}) {
+    const monthCode = normalizeMonthlyCode(payload.month, new Date(nowMs(now)), config.timeZone);
+    const date = normalizeDateParam(payload.date, config.timeZone);
+    if (!date) throw Object.assign(new Error("Invalid schedule date"), { status: 400 });
+    const shift = text(payload.shift).toLowerCase();
+    if (shift !== "am" && shift !== "pm") throw Object.assign(new Error("Invalid schedule shift"), { status: 400 });
+    const remark = String(payload.remark == null ? "" : payload.remark).trim();
+    if (remark.length > 2000) throw Object.assign(new Error("Schedule remark is too long"), { status: 400 });
+    const table = await readScheduleTable(monthCode, { refresh: true, cache: false });
+    if (!table) throw Object.assign(new Error(`Schedule sheet ${scheduleSheetName(monthCode)} was not found`), { status: 404 });
+    const day = Number(date.slice(-2));
+    const rowIndex = table.rows.findIndex((row) => Number(text(row?.[0])) === day);
+    if (rowIndex < 0) throw Object.assign(new Error(`Schedule date ${date} was not found`), { status: 404 });
+    const remarkColumn = scheduleRemarkColumns(table.headers)[shift].remark;
+    if (remarkColumn < 0) throw Object.assign(new Error(`The ${shift.toUpperCase()} schedule remark column was not found`), { status: 400 });
+    const rowNumber = table.headerRow + 1 + rowIndex;
+    await writeValues(
+      table.spreadsheetId,
+      table.sheetName,
+      `${columnNumberToA1(remarkColumn + 1)}${rowNumber}`,
+      [[remark]],
+    );
+    await invalidateSchedule(monthCode);
+    return { success: true, monthCode, date, shift, remark };
   }
 
   async function getAction(params = {}) {
@@ -1212,6 +1255,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!Array.isArray(payload) && payload.action === "bulkUpdateBrokenPartsRecords") return bulkUpdateBrokenPartsRecords(payload);
     if (!Array.isArray(payload) && payload.action === "ensureBrokenPartsSchema") return ensureBrokenPartsSchema();
     if (!Array.isArray(payload) && payload.action === "updateMonthlySettings") return updateMonthlySettings(payload);
+    if (!Array.isArray(payload) && payload.action === "updateScheduleRemark") return updateScheduleRemark(payload);
     if (!Array.isArray(payload) && payload.action === "bulkUpdateRecords") return bulkUpdateRecords(payload);
     if (!Array.isArray(payload) && payload.action === "submitRecords") {
       const repaired = await updateBrokenRepairDays(payload.brokenPartsRepairs || []);
@@ -1270,6 +1314,7 @@ export function createRepository(env = {}, dependencies = {}) {
     monthlyCompany,
     monthlySubset,
     scheduleOverview,
+    updateScheduleRemark,
     findSubmissionIds,
     invalidateCompany,
     readMainTable,

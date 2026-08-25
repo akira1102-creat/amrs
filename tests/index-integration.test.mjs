@@ -63,3 +63,10 @@ test("all frontend assets use one release URL so an old worker cannot mix JavaSc
     assert.match(worker, new RegExp(`${asset.replace(".", "\\.")}\\?v=${release}`));
   }
 });
+
+test("schedule remarks expose edit controls for both shifts", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /updateScheduleRemark/);
+  assert.match(html, /openScheduleRemark\('\$\{date\}','\$\{shift\}'\)/);
+  assert.match(html, /shift==='pm'\?'下午':'上午'/);
+});

@@ -22,6 +22,12 @@ test("GAS exposes every CVCS read and write action used by Worker", { skip: !gas
   actions.forEach((action) => assert.ok(gasCode.includes(`'${action}'`) || gasCvcs.includes(`'${action}'`), action));
 });
 
+test("GAS keeps the schedule remark write path and full-width afternoon columns", { skip: !gasAvailable }, () => {
+  assert.match(gasCode, /data\.action === 'updateScheduleRemark'/);
+  assert.match(gasCode, /function updateScheduleRemark\(params\)/);
+  assert.match(gasCode, /Math\.max\(20, sheet\.getMaxColumns\(\)\)/);
+});
+
 test("GAS bootstrap declares the approved nine visible CVCS worksheets and hidden identity headers", { skip: !gasAvailable }, () => {
   const source = fs.readFileSync(gasCvcsPath, "utf8");
   [
