@@ -36,6 +36,8 @@ import {
   scheduleMonthCode,
   scheduleOverviewFromRows,
   scheduleSheetName,
+  scheduleAssignmentWithVenue,
+  scheduleAssignmentWithoutVenue,
   scheduleVenueEntriesInText,
   scheduleVenueLink,
   validateEditedRecord,
@@ -333,6 +335,16 @@ test("maps separate AM and PM schedule remarks from their sections", () => {
   assert.deepEqual(overview.days[0].remarks, { am: "Morning note", pm: "Afternoon note" });
   assert.deepEqual(overview.days[0].items[0].am.map((person) => person.name), ["Marco", "Alex"]);
   assert.deepEqual(overview.days[0].items[0].pm.map((person) => person.name), ["Marco", "Bea"]);
+});
+
+test("exposes shift-specific staff options and removes only the selected venue", () => {
+  const headers = ["Day", "Marco", "Alex", "Remark", "Marco", "Bea", "Remark"];
+  const monday = ["3", "VML / LON", "", "", "VML", "LON", ""];
+  const overview = scheduleOverviewFromRows({ from: "2026/08/03", days: 1 }, { "2608": [headers, monday] });
+  assert.deepEqual(overview.days[0].people, { am: ["Marco", "Alex"], pm: ["Marco", "Bea"] });
+  assert.equal(scheduleAssignmentWithoutVenue("VML / LON", "Venetian"), "LON");
+  assert.equal(scheduleAssignmentWithoutVenue("VML*", "Venetian"), "");
+  assert.equal(scheduleAssignmentWithVenue("LON", "Venetian"), "LON / VML");
 });
 
 test("combines monthly counts, targets, and schedule visits", () => {

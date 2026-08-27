@@ -279,6 +279,30 @@ test("updates the requested schedule remark cell and invalidates the schedule re
   assert.equal(harness.sheets.get("schedule:2026-AUG").values[3][22], "Updated afternoon note");
 });
 
+test("updates only the selected schedule shift and venue personnel", async () => {
+  const headers = ["Day", "Marco", "Alex", "Remark", "Marco", "Bea", "Remark"];
+  const row = [4, "VML / LON", "VML", "", "VML", "LON", ""];
+  const harness = createSheetsHarness({ ...companyData, schedule: [{ title: "2026-AUG", values: [[], [], headers, row] }] });
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+
+  const result = await repository.postAction({
+    action: "updateSchedulePeople",
+    month: "2608",
+    date: "2026/08/04",
+    shift: "am",
+    company: "SCL",
+    venue: "Venetian",
+    people: ["Alex"],
+  });
+
+  assert.equal(result.success, true);
+  const saved = harness.sheets.get("schedule:2026-AUG").values[3];
+  assert.equal(saved[1], "LON");
+  assert.equal(saved[2], "VML");
+  assert.equal(saved[4], "VML");
+  assert.equal(saved[5], "LON");
+});
+
 test("finds same non-PM serial and reason within the requested 30-day window", () => {
   const rows = [
     ["Venetian", "2026/08/04", "2608", "SAE", "1234", "Hardware Problem", "Repair", "", "", ""],

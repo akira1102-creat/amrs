@@ -547,6 +547,26 @@
     .schedule-people-names{display:flex;flex-wrap:wrap;gap:7px}
     .schedule-people-name{padding:7px 10px;border:1px solid #30363d;border-radius:8px;background:#0d1117;color:#e6edf3;font-size:13px;font-weight:800}
     .schedule-people-empty{padding:20px 8px;color:#8b949e;font-size:13px;text-align:center}
+    .schedule-assignment[data-schedule-edit]{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}
+    .schedule-assignment[data-schedule-edit]:hover,.schedule-assignment[data-schedule-edit]:focus-visible{border-color:#58a6ff;box-shadow:0 0 0 2px rgba(56,139,253,.18);outline:none}
+    .schedule-people-edit-box{width:min(460px,96vw)}
+    .schedule-people-location{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-2px 0 14px;padding:10px 12px;border:1px solid #30363d;border-radius:10px;background:#0d1117}
+    .schedule-people-location-label{color:#8b949e;font-size:11px;font-weight:800}
+    .schedule-people-location-value{color:#e6edf3;font-size:14px;font-weight:900;text-align:right}
+    .schedule-people-editor-label{margin-bottom:8px;color:#8b949e;font-size:12px;font-weight:800}
+    .schedule-people-editor-current{display:flex;flex-wrap:wrap;gap:7px;min-height:42px;padding:9px;border:1px solid #30363d;border-radius:10px;background:#0d1117}
+    .schedule-people-editor-empty{padding:3px;color:#484f58;font-size:12px}
+    .schedule-people-editor-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid #1f6feb;border-radius:8px;background:#0d203d;color:#e6edf3;font-size:12px;font-weight:800}
+    .schedule-people-remove{width:20px;height:20px;padding:0;border:1px solid #388bfd;border-radius:50%;background:transparent;color:#79c0ff;font-size:14px;line-height:1;cursor:pointer}
+    .schedule-people-remove:hover,.schedule-people-remove:active{background:#1f6feb;color:#fff}
+    .schedule-people-add{width:100%;margin-top:10px;padding:9px 11px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#79c0ff;font-size:12px;font-weight:800;text-align:left;cursor:pointer}
+    .schedule-people-add:hover,.schedule-people-add:active{border-color:#58a6ff;color:#fff}
+    .schedule-people-options{display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px;padding:8px;border:1px solid #30363d;border-radius:10px;background:#0d1117}
+    .schedule-people-options.show{display:grid}
+    .schedule-people-option{min-width:0;padding:8px 9px;border:1px solid #30363d;border-radius:8px;background:#161b22;color:#e6edf3;font-size:12px;font-weight:800;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+    .schedule-people-option:hover,.schedule-people-option:active{border-color:#58a6ff;background:#0d203d;color:#fff}
+    .schedule-people-option:disabled{opacity:.45;cursor:default}
+    .schedule-people-edit-status{min-height:18px;margin-top:8px;color:#8b949e;font-size:12px}
     .dash-pager{display:none;align-items:center;justify-content:center;gap:10px;margin-top:12px}
     .dash-pager.show{display:flex}
     .dash-page-info{font-size:12px;color:#8b949e;font-weight:700;min-width:76px;text-align:center}
@@ -735,10 +755,11 @@
     .parts-list-jp{color:#e6edf3;margin-top:4px}
     .parts-list-en{color:#8b949e;margin-top:2px}
     .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
-    #bulkEditModal,#bpBulkEditModal,#repeatRecordsModal,#exportModal,#schedulePeopleModal,#scheduleRemarkModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
-    #bulkEditModal.show,#bpBulkEditModal.show,#repeatRecordsModal.show,#exportModal.show,#schedulePeopleModal.show,#scheduleRemarkModal.show{display:flex}
+    #bulkEditModal,#bpBulkEditModal,#repeatRecordsModal,#exportModal,#schedulePeopleModal,#schedulePeopleEditModal,#scheduleRemarkModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #bulkEditModal.show,#bpBulkEditModal.show,#repeatRecordsModal.show,#exportModal.show,#schedulePeopleModal.show,#schedulePeopleEditModal.show,#scheduleRemarkModal.show{display:flex}
     #schedulePeopleModal{z-index:8910}
-    #scheduleRemarkModal{z-index:8920}
+    #schedulePeopleEditModal{z-index:8920}
+    #scheduleRemarkModal{z-index:8930}
     .schedule-remark-box{width:min(520px,96vw)}
     .schedule-remark-input{width:100%;min-height:150px;padding:11px 12px;border:1px solid #30363d;border-radius:10px;background:#0d1117;color:#e6edf3;font:inherit;font-size:14px;line-height:1.5;resize:vertical}
     .schedule-remark-input:focus{outline:none;border-color:#388bfd}
@@ -1031,6 +1052,20 @@
     <div class="template-head"><div class="template-title">當日安排人員</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeSchedulePeople()" type="button">關閉</button></div>
     <div class="schedule-people-context" id="schedulePeopleContext"></div>
     <div id="schedulePeopleBody"><div class="schedule-people-empty">載入中...</div></div>
+  </div>
+</div>
+
+<div id="schedulePeopleEditModal" onclick="if(event.target===this)closeSchedulePeopleEditor()">
+  <div class="work-modal-box schedule-people-edit-box">
+    <div class="template-head"><div class="template-title">修改工作人員</div><button class="confirm-cancel" style="flex:0 0 auto;padding:8px 12px" onclick="closeSchedulePeopleEditor()" type="button">關閉</button></div>
+    <div class="schedule-people-context" id="schedulePeopleEditContext"></div>
+    <div class="schedule-people-location"><span class="schedule-people-location-label">地點（只讀）</span><strong class="schedule-people-location-value" id="schedulePeopleEditLocation">—</strong></div>
+    <div class="schedule-people-editor-label">目前人員</div>
+    <div class="schedule-people-editor-current" id="schedulePeopleEditCurrent"></div>
+    <button class="schedule-people-add" id="schedulePeopleAddBtn" onclick="toggleSchedulePeopleOptions()" type="button">＋ 新增人員</button>
+    <div class="schedule-people-options" id="schedulePeopleEditOptions"></div>
+    <div class="schedule-people-edit-status" id="schedulePeopleEditStatus"></div>
+    <div class="template-actions"><button class="confirm-cancel" onclick="closeSchedulePeopleEditor()" type="button">取消</button><button class="template-save" id="schedulePeopleEditSaveBtn" onclick="saveSchedulePeopleEditor()" type="button">儲存</button></div>
   </div>
 </div>
 
@@ -1593,8 +1628,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.25-01';
-const _APP_VERSION='v1.069';
+const _APP_BUMP='2026.08.27-01';
+const _APP_VERSION='v1.070';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -1996,6 +2031,37 @@ function normalizeCredentialInput(value){
 }
 function openMenu(){renderCompanyMenu();document.getElementById('menuOverlay').classList.add('show');document.getElementById('sideMenu').classList.add('show');}
 function closeMenu(){document.getElementById('menuOverlay').classList.remove('show');document.getElementById('sideMenu').classList.remove('show');}
+let _mobileMenuSwipe=null;
+function isMobileMenuGesture(){return document.documentElement.classList.contains('mob')||!!window.matchMedia?.('(max-width:768px)')?.matches;}
+function initMobileMenuSwipe(){
+  document.addEventListener('touchstart',event=>{
+    if(!isMobileMenuGesture())return;
+    const touch=event.touches?.[0],menu=document.getElementById('sideMenu');if(!touch||!menu)return;
+    const menuOpen=menu.classList.contains('show');
+    if(menuOpen&&!menu.contains(event.target))return;
+    if(!menuOpen&&touch.clientX > 24)return;
+    _mobileMenuSwipe={x:touch.clientX,y:touch.clientY,open:menuOpen,cancel:false,locked:false};
+  },{passive:true});
+  document.addEventListener('touchmove',event=>{
+    const state=_mobileMenuSwipe,touch=event.touches?.[0];if(!state||!touch||state.cancel)return;
+    const dx=touch.clientX-state.x,dy=touch.clientY-state.y;
+    if(Math.abs(dy)>Math.abs(dx)+8){state.cancel=true;return;}
+    if(Math.abs(dx)<12)return;
+    state.locked=true;
+    const validDirection=state.open?dx<0:dx>0;
+    if(validDirection&&Math.abs(dx)>=30)event.preventDefault();
+  },{passive:false});
+  document.addEventListener('touchend',event=>{
+    const state=_mobileMenuSwipe;_mobileMenuSwipe=null;if(!state||state.cancel||!state.locked)return;
+    const touch=event.changedTouches?.[0];if(!touch)return;
+    const dx=touch.clientX-state.x,dy=touch.clientY-state.y;
+    if(Math.abs(dx)<56||Math.abs(dx)<=Math.abs(dy))return;
+    if(state.open&&dx<0)closeMenu();
+    if(!state.open&&dx>0)openMenu();
+  },{passive:true});
+  document.addEventListener('touchcancel',()=>{_mobileMenuSwipe=null;},{passive:true});
+}
+initMobileMenuSwipe();
 let _accessPermissions=[];
 let _cvcsApp=null,_tokenAdminApp=null,_cvcsMenuOpen=false;
 function hasAccess(permission){return window.AmrsAccessControl.hasPermission(_accessPermissions,permission);}
@@ -2084,10 +2150,10 @@ function showPage(page){
   }
   if(page==='tokenAdmin'){ensureFeatureApps();_tokenAdminApp.mount();}
 }
-const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v3_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v2',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
+const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v4_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v3',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
 const SCHEDULE_INITIAL_DAYS=8,SCHEDULE_EXTENDED_DAYS=35;
 const SCHEDULE_FRESH_MS=2*60*1000,SCHEDULE_FALLBACK_MS=7*24*60*60*1000;
-let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null,_scheduleCutoffTimer=null,_scheduleRemarkContext=null;
+let _scheduleAnchor='',_scheduleTodayData=null,_scheduleWeekDays=[],_scheduleRequest=null,_scheduleCutoffTimer=null,_scheduleRemarkContext=null,_schedulePeopleEditContext=null;
 const SCHEDULE_MACHINE_COUNTS_FRESH_MS=5*60*1000;
 let _scheduleMachineCounts={},_scheduleMachineCountsMonth='',_scheduleMachineCountCompanies=new Set(),_scheduleMachineCountsLoadedAt=0,_scheduleMachineCountsRequest=null;
 function scheduleLocalIso(date=new Date()){
@@ -2314,9 +2380,11 @@ function renderScheduleAssignment(item,date,shift,showMachineCount=false){
   const machineCountExcluded=!!item.machineCountExcluded?.[shift]||/\*\s*$/.test(String(item.title||''));
   const machines=!machineCountExcluded&&showMachineCount&&linked&&itemMonthCode===_scheduleMachineCountsMonth?_scheduleMachineCounts[scheduleMachineCountKey(company,venue)]:null;
   const staleMachineCount=machines!=null&&scheduleMachineCountIsStale(date,shift);
-  const machinesHtml=machines!=null?`<button class="schedule-machine-count${staleMachineCount?' stale':''}" type="button" onclick="showPage('monthlyStats')" aria-label="查看每月統計，餘下每次需做 ${machines} 台"><strong>${machines}</strong> 台</button>`:'';
-  const companyHtml=linked&&!leaveLabel?`<button class="schedule-company schedule-company-link" data-company="${esc(company)}" data-venue="${esc(venue)}" data-date="${esc(date)}" onclick="openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
-  return `<article class="schedule-assignment ${linked?'linked':'unlinked'}">
+  const machinesHtml=machines!=null?`<button class="schedule-machine-count${staleMachineCount?' stale':''}" type="button" onclick="event.stopPropagation();showPage('monthlyStats')" aria-label="查看每月統計，餘下每次需做 ${machines} 台"><strong>${machines}</strong> 台</button>`:'';
+  const editable=linked&&!leaveLabel&&!!company&&!!venue;
+  const editAttrs=editable?` data-schedule-edit="1" data-date="${esc(date)}" data-shift="${esc(shift)}" data-company="${esc(company)}" data-venue="${esc(venue)}" role="button" tabindex="0" aria-label="修改${esc(title)}${shift==='pm'?'下午':'上午'}人員" onclick="openSchedulePeopleEditor(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSchedulePeopleEditor(this)}"`:'';
+  const companyHtml=linked&&!leaveLabel?`<button class="schedule-company schedule-company-link" data-company="${esc(company)}" data-venue="${esc(venue)}" data-date="${esc(date)}" onclick="event.stopPropagation();openScheduleInputFromButton(this)" type="button">${esc(company)}</button>`:`<span class="schedule-company">${esc(company)}</span>`;
+  return `<article class="schedule-assignment ${linked?'linked':'unlinked'}"${editAttrs}>
     <div class="schedule-assignment-head"><div class="schedule-assignment-main">${companyHtml}<div class="schedule-assignment-title">${esc(title)}</div></div><div class="schedule-assignment-meta">${machinesHtml}<span>${count} 人</span></div></div>
     <div class="schedule-assignment-details"><div class="schedule-assignment-people-row"><div class="schedule-person-list schedule-assignment-people">${people.map(person=>`<span class="schedule-person">${esc(person.name)}</span>`).join('')}</div></div></div>
   </article>`;
@@ -4855,7 +4923,7 @@ function schedulePeopleKey(value){
 const SCHEDULE_PEOPLE_ALIASES={
   LON:'Londoner',VML:'Venetian',PAR:'Parisian',PLZ:'Plaza',SM:'Sands',
   MGM:'MGM Macau',MGMC:'MGM Cotai',COD:'COD',ALT:'ALT',SC:'SC',SW:'StarWorld',
-  GX:'Galaxy',GALAXY:'Galaxy',GL:'Grand Lisboa',GLP:'Grand Lisboa Palace',
+  GX:'Galaxy',JA:'Jai Alai',GALAXY:'Galaxy',GL:'Grand Lisboa',GLP:'Grand Lisboa Palace',
   WYNN:'Wynn',WP:'Wynn Palace',OCN:'Oceanus',LISBOA:'Lisboa',
   LONDONER:'Londoner',VENETIAN:'Venetian',PARISIAN:'Parisian',SANDS:'Sands',PLAZA:'Plaza',
   STARWORLD:'StarWorld','MGM MACAU':'MGM Macau','MGM COTAI':'MGM Cotai',
@@ -4874,6 +4942,78 @@ function schedulePeopleItemMatches(item,company,casino){
   const itemVenue=schedulePeopleVenue(item?.venue||item?.title),expectedVenue=schedulePeopleVenue(casino);
   const itemCompany=cleanDashValue(item?.company)||schedulePeopleCompany(itemVenue);
   return schedulePeopleKey(itemCompany)===schedulePeopleKey(company)&&schedulePeopleKey(itemVenue)===schedulePeopleKey(expectedVenue);
+}
+function scheduleLoadedDay(date){
+  return [...(_scheduleTodayData?.days||[]),...(_scheduleWeekDays||[])].find(item=>item?.date===date)||null;
+}
+function scheduleUniquePeople(names){
+  const result=[];const seen=new Set();
+  (names||[]).forEach(name=>{
+    const value=cleanDashValue(name),key=schedulePeopleKey(value);if(!key||seen.has(key))return;
+    seen.add(key);result.push(value);
+  });
+  return result;
+}
+function renderSchedulePeopleEditor(){
+  const context=_schedulePeopleEditContext,current=document.getElementById('schedulePeopleEditCurrent'),options=document.getElementById('schedulePeopleEditOptions');
+  if(!context||!current||!options)return;
+  const selected=scheduleUniquePeople(context.selected),selectedKeys=new Set(selected.map(schedulePeopleKey));
+  context.selected=selected;
+  current.innerHTML=selected.length?selected.map(name=>`<span class="schedule-people-editor-chip">${esc(name)}<button class="schedule-people-remove" data-name="${esc(name)}" onclick="removeScheduleEditorPerson(this.dataset.name)" type="button" aria-label="刪除${esc(name)}">×</button></span>`).join(''):'<span class="schedule-people-editor-empty">未選擇人員</span>';
+  const available=scheduleUniquePeople(context.available),remaining=available.filter(name=>!selectedKeys.has(schedulePeopleKey(name)));
+  options.innerHTML=remaining.length?remaining.map(name=>`<button class="schedule-people-option" data-name="${esc(name)}" onclick="addScheduleEditorPerson(this.dataset.name)" type="button">＋ ${esc(name)}</button>`).join(''):'<div class="schedule-people-editor-empty">沒有其他可加入的人員</div>';
+}
+function closeSchedulePeopleEditor(){
+  _schedulePeopleEditContext=null;
+  document.getElementById('schedulePeopleEditModal').classList.remove('show');
+  document.getElementById('schedulePeopleEditOptions').classList.remove('show');
+}
+function toggleSchedulePeopleOptions(){
+  const options=document.getElementById('schedulePeopleEditOptions');if(!options)return;
+  options.classList.toggle('show');renderSchedulePeopleEditor();
+}
+function addScheduleEditorPerson(name){
+  if(!_schedulePeopleEditContext)return;
+  const value=cleanDashValue(name),key=schedulePeopleKey(value);if(!key)return;
+  if(!_schedulePeopleEditContext.selected.some(item=>schedulePeopleKey(item)===key))_schedulePeopleEditContext.selected.push(value);
+  renderSchedulePeopleEditor();
+}
+function removeScheduleEditorPerson(name){
+  if(!_schedulePeopleEditContext)return;
+  const key=schedulePeopleKey(name);_schedulePeopleEditContext.selected=_schedulePeopleEditContext.selected.filter(item=>schedulePeopleKey(item)!==key);renderSchedulePeopleEditor();
+}
+function openSchedulePeopleEditor(card){
+  const data=card?.dataset||{};
+  if(!data.date||!data.shift||!data.company||!data.venue)return;
+  const day=scheduleLoadedDay(data.date),target=(day?.items||[]).find(item=>schedulePeopleItemMatches(item,data.company,data.venue));
+  const cardPeople=[...card.querySelectorAll('.schedule-person')].map(element=>element.textContent);
+  const targetPeople=(target?.[data.shift]||[]).map(person=>typeof person==='object'?person.name:person);
+  const current=scheduleUniquePeople(targetPeople.length?targetPeople:cardPeople);
+  const available=scheduleUniquePeople([...(day?.people?.[data.shift]||[]),...current]);
+  _schedulePeopleEditContext={date:data.date,shift:data.shift,company:data.company,venue:data.venue,available,selected:current};
+  document.getElementById('schedulePeopleEditContext').textContent=`${scheduleDateLabel(data.date)} · ${data.shift==='pm'?'下午':'上午'} · ${data.company}`;
+  document.getElementById('schedulePeopleEditLocation').textContent=data.venue;
+  document.getElementById('schedulePeopleEditStatus').textContent='';
+  document.getElementById('schedulePeopleEditSaveBtn').disabled=false;
+  document.getElementById('schedulePeopleEditSaveBtn').textContent='儲存';
+  document.getElementById('schedulePeopleEditOptions').classList.remove('show');
+  renderSchedulePeopleEditor();
+  document.getElementById('schedulePeopleEditModal').classList.add('show');
+}
+async function saveSchedulePeopleEditor(){
+  const context=_schedulePeopleEditContext,button=document.getElementById('schedulePeopleEditSaveBtn'),status=document.getElementById('schedulePeopleEditStatus');
+  if(!context||!button)return;
+  const month=scheduleMonthCodeFromValue(context.date.slice(0,7));
+  button.disabled=true;button.textContent='儲存中...';status.textContent='正在更新工作安排...';
+  try{
+    const data=await postGasJson({action:'updateSchedulePeople',month,date:context.date,shift:context.shift,company:context.company,venue:context.venue,people:context.selected});
+    if(!data?.success)throw new Error(data?.message||'人員更新失敗');
+    closeSchedulePeopleEditor();
+    await loadScheduleOverview(true);
+    showToast('✓ 工作安排人員已更新');
+  }catch(error){
+    button.disabled=false;button.textContent='儲存';status.textContent=error.message||'人員更新失敗';showToast(status.textContent,'err');
+  }
 }
 function closeSchedulePeople(){
   _schedulePeopleRequestToken++;

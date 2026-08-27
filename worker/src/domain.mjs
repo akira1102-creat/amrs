@@ -58,12 +58,36 @@ export const SCHEDULE_VENUE_ALIASES = {
   SC: "SC",
   SW: "StarWorld",
   GX: "Galaxy",
+  JA: "Jai Alai",
   GL: "Grand Lisboa",
   GLP: "Grand Lisboa Palace",
   WYNN: "Wynn",
   WP: "Wynn Palace",
   OCN: "Oceanus",
   "L'ARC": "L’Arc",
+};
+
+export const SCHEDULE_VENUE_CODES = {
+  "Grand Lisboa Palace": "GLP",
+  "MGM Cotai": "MGMC",
+  "Wynn Palace": "WP",
+  "Grand Lisboa": "GL",
+  "Jai Alai": "JA",
+  Londoner: "LON",
+  Venetian: "VML",
+  Parisian: "PAR",
+  StarWorld: "SW",
+  Oceanus: "OCN",
+  Lisboa: "LISBOA",
+  Sands: "SM",
+  Plaza: "PLZ",
+  Galaxy: "GX",
+  "MGM Macau": "MGM",
+  COD: "COD",
+  ALT: "ALT",
+  SC: "SC",
+  Wynn: "WYNN",
+  "L’Arc": "L'ARC",
 };
 
 const MONTH_NAMES = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
@@ -710,6 +734,46 @@ export function scheduleVenueLink(venue) {
   return null;
 }
 
+const SCHEDULE_EMERGENCY_NOTE = /資料輸入\s*\/\s*緊急任務/gi;
+
+function scheduleVenueAliasesFor(venue) {
+  return Object.entries(SCHEDULE_VENUE_ALIASES)
+    .filter(([, canonical]) => canonical === venue)
+    .map(([alias]) => alias)
+    .sort((left, right) => right.length - left.length);
+}
+
+function scheduleAssignmentNameKey(value) {
+  return gasString(value).trim().toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, "");
+}
+
+export function scheduleAssignmentWithoutVenue(value, venue) {
+  const raw = gasString(value).trim();
+  if (!raw || !venue) return raw;
+  const note = raw.match(SCHEDULE_EMERGENCY_NOTE)?.[0] || "";
+  let visible = raw.replace(SCHEDULE_EMERGENCY_NOTE, "").trim();
+  scheduleVenueAliasesFor(venue).forEach((alias) => {
+    const matcher = new RegExp(`(^|[\\s/,&、|+;]*)${escapeRegExp(alias)}\\s*\\*?(?=$|[\\s/,&、|+;]*)`, "gi");
+    visible = visible.replace(matcher, "$1");
+  });
+  visible = visible.replace(/[\s/,&、|+;]+/g, " ").trim();
+  return [visible, note].filter(Boolean).join(" ").trim();
+}
+
+export function scheduleAssignmentWithVenue(value, venue) {
+  const raw = gasString(value).trim();
+  if (!venue || scheduleVenueEntriesInText(raw).some((entry) => entry.venue === venue)) return raw;
+  const note = raw.match(SCHEDULE_EMERGENCY_NOTE)?.[0] || "";
+  const visible = raw.replace(SCHEDULE_EMERGENCY_NOTE, "").trim();
+  const code = SCHEDULE_VENUE_CODES[venue] || venue;
+  const next = visible ? `${visible} / ${code}` : code;
+  return note ? `${next} ${note}` : next;
+}
+
+export function schedulePersonNameKey(value) {
+  return scheduleAssignmentNameKey(value);
+}
+
 export function parseScheduleOverviewDate(value, now = new Date(), options = DEFAULT_TIME_ZONE) {
   const timeZone = timeZoneOf(options);
   const normalized = normalizeDateParam(value || formatSheetDate(now, timeZone), timeZone);
@@ -785,7 +849,7 @@ export function scheduleOverviewFromRows(params = {}, scheduleSheets = {}) {
     if (dayOfWeek === 0 || dayOfWeek === 6) continue;
     const iso = scheduleIsoDate(date, params.timeZone || DEFAULT_TIME_ZONE);
     const monthCode = scheduleMonthCode(date, params.timeZone || DEFAULT_TIME_ZONE);
-    requestedDates.push({ date: iso, day: date.getUTCDate(), monthCode, items: [], remarks: { am: "", pm: "" } });
+    requestedDates.push({ date: iso, day: date.getUTCDate(), monthCode, items: [], people: { am: [], pm: [] }, remarks: { am: "", pm: "" } });
     monthCodes[monthCode] = true;
   }
   const missingSheets = [];
@@ -801,6 +865,19 @@ export function scheduleOverviewFromRows(params = {}, scheduleSheets = {}) {
       if (item.monthCode === monthCode) wantedDays[item.day] = item;
     });
     const shiftRanges = scheduleRemarkColumns(headers);
+    requestedDates.forEach((item) => {
+      if (item.monthCode !== monthCode) return;
+      Object.entries(shiftRanges).forEach(([shift, range]) => {
+        const names = [];
+        for (let column = range.start; column < range.end; column += 1) {
+          if (column === range.remark) continue;
+          const name = gasString(rowValue(headers, column)).trim();
+          if (!name || /^remark(?:\s|$)/i.test(name)) continue;
+          if (!names.some((existing) => schedulePersonNameKey(existing) === schedulePersonNameKey(name))) names.push(name);
+        }
+        item.people[shift] = names;
+      });
+    });
     rows.forEach((row) => {
       const day = Number(gasString(rowValue(row, 0)).trim());
       const dayResult = wantedDays[day];

@@ -28,6 +28,12 @@ test("GAS keeps the schedule remark write path and full-width afternoon columns"
   assert.match(gasCode, /Math\.max\(20, sheet\.getMaxColumns\(\)\)/);
 });
 
+test("GAS exposes the schedule personnel read and write path", { skip: !gasAvailable }, () => {
+  assert.match(gasCode, /data\.action === 'updateSchedulePeople'/);
+  assert.match(gasCode, /function updateSchedulePeople\(params\)/);
+  assert.match(gasCode, /people: \{ am: \[\], pm: \[\] \}/);
+});
+
 test("GAS bootstrap declares the approved nine visible CVCS worksheets and hidden identity headers", { skip: !gasAvailable }, () => {
   const source = fs.readFileSync(gasCvcsPath, "utf8");
   [

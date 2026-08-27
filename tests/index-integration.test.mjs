@@ -70,3 +70,11 @@ test("schedule remarks expose edit controls for both shifts", () => {
   assert.match(html, /openScheduleRemark\('\$\{date\}','\$\{shift\}'\)/);
   assert.match(html, /shift==='pm'\?'下午':'上午'/);
 });
+
+test("schedule cards expose shift-scoped personnel editing and mobile edge swipe navigation", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /updateSchedulePeople/);
+  assert.match(html, /openSchedulePeopleEditor/);
+  assert.match(html, /touchstart/);
+  assert.match(html, /clientX > 24/);
+});

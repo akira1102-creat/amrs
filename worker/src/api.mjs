@@ -21,7 +21,7 @@ const OPERATION_COMPLETED = "completed";
 const OPERATION_FAILED = "failed";
 const SUBMISSION_ACTIONS = new Set(["submitRecords", "submitCvcsRecords", "submitCvcsBrokenParts"]);
 
-const SCHEDULE_ACTIONS = new Set(["scheduleOverview", "scheduleMachineCounts", "updateScheduleRemark"]);
+const SCHEDULE_ACTIONS = new Set(["scheduleOverview", "scheduleMachineCounts", "updateScheduleRemark", "updateSchedulePeople"]);
 const ADMIN_ACTIONS = new Set(["bootstrapAccessToken", "listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"]);
 
 export function permissionForAction(action) {

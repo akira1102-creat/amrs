@@ -33,10 +33,15 @@ import {
   recordFromRow,
   recordToValues,
   recordsMatch,
+  scheduleAssignmentWithVenue,
+  scheduleAssignmentWithoutVenue,
   scheduleMonthCode,
   scheduleOverviewFromRows,
   scheduleRemarkColumns,
   scheduleSheetName,
+  schedulePersonNameKey,
+  scheduleVenueEntriesInText,
+  scheduleVenueLink,
   validateEditedRecord,
   validateHoldDates,
   validateIncomingRecord,
@@ -880,6 +885,77 @@ export function createRepository(env = {}, dependencies = {}) {
     return { success: true, monthCode, date, shift, remark };
   }
 
+  async function updateSchedulePeople(payload = {}) {
+    const monthCode = normalizeMonthlyCode(payload.month, new Date(nowMs(now)), config.timeZone);
+    const date = normalizeDateParam(payload.date, config.timeZone);
+    if (!date) throw Object.assign(new Error("Invalid schedule date"), { status: 400 });
+    const dateMonthCode = scheduleMonthCode(new Date(`${date.replace(/\//g, "-")}T12:00:00Z`), config.timeZone);
+    if (dateMonthCode !== monthCode) throw Object.assign(new Error("Schedule date does not match month"), { status: 400 });
+    const shift = text(payload.shift).toLowerCase();
+    if (shift !== "am" && shift !== "pm") throw Object.assign(new Error("Invalid schedule shift"), { status: 400 });
+    if (!Array.isArray(payload.people)) throw Object.assign(new Error("Schedule people must be an array"), { status: 400 });
+    const requestedCompany = text(payload.company);
+    const company = normalizeCompany(requestedCompany);
+    if (!requestedCompany || requestedCompany.toLowerCase() !== company.toLowerCase()) throw Object.assign(new Error("Invalid company"), { status: 400 });
+    const venue = text(payload.venue);
+    const link = scheduleVenueLink(venue);
+    if (!link || link.company !== company) throw Object.assign(new Error("Invalid schedule location"), { status: 400 });
+    const requestedPeople = payload.people.map(text).filter(Boolean);
+    if (requestedPeople.length > 50) throw Object.assign(new Error("Too many schedule people"), { status: 400 });
+    const requestedKeys = new Set();
+    requestedPeople.forEach((name) => {
+      const key = schedulePersonNameKey(name);
+      if (!key || requestedKeys.has(key)) return;
+      requestedKeys.add(key);
+    });
+
+    const table = await readScheduleTable(monthCode, { refresh: true, cache: false });
+    if (!table) throw Object.assign(new Error(`Schedule sheet ${scheduleSheetName(monthCode)} was not found`), { status: 404 });
+    const day = Number(date.slice(-2));
+    const rowIndex = table.rows.findIndex((row) => Number(text(row?.[0])) === day);
+    if (rowIndex < 0) throw Object.assign(new Error(`Schedule date ${date} was not found`), { status: 404 });
+    const range = scheduleRemarkColumns(table.headers)[shift];
+    const availablePeople = [];
+    for (let column = range.start; column < range.end; column += 1) {
+      if (column === range.remark) continue;
+      const name = text(table.headers[column]);
+      if (!name || /^remark(?:\s|$)/i.test(name)) continue;
+      if (!availablePeople.some((existing) => schedulePersonNameKey(existing) === schedulePersonNameKey(name))) availablePeople.push(name);
+    }
+    const availableKeys = new Set(availablePeople.map(schedulePersonNameKey));
+    for (const key of requestedKeys) {
+      if (!availableKeys.has(key)) throw Object.assign(new Error("Selected schedule person is not in this shift"), { status: 400 });
+    }
+    const row = table.rows[rowIndex] || [];
+    const changes = [];
+    for (let column = range.start; column < range.end; column += 1) {
+      if (column === range.remark) continue;
+      const person = text(table.headers[column]);
+      const personKey = schedulePersonNameKey(person);
+      if (!personKey || !availableKeys.has(personKey)) continue;
+      const raw = text(row[column]);
+      const hasVenue = scheduleVenueEntriesInText(raw).some((entry) => entry.venue === venue);
+      const shouldHaveVenue = requestedKeys.has(personKey);
+      const next = shouldHaveVenue && !hasVenue
+        ? scheduleAssignmentWithVenue(raw, venue)
+        : !shouldHaveVenue && hasVenue
+          ? scheduleAssignmentWithoutVenue(raw, venue)
+          : raw;
+      if (next !== raw) changes.push({ column, value: next });
+    }
+    const rowNumber = table.headerRow + 1 + rowIndex;
+    for (const change of changes) {
+      await writeValues(
+        table.spreadsheetId,
+        table.sheetName,
+        `${columnNumberToA1(change.column + 1)}${rowNumber}`,
+        [[change.value]],
+      );
+    }
+    await invalidateSchedule(monthCode);
+    return { success: true, monthCode, date, shift, company, venue, people: availablePeople.filter((name) => requestedKeys.has(schedulePersonNameKey(name))), updatedCells: changes.length };
+  }
+
   async function getAction(params = {}) {
     const action = text(params.action);
     const cvcsResult = await getCvcsRepository().getAction(params);
@@ -1256,6 +1332,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!Array.isArray(payload) && payload.action === "ensureBrokenPartsSchema") return ensureBrokenPartsSchema();
     if (!Array.isArray(payload) && payload.action === "updateMonthlySettings") return updateMonthlySettings(payload);
     if (!Array.isArray(payload) && payload.action === "updateScheduleRemark") return updateScheduleRemark(payload);
+    if (!Array.isArray(payload) && payload.action === "updateSchedulePeople") return updateSchedulePeople(payload);
     if (!Array.isArray(payload) && payload.action === "bulkUpdateRecords") return bulkUpdateRecords(payload);
     if (!Array.isArray(payload) && payload.action === "submitRecords") {
       const repaired = await updateBrokenRepairDays(payload.brokenPartsRepairs || []);
@@ -1315,6 +1392,7 @@ export function createRepository(env = {}, dependencies = {}) {
     monthlySubset,
     scheduleOverview,
     updateScheduleRemark,
+    updateSchedulePeople,
     findSubmissionIds,
     invalidateCompany,
     readMainTable,
