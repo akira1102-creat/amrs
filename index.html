@@ -559,13 +559,9 @@
     .schedule-people-editor-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid #1f6feb;border-radius:8px;background:#0d203d;color:#e6edf3;font-size:12px;font-weight:800}
     .schedule-people-remove{width:20px;height:20px;padding:0;border:1px solid #388bfd;border-radius:50%;background:transparent;color:#79c0ff;font-size:14px;line-height:1;cursor:pointer}
     .schedule-people-remove:hover,.schedule-people-remove:active{background:#1f6feb;color:#fff}
-    .schedule-people-add{width:100%;margin-top:10px;padding:9px 11px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#79c0ff;font-size:12px;font-weight:800;text-align:left;cursor:pointer}
-    .schedule-people-add:hover,.schedule-people-add:active{border-color:#58a6ff;color:#fff}
-    .schedule-people-options{display:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:8px;padding:8px;border:1px solid #30363d;border-radius:10px;background:#0d1117}
-    .schedule-people-options.show{display:grid}
-    .schedule-people-option{min-width:0;padding:8px 9px;border:1px solid #30363d;border-radius:8px;background:#161b22;color:#e6edf3;font-size:12px;font-weight:800;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
-    .schedule-people-option:hover,.schedule-people-option:active{border-color:#58a6ff;background:#0d203d;color:#fff}
-    .schedule-people-option:disabled{opacity:.45;cursor:default}
+    .schedule-people-select{width:100%;margin-top:0;padding:10px 12px;border:1px solid #30363d;border-radius:10px;background:#0d1117;color:#e6edf3;font-size:13px;font-weight:700;cursor:pointer;appearance:auto;-webkit-appearance:auto}
+    .schedule-people-select:focus{outline:none;border-color:#58a6ff}
+    .schedule-people-select:disabled{color:#8b949e;cursor:default;opacity:.8}
     .schedule-people-edit-status{min-height:18px;margin-top:8px;color:#8b949e;font-size:12px}
     .dash-pager{display:none;align-items:center;justify-content:center;gap:10px;margin-top:12px}
     .dash-pager.show{display:flex}
@@ -1062,8 +1058,10 @@
     <div class="schedule-people-location"><span class="schedule-people-location-label">地點（只讀）</span><strong class="schedule-people-location-value" id="schedulePeopleEditLocation">—</strong></div>
     <div class="schedule-people-editor-label">目前人員</div>
     <div class="schedule-people-editor-current" id="schedulePeopleEditCurrent"></div>
-    <button class="schedule-people-add" id="schedulePeopleAddBtn" onclick="toggleSchedulePeopleOptions()" type="button">＋ 新增人員</button>
-    <div class="schedule-people-options" id="schedulePeopleEditOptions"></div>
+    <label class="schedule-people-editor-label" for="schedulePeopleEditSelect">新增人員</label>
+    <select class="schedule-people-select" id="schedulePeopleEditSelect" onchange="addScheduleEditorPerson(this.value);this.value=''" aria-label="選擇要加入的人員">
+      <option value="">選擇日程表人員</option>
+    </select>
     <div class="schedule-people-edit-status" id="schedulePeopleEditStatus"></div>
     <div class="template-actions"><button class="confirm-cancel" onclick="closeSchedulePeopleEditor()" type="button">取消</button><button class="template-save" id="schedulePeopleEditSaveBtn" onclick="saveSchedulePeopleEditor()" type="button">儲存</button></div>
   </div>
@@ -1628,8 +1626,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.27-01';
-const _APP_VERSION='v1.070';
+const _APP_BUMP='2026.08.27-02';
+const _APP_VERSION='v1.071';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -4954,23 +4952,27 @@ function scheduleUniquePeople(names){
   });
   return result;
 }
+function scheduleAvailablePeople(day,shift,current=[]){
+  const names=[...(day?.people?.[shift]||[])];
+  (day?.items||[]).forEach(item=>{
+    (item?.[shift]||[]).forEach(person=>names.push(typeof person==='object'?person.name:person));
+  });
+  return scheduleUniquePeople([...names,...current]);
+}
 function renderSchedulePeopleEditor(){
-  const context=_schedulePeopleEditContext,current=document.getElementById('schedulePeopleEditCurrent'),options=document.getElementById('schedulePeopleEditOptions');
-  if(!context||!current||!options)return;
+  const context=_schedulePeopleEditContext,current=document.getElementById('schedulePeopleEditCurrent'),select=document.getElementById('schedulePeopleEditSelect');
+  if(!context||!current||!select)return;
   const selected=scheduleUniquePeople(context.selected),selectedKeys=new Set(selected.map(schedulePeopleKey));
   context.selected=selected;
   current.innerHTML=selected.length?selected.map(name=>`<span class="schedule-people-editor-chip">${esc(name)}<button class="schedule-people-remove" data-name="${esc(name)}" onclick="removeScheduleEditorPerson(this.dataset.name)" type="button" aria-label="刪除${esc(name)}">×</button></span>`).join(''):'<span class="schedule-people-editor-empty">未選擇人員</span>';
   const available=scheduleUniquePeople(context.available),remaining=available.filter(name=>!selectedKeys.has(schedulePeopleKey(name)));
-  options.innerHTML=remaining.length?remaining.map(name=>`<button class="schedule-people-option" data-name="${esc(name)}" onclick="addScheduleEditorPerson(this.dataset.name)" type="button">＋ ${esc(name)}</button>`).join(''):'<div class="schedule-people-editor-empty">沒有其他可加入的人員</div>';
+  select.innerHTML=`<option value="">${remaining.length?'選擇日程表人員':'沒有其他可加入的人員'}</option>${remaining.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}`;
+  select.disabled=!remaining.length;
+  select.value='';
 }
 function closeSchedulePeopleEditor(){
   _schedulePeopleEditContext=null;
   document.getElementById('schedulePeopleEditModal').classList.remove('show');
-  document.getElementById('schedulePeopleEditOptions').classList.remove('show');
-}
-function toggleSchedulePeopleOptions(){
-  const options=document.getElementById('schedulePeopleEditOptions');if(!options)return;
-  options.classList.toggle('show');renderSchedulePeopleEditor();
 }
 function addScheduleEditorPerson(name){
   if(!_schedulePeopleEditContext)return;
@@ -4989,14 +4991,13 @@ function openSchedulePeopleEditor(card){
   const cardPeople=[...card.querySelectorAll('.schedule-person')].map(element=>element.textContent);
   const targetPeople=(target?.[data.shift]||[]).map(person=>typeof person==='object'?person.name:person);
   const current=scheduleUniquePeople(targetPeople.length?targetPeople:cardPeople);
-  const available=scheduleUniquePeople([...(day?.people?.[data.shift]||[]),...current]);
+  const available=scheduleAvailablePeople(day,data.shift,current);
   _schedulePeopleEditContext={date:data.date,shift:data.shift,company:data.company,venue:data.venue,available,selected:current};
   document.getElementById('schedulePeopleEditContext').textContent=`${scheduleDateLabel(data.date)} · ${data.shift==='pm'?'下午':'上午'} · ${data.company}`;
   document.getElementById('schedulePeopleEditLocation').textContent=data.venue;
   document.getElementById('schedulePeopleEditStatus').textContent='';
   document.getElementById('schedulePeopleEditSaveBtn').disabled=false;
   document.getElementById('schedulePeopleEditSaveBtn').textContent='儲存';
-  document.getElementById('schedulePeopleEditOptions').classList.remove('show');
   renderSchedulePeopleEditor();
   document.getElementById('schedulePeopleEditModal').classList.add('show');
 }

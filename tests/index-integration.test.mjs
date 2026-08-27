@@ -78,3 +78,10 @@ test("schedule cards expose shift-scoped personnel editing and mobile edge swipe
   assert.match(html, /touchstart/);
   assert.match(html, /clientX > 24/);
 });
+
+test("schedule personnel editor offers a dropdown for every person in the selected shift", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /<select[^>]+id="schedulePeopleEditSelect"/);
+  assert.match(html, /scheduleAvailablePeople/);
+  assert.match(html, /schedulePeopleEditSelect/);
+});

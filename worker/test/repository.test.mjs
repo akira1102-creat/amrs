@@ -291,14 +291,14 @@ test("updates only the selected schedule shift and venue personnel", async () =>
     date: "2026/08/04",
     shift: "am",
     company: "SCL",
-    venue: "Venetian",
+    venue: "Londoner",
     people: ["Alex"],
   });
 
   assert.equal(result.success, true);
   const saved = harness.sheets.get("schedule:2026-AUG").values[3];
-  assert.equal(saved[1], "LON");
-  assert.equal(saved[2], "VML");
+  assert.equal(saved[1], "VML");
+  assert.equal(saved[2], "VML / LON");
   assert.equal(saved[4], "VML");
   assert.equal(saved[5], "LON");
 });
