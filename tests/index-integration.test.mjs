@@ -85,3 +85,12 @@ test("schedule personnel editor offers a dropdown for every person in the select
   assert.match(html, /scheduleAvailablePeople/);
   assert.match(html, /schedulePeopleEditSelect/);
 });
+
+test("submission flow checks machine states and offers selectable Hold and Waiting Parts actions", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /submissionWarnings/);
+  assert.match(html, /submitWarningModal/);
+  assert.match(html, /bpHoldReleaseDate/);
+  assert.match(html, /bpRepairDay/);
+  assert.match(html, /brokenPartsRepairs/);
+});

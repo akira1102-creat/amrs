@@ -261,6 +261,7 @@ function calendarOrdinal(value, timeZone = DEFAULT_TIME_ZONE) {
 export function getDuplicateFaultsFromRows(rows, params = {}) {
   const timeZone = timeZoneOf(params.timeZone);
   const reason = gasString(params.reason).trim();
+  const model = gasString(params.model).trim().toUpperCase();
   if (!reason || reason.toUpperCase() === "PM") return {};
   const serialNos = new Set((Array.isArray(params.serialNos) ? params.serialNos : gasString(params.serialNos).split(","))
     .map((value) => gasString(value).trim())
@@ -273,6 +274,7 @@ export function getDuplicateFaultsFromRows(rows, params = {}) {
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const serialNo = gasString(rowValue(row, 4)).trim();
     if (!serialNos.has(serialNo)) return;
+    if (model && gasString(rowValue(row, 3)).trim().toUpperCase() !== model) return;
     const rowReason = gasString(rowValue(row, normalizeCompany(params.company) === "GEG" ? 7 : 5)).trim();
     if (rowReason.toUpperCase() !== targetReason || rowReason.toUpperCase() === "PM") return;
     const rowOrdinal = calendarOrdinal(rowValue(row, 1), timeZone);
@@ -482,6 +484,35 @@ function brokenPartStatus(row) {
     holding: !!gasString(holdDate).trim() && !gasString(holdReleaseDate).trim(),
     holdReleased: !!gasString(holdDate).trim() && !!gasString(holdReleaseDate).trim(),
   };
+}
+
+export function getSubmissionWarningsFromRows(rows = [], machines = [], options = {}) {
+  const wanted = new Map();
+  (Array.isArray(machines) ? machines : []).forEach((machine) => {
+    const serialNo = gasString(machine?.serialNo ?? machine?.sn).trim();
+    const model = gasString(machine?.model).trim().toUpperCase();
+    const casino = gasString(machine?.casino).trim();
+    if (!serialNo || !model) return;
+    wanted.set(`${casino.toUpperCase()}\u0000${model}\u0000${serialNo}`, { casino, model, serialNo });
+  });
+  if (!wanted.size) return [];
+  const startRow = Number.isFinite(Number(options.startRow)) ? Number(options.startRow) : 1;
+  const result = [];
+  (Array.isArray(rows) ? rows : []).forEach((row, index) => {
+    if (isBrokenPartsHeader(row) || !Array.isArray(row) || row.every((value) => value === "" || value == null)) return;
+    const record = brokenPartsRecordFromRow(row, startRow + index, options.timeZone || DEFAULT_TIME_ZONE);
+    const key = `${gasString(record.casino).trim().toUpperCase()}\u0000${gasString(record.model).trim().toUpperCase()}\u0000${gasString(record.serialNo).trim()}`;
+    const machine = wanted.get(key);
+    if (!machine) return;
+    const status = brokenPartStatus(row);
+    if (!status.holding && !status.waiting) return;
+    result.push({
+      ...record,
+      holding: status.holding,
+      waiting: status.waiting,
+    });
+  });
+  return result;
 }
 
 export function brokenPartsRecordsFromRows(rows = [], serialNo = "", filters = {}, options = {}) {

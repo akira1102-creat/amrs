@@ -15,6 +15,7 @@ import {
   getBrokenPartsPage,
   getBrokenPartsRecords,
   getBrokenPartsStats,
+  getSubmissionWarningsFromRows,
   getDashboardRecords,
   getInspectorColumn,
   getMonthlyScheduleFromRows,
@@ -243,6 +244,26 @@ test("filters, sorts, and paginates broken-part rows by status", () => {
     records: [brokenPartsRecordFromRow(rows[1], 2)],
     topParts: [{ label: "P-WAIT", count: 1 }],
   });
+});
+
+test("finds current Holding and Waiting Parts states by model and serial", () => {
+  const rows = [
+    [...BROKEN_PARTS_HEADERS],
+    brokenRow({ model: "SAE", serialNo: "1000", repairDay: "Waiting", hold: "2026/08/01", release: "" }),
+    brokenRow({ model: "TAE", serialNo: "1000", repairDay: "2026/08/02", hold: "2026/08/01", release: "2026/08/03" }),
+    brokenRow({ model: "SAE", serialNo: "2000", repairDay: "Waiting", hold: "", release: "" }),
+  ];
+  const warnings = getSubmissionWarningsFromRows(rows, [
+    { casino: "Venetian", model: "SAE", serialNo: "1000" },
+    { casino: "Venetian", model: "TAE", serialNo: "1000" },
+    { casino: "Venetian", model: "SAE", serialNo: "2000" },
+  ]);
+  assert.deepEqual(warnings.map(({ rowNumber, casino, model, serialNo, brokenParts, holding, waiting }) => ({
+    rowNumber, casino, model, serialNo, brokenParts, holding, waiting,
+  })), [
+    { rowNumber: 2, casino: "Venetian", model: "SAE", serialNo: "1000", brokenParts: "P-001", holding: true, waiting: true },
+    { rowNumber: 4, casino: "Venetian", model: "SAE", serialNo: "2000", brokenParts: "P-001", holding: false, waiting: true },
+  ]);
 });
 
 test("filters dashboard rows and computes full-result statistics", () => {

@@ -20,6 +20,7 @@ import {
   getBrokenPartsPage,
   getDashboardRecords,
   getDuplicateFaultsFromRows,
+  getSubmissionWarningsFromRows,
   getMonthlyScheduleFromRows,
   getMonthlyStatsSubsetFromData,
   monthlyCompanyStatsCacheKey,
@@ -764,8 +765,30 @@ export function createRepository(env = {}, dependencies = {}) {
     const main = await mainRowsForCompany(company, { refresh: true, cache: false });
     return {
       success: true,
-      duplicates: getDuplicateFaultsFromRows(main.rows, { company, serialNos, reason, date, timeZone: config.timeZone }),
+      duplicates: getDuplicateFaultsFromRows(main.rows, { company, model: text(params.model), serialNos, reason, date, timeZone: config.timeZone }),
     };
+  }
+
+  async function getSubmissionWarnings(params = {}) {
+    const supplied = jsonParse(params.records);
+    const records = Array.isArray(supplied) ? supplied : [];
+    if (!records.length) return { success: true, warnings: [] };
+    const grouped = new Map();
+    records.forEach((record) => {
+      const company = normalizeCompany(record?.company);
+      if (/^CVCS(?:-BROKEN)?$/i.test(text(record?.company))) return;
+      if (!grouped.has(company)) grouped.set(company, []);
+      grouped.get(company).push(record);
+    });
+    const warnings = [];
+    for (const [company, machines] of grouped) {
+      const table = await readBrokenTable(company, { refresh: true, cache: false });
+      if (!table.sheet) continue;
+      getSubmissionWarningsFromRows(table.values, machines, { startRow: 1, timeZone: config.timeZone }).forEach((warning) => {
+        warnings.push({ company, ...warning });
+      });
+    }
+    return { success: true, warnings };
   }
 
   async function getBrokenParts(params = {}) {
@@ -963,6 +986,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (action === "ping") return { success: true };
     if (action === "today") return getToday(params);
     if (action === "duplicateFault") return getDuplicateFaults(params);
+    if (action === "submissionWarnings") return getSubmissionWarnings(params);
     if (action === "dashboard") return getDashboard(params);
     if (action === "parts") return { parts: await readParts({ refresh: text(params.refresh) === "1" }) };
     if (action === "template") return { success: true, mappings: await readTemplate(params.company, { refresh: text(params.refresh) === "1" }) };
@@ -1237,11 +1261,17 @@ export function createRepository(env = {}, dependencies = {}) {
         const rowNumber = Number.parseInt(record.rowNumber, 10);
         if (!rowNumber || rowNumber < 2 || rowNumber > table.values.length) throw new Error("Invalid Broken Parts List row");
         const row = table.values[rowNumber - 1] || [];
-        if (text(arrayValue(row, 3)) !== text(record.serialNo) || text(arrayValue(row, 4)) !== text(record.brokenParts)) {
+        if ((text(record.model) && text(arrayValue(row, 2)).toUpperCase() !== text(record.model).toUpperCase())
+          || text(arrayValue(row, 3)) !== text(record.serialNo)
+          || text(arrayValue(row, 4)) !== text(record.brokenParts)) {
           throw new Error("Broken Parts List record changed; please reload");
         }
-        data.push({ range: `${quoteSheetName(table.sheet.title)}!H${rowNumber}`, values: [[record.bpRepairDay || ""]] });
-        repaired += 1;
+        const current = brokenPartsRecordFromRow(row, rowNumber, config.timeZone);
+        const after = { ...current, ...record };
+        validateHoldDates(after);
+        if (own(record, "bpRepairDay")) data.push({ range: `${quoteSheetName(table.sheet.title)}!H${rowNumber}`, values: [[record.bpRepairDay || ""]] });
+        if (own(record, "bpHoldReleaseDate")) data.push({ range: `${quoteSheetName(table.sheet.title)}!N${rowNumber}`, values: [[record.bpHoldReleaseDate || ""]] });
+        if (own(record, "bpRepairDay") || own(record, "bpHoldReleaseDate")) repaired += 1;
       }
       if (data.length) await sheets.valuesBatchUpdate({ spreadsheetId: table.spreadsheetId, data, valueInputOption: "USER_ENTERED" });
       await invalidateCompany(company);
@@ -1386,6 +1416,7 @@ export function createRepository(env = {}, dependencies = {}) {
     getDashboard,
     getToday,
     getDuplicateFaults,
+    getSubmissionWarnings,
     getBrokenParts,
     monthlyBase,
     monthlyCompany,

@@ -34,6 +34,13 @@ test("GAS exposes the schedule personnel read and write path", { skip: !gasAvail
   assert.match(gasCode, /people: \{ am: \[\], pm: \[\] \}/);
 });
 
+test("GAS mirrors model-aware duplicate checks and submission state warnings", { skip: !gasAvailable }, () => {
+  assert.match(gasCode, /action === 'submissionWarnings'/);
+  assert.match(gasCode, /function getSubmissionWarnings\(params\)/);
+  assert.match(gasCode, /String\(params\.model \|\| ''\)\.trim\(\)\.toUpperCase\(\)/);
+  assert.match(gasCode, /bpHoldReleaseDate/);
+});
+
 test("GAS bootstrap declares the approved nine visible CVCS worksheets and hidden identity headers", { skip: !gasAvailable }, () => {
   const source = fs.readFileSync(gasCvcsPath, "utf8");
   [

@@ -7,10 +7,10 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260813c">
+  <link rel="manifest" href="manifest.json?v=20260831a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260813c">
+  <link rel="stylesheet" href="./cvcs.css?v=20260831a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -170,6 +170,21 @@
     .confirm-btns{display:flex;gap:10px}
     .confirm-cancel{flex:1;padding:11px;font-size:14px;font-weight:700;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:12px;cursor:pointer}
     .confirm-ok{flex:1;padding:11px;font-size:14px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:12px;cursor:pointer}
+    #submitWarningModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:8895;align-items:center;justify-content:center;padding:18px}
+    #submitWarningModal.show{display:flex}
+    #submitWarningBox{width:min(520px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #9a6700;border-radius:20px;padding:22px}
+    .submit-warning-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+    .submit-warning-title{font-size:18px;font-weight:800;color:#f0b45c}
+    .submit-warning-note{font-size:13px;color:#8b949e;line-height:1.6;margin-bottom:14px}
+    #submitWarningList{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+    .submit-warning-option{display:flex;align-items:flex-start;gap:10px;padding:11px 12px;border:1px solid #30363d;border-radius:12px;background:#0d1117;color:#e6edf3;font-size:13px;line-height:1.45;cursor:pointer}
+    .submit-warning-option:hover{border-color:#58a6ff}
+    .submit-warning-option input{width:19px;height:19px;flex:0 0 auto;margin:1px 0 0;accent-color:#238636}
+    .submit-warning-option strong{color:#f0b45c}
+    .submit-warning-actions{display:flex;gap:10px}
+    .submit-warning-actions button{flex:1;padding:11px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer}
+    .submit-warning-skip{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+    .submit-warning-apply{background:#238636;color:#fff;border:none}
     #templateModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8890;align-items:center;justify-content:center;padding:18px}
     #templateModal.show{display:flex}
     #templateBox{width:min(720px,96vw);max-height:88vh;overflow:auto;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:20px}
@@ -941,6 +956,21 @@
   </div>
 </div>
 
+<div id="submitWarningModal">
+  <div id="submitWarningBox">
+    <div class="submit-warning-head">
+      <div class="submit-warning-title">⚠ 提交前狀態提醒</div>
+      <button class="confirm-cancel" style="flex:0 0 auto;padding:7px 10px" onclick="skipSubmissionWarnings()" type="button">×</button>
+    </div>
+    <div class="submit-warning-note">以下機台目前有 Holding 或等待零件狀態。請自行勾選要同步修改的項目；不勾選亦可繼續提交。</div>
+    <div id="submitWarningList"></div>
+    <div class="submit-warning-actions">
+      <button class="submit-warning-skip" onclick="skipSubmissionWarnings()" type="button">不修改，繼續提交</button>
+      <button class="submit-warning-apply" onclick="applySubmissionWarnings()" type="button">套用選取並提交</button>
+    </div>
+  </div>
+</div>
+
 <div id="templateModal">
   <div id="templateBox">
     <div class="template-head">
@@ -1618,16 +1648,16 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260813c"></script>
-<script src="./access-control.js?v=20260813c"></script>
-<script src="./cvcs.js?v=20260813c"></script>
-<script src="./token-admin.js?v=20260813c"></script>
+<script src="./cloud-api.js?v=20260831a"></script>
+<script src="./access-control.js?v=20260831a"></script>
+<script src="./cvcs.js?v=20260831a"></script>
+<script src="./token-admin.js?v=20260831a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.27-02';
-const _APP_VERSION='v1.071';
+const _APP_BUMP='2026.08.31-01';
+const _APP_VERSION='v1.072';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3365,6 +3395,7 @@ document.getElementById('poNumber').addEventListener('input',function(){saveComp
 let queue=[],editingIdx=-1,editTemp=null,todayRecords=[],pendingAdd=null,pendingBatchAdd=null,optionalVisible=false,isSubmitting=false,currentDashboardCompany='',_batchMode=false;
 let _queueAddBusy=false;
 let _submitCheckBusy=false;
+let _pendingSubmissionWarnings=[],_pendingSubmissionRepairs=[],_pendingSubmitSummary=null;
 function setQueueAddBusy(busy,batch=false){
   _queueAddBusy=busy;
   const singleBtn=document.getElementById('addQueueBtn');
@@ -4300,30 +4331,31 @@ function sameDayDuplicateSerials(items){
   const casino=document.getElementById('casino').value;
   const date=fmtDate(document.getElementById('date').value);
   const existing=new Set([
-    ...todayRecords.map(record=>String(record.serialNo??'')),
-    ...queue.filter(item=>(item.casino||casino)===casino&&(item.date||date)===date).map(item=>String(item.sn??'')),
-    ..._getLocalLog().filter(record=>record.company===activeCompany&&record.casino===casino).map(record=>String(record.serialNo??''))
+    ...todayRecords.map(record=>duplicateMachineKey(record.model,record.serialNo)),
+    ...queue.filter(item=>(item.casino||casino)===casino&&(item.date||date)===date).map(item=>duplicateMachineKey(item.model,item.sn)),
+    ..._getLocalLog().filter(record=>record.company===activeCompany&&record.casino===casino).map(record=>duplicateMachineKey(record.model,record.serialNo))
   ].filter(Boolean));
   const seen=new Set(),duplicates=new Set();
   items.forEach(item=>{
-    const sn=String(item.sn??'');
-    if(existing.has(sn)||seen.has(sn))duplicates.add(sn);
-    seen.add(sn);
+    const key=duplicateMachineKey(item.model,item.sn);
+    if(existing.has(key)||seen.has(key))duplicates.add(key);
+    seen.add(key);
   });
   return [...duplicates];
 }
+function duplicateMachineKey(model,sn){const normalizedSn=String(sn??'').trim();return normalizedSn?`${String(model||'SAE').trim().toUpperCase()||'SAE'}\u0000${normalizedSn}`:'';}
 function requestSameDayDuplicateConfirmation(items,batch){
   const duplicates=sameDayDuplicateSerials(items);
   if(!duplicates.length)return false;
   pendingAdd=batch?null:items[0];
   pendingBatchAdd=batch?items:null;
-  document.getElementById('dupMsg').textContent=`S/N ${duplicates.join('、')} 今日已經輸入過，是否仍然加入待提交？`;
+  document.getElementById('dupMsg').textContent=`${duplicates.map(key=>{const[model,sn]=key.split('\u0000');return `${model} S/N ${sn}`;}).join('、')} 今日已經輸入過，是否仍然加入待提交？`;
   document.getElementById('dupModal').classList.add('show');
   return true;
 }
 
 function isDuplicateCheckItem(item){return String(item?.reason||'').trim().toUpperCase()!=='PM';}
-function duplicateItemKey(item){return `${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}\u0000${String(item?.date||'')}`;}
+function duplicateItemKey(item){return `${String(item?.model||'SAE').trim().toUpperCase()}\u0000${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}\u0000${String(item?.date||'')}`;}
 function scheduleQueueDuplicateCheck(){renderQueueDuplicateNotice();}
 function syncSubmitButtonState(){
   const btn=document.getElementById('submitBtn');if(!btn||isSubmitting)return;
@@ -4335,13 +4367,13 @@ function collectQueueDuplicateWarnings(){
   const counts=new Map();
   faultItems.forEach(item=>{const key=duplicateItemKey(item);counts.set(key,(counts.get(key)||0)+1);});
   const warnings=[];
-  counts.forEach((count,key)=>{if(count>1){const [sn,reason,date]=key.split('\u0000');warnings.push(`待提交內 S/N ${sn} 在 ${date} 有 ${count} 筆「${reason}」`);}});
+  counts.forEach((count,key)=>{if(count>1){const [model,sn,reason,date]=key.split('\u0000');warnings.push(`待提交內 ${model} S/N ${sn} 在 ${date} 有 ${count} 筆「${reason}」`);}});
   const todayKeys=new Set();
   faultItems.forEach(item=>{
-    const exists=todayRecords.some(record=>String(record.serialNo)===String(item.sn)&&(!record.reason||String(record.reason).trim()===String(item.reason).trim()));
+    const exists=todayRecords.some(record=>duplicateMachineKey(record.model,record.serialNo)===duplicateMachineKey(item.model,item.sn)&&(!record.reason||String(record.reason).trim()===String(item.reason).trim()));
     if(exists)todayKeys.add(duplicateItemKey(item));
   });
-  todayKeys.forEach(key=>{const [sn,reason]=key.split('\u0000');warnings.push(`S/N ${sn} 今日已提交「${reason}」`);});
+  todayKeys.forEach(key=>{const [model,sn,reason]=key.split('\u0000');warnings.push(`${model} S/N ${sn} 今日已提交「${reason}」`);});
   return [...new Set(warnings)];
 }
 function renderQueueDuplicateNotice(){
@@ -4355,7 +4387,7 @@ function renderQueueDuplicateNotice(){
   }
 }
 
-async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=fmtDate(document.getElementById('date').value)){
+async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=fmtDate(document.getElementById('date').value),model=''){
   const normalizedReason=String(reason||'').trim();
   if(!normalizedReason||normalizedReason.toUpperCase()==='PM')return {};
   const url=getScriptUrl();
@@ -4363,6 +4395,7 @@ async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=
   const params=new URLSearchParams({
     action:'duplicateFault',
     company:String(company||activeCompany),
+    model:String(model||''),
     serialNos:[...new Set(serialNos.map(value=>String(value||'').trim()).filter(Boolean))].join(','),
     reason:normalizedReason,
     date:String(date||'')
@@ -4376,25 +4409,111 @@ async function collectRecentDuplicateWarnings(){
   const groups=new Map();
   queue.filter(isDuplicateCheckItem).forEach(item=>{
     const company=item.company||activeCompany;
+    const model=String(item.model||'SAE').trim().toUpperCase()||'SAE';
     const reason=String(item.reason||'').trim();
     const date=item.date||fmtDate(document.getElementById('date').value);
-    const key=`${company}\u0000${reason}\u0000${date}`;
-    if(!groups.has(key))groups.set(key,{company,reason,date,serialNos:new Set()});
+    const key=`${company}\u0000${model}\u0000${reason}\u0000${date}`;
+    if(!groups.has(key))groups.set(key,{company,model,reason,date,serialNos:new Set()});
     groups.get(key).serialNos.add(String(item.sn||'').trim());
   });
   const warnings=[];
   for(const group of groups.values()){
     const serialNos=[...group.serialNos].filter(Boolean);
     for(let offset=0;offset<serialNos.length;offset+=50){
-      const duplicates=await fetchDuplicateFaults(serialNos.slice(offset,offset+50),group.reason,group.company,group.date);
+      const duplicates=await fetchDuplicateFaults(serialNos.slice(offset,offset+50),group.reason,group.company,group.date,group.model);
       Object.entries(duplicates).forEach(([serialNo,value])=>{
         const count=duplicateCount(value);
-        if(count>0)warnings.push(`S/N ${serialNo} 最近 30 日已有 ${count} 筆相同非 PM 記錄（${group.reason}）`);
+        if(count>0)warnings.push(`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆相同非 PM 記錄（${group.reason}）`);
       });
     }
   }
   return [...new Set(warnings)];
 }
+
+function todaySheetDate(){
+  const now=new Date();
+  return `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+}
+function hasSubmissionFieldValue(item,fields){
+  return fields.some(field=>Object.prototype.hasOwnProperty.call(item||{},field)&&String(item[field]??'').trim()!=='');
+}
+function submissionWarningMachine(item,index){
+  const company=String(item?.company||activeCompany).trim();
+  if(!company||/^CVCS(?:-BROKEN)?$/i.test(company))return null;
+  const serialNo=String(item?.sn??'').trim();
+  const model=String(item?.model||'SAE').trim().toUpperCase()||'SAE';
+  if(!serialNo)return null;
+  return {
+    queueIndex:index,
+    company,
+    casino:String(item?.casino||document.getElementById('casino')?.value||'').trim(),
+    model,
+    serialNo,
+    skipHolding:hasSubmissionFieldValue(item,['bpHoldDate','bpHoldReleaseDate']),
+    skipWaiting:hasSubmissionFieldValue(item,['bpRepairDay'])||String(item?.action||'').trim().toLowerCase()==='waiting parts'||!!item?.poRepair?.record,
+  };
+}
+async function collectSubmissionWarnings(){
+  const machines=queue.map(submissionWarningMachine).filter(Boolean);
+  if(!machines.length)return [];
+  const url=getScriptUrl();
+  if(!url)throw new Error('尚未設定網站代號');
+  const params=new URLSearchParams({action:'submissionWarnings',records:JSON.stringify(machines.map(({queueIndex,...machine})=>machine))});
+  const data=await fetchJsonWithTimeout(`${url}?${params.toString()}`,{},60000);
+  if(!data?.success)throw new Error(data?.message||'無法檢查機台狀態');
+  const result=[];
+  (Array.isArray(data.warnings)?data.warnings:[]).forEach(warning=>{
+    const warningCompany=String(warning.company||'').trim().toUpperCase();
+    const warningCasino=String(warning.casino||'').trim().toUpperCase();
+    const warningModel=String(warning.model||'').trim().toUpperCase();
+    const warningSerial=String(warning.serialNo||'').trim();
+    const queueIndex=machines.findIndex(machine=>String(machine.company||'').trim().toUpperCase()===warningCompany&&String(machine.casino||'').trim().toUpperCase()===warningCasino&&String(machine.model||'').trim().toUpperCase()===warningModel&&String(machine.serialNo||'').trim()===warningSerial);
+    const machine=queueIndex>=0?machines[queueIndex]:null;
+    if(!machine)return;
+    const item={...warning,queueIndex:machine.queueIndex,holding:warning.holding===true&&!machine.skipHolding,waiting:warning.waiting===true&&!machine.skipWaiting};
+    if(item.holding||item.waiting)result.push(item);
+  });
+  return result;
+}
+function submissionWarningActionLabel(item,type,today){
+  const machine=`${item.company||activeCompany} · ${item.casino||'未設定場地'} · ${item.model||'SAE'} S/N ${item.serialNo}`;
+  if(type==='hold')return `<strong>${esc(machine)}</strong><br>目前 Holding（Hold Date：${esc(item.bpHoldDate||'已設定')}），將 Hold Release Date 改為 ${esc(today)}`;
+  return `<strong>${esc(machine)}</strong><br>目前等待零件${item.brokenParts?`（${esc(item.brokenParts)}）`:''}，將 Repair Day 改為 ${esc(today)}`;
+}
+function openSubmissionWarningModal(warnings){
+  _pendingSubmissionWarnings=[];
+  const today=todaySheetDate();
+  warnings.forEach(warning=>{
+    if(warning.holding)_pendingSubmissionWarnings.push({...warning,type:'hold'});
+    if(warning.waiting)_pendingSubmissionWarnings.push({...warning,type:'waiting'});
+  });
+  const list=document.getElementById('submitWarningList');
+  if(list)list.innerHTML=_pendingSubmissionWarnings.map((item,index)=>`<label class="submit-warning-option"><input type="checkbox" data-warning-index="${index}"><span>${submissionWarningActionLabel(item,item.type,today)}</span></label>`).join('');
+  document.getElementById('submitWarningModal').classList.add('show');
+}
+function closeSubmissionWarningModal(){document.getElementById('submitWarningModal').classList.remove('show');}
+function selectedSubmissionRepairs(){
+  const today=todaySheetDate();
+  const repairs=new Map();
+  document.querySelectorAll('#submitWarningList input[data-warning-index]:checked').forEach(input=>{
+    const warning=_pendingSubmissionWarnings[Number(input.dataset.warningIndex)];
+    if(!warning)return;
+    const key=`${warning.company}\u0000${warning.rowNumber}`;
+    const existing=repairs.get(key)||{company:warning.company,queueIndex:warning.queueIndex,record:{rowNumber:warning.rowNumber,model:warning.model,serialNo:warning.serialNo,brokenParts:warning.brokenParts}};
+    if(warning.type==='hold')existing.record.bpHoldReleaseDate=today;
+    if(warning.type==='waiting')existing.record.bpRepairDay=today;
+    repairs.set(key,existing);
+  });
+  return [...repairs.values()];
+}
+function continueAfterSubmissionWarnings(repairs){
+  _pendingSubmissionRepairs=repairs;
+  const summary=_pendingSubmitSummary||{warnings:[],stateWarnings:[]};
+  closeSubmissionWarningModal();
+  showSubmitConfirmation(summary.warnings,summary.stateWarnings);
+}
+function skipSubmissionWarnings(){continueAfterSubmissionWarnings([]);}
+function applySubmissionWarnings(){continueAfterSubmissionWarnings(selectedSubmissionRepairs());}
 
 let _poRepairMode=false,_poRepairRecords=[],_poRepairSelected=null,_poRepairLanguage='jp',_poRepairToken=0,_poSnTimer=null;
 function onReasonInput(){const r=document.getElementById('reason').value;if(REASONS.includes(r))onReasonChange();}
@@ -5475,6 +5594,28 @@ async function saveDashboardRow(rowNumber,btn){
     showToast(e.message||'儲存失敗','err');
   }
 }
+function showSubmitConfirmation(warnings=[],stateWarnings=[]){
+  const casino=document.getElementById('casino').value;
+  const date=document.getElementById('date').value;
+  const poNumber=document.getElementById('poNumber').value.trim();
+  const queueCasinos=[...new Set(queue.map(item=>item.casino||casino))];
+  const queueDates=[...new Set(queue.map(item=>item.date||fmtDate(date)))];
+  const queuePoNumbers=[...new Set(queue.map(item=>item.poNumber??poNumber).filter(Boolean))];
+  const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
+  const selectedUpdates=_pendingSubmissionRepairs.length?`<div style="display:block;color:#56d364;line-height:1.5"><strong>已選狀態更新</strong><br>${_pendingSubmissionRepairs.map(item=>`${esc(item.record.model||'SAE')} S/N ${esc(item.record.serialNo||'')}：${item.record.bpHoldReleaseDate?'解除 Hold':''}${item.record.bpHoldReleaseDate&&item.record.bpRepairDay?'、':''}${item.record.bpRepairDay?'Repair Day 改為今日':''}`).join('<br>')}</div>`:'';
+  const stateInfo=stateWarnings.length?`<div style="display:block;color:#f0b45c;line-height:1.5"><strong>狀態提醒</strong><br>${stateWarnings.map(item=>esc(`${item.model||'SAE'} S/N ${item.serialNo||''}：${item.holding?'Holding':''}${item.holding&&item.waiting?'、':''}${item.waiting?'等待零件':''}`)).join('<br>')}</div>`:'';
+  document.getElementById('confirmInfo').innerHTML=`
+    <div><span>場地</span><span>${esc(queueCasinos.join('、'))}</span></div>
+    <div><span>日期</span><span>${esc(queueDates.join('、'))}</span></div>
+    ${queuePoNumbers.length?`<div><span>PO 號碼</span><span>${esc(queuePoNumbers.join('、'))}</span></div>`:''}
+    <div><span>機型</span><span>${esc(models)}</span></div>
+    ${selectedUpdates}${stateInfo}
+    ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(esc).join('<br>')}</div>`:''}`;
+  document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length||_pendingSubmissionRepairs.length?'（有提示，請確認）':''}`;
+  document.getElementById('confirmOkBtn').disabled=false;
+  document.getElementById('confirmOkBtn').textContent='提交';
+  document.getElementById('confirmModal').classList.add('show');
+}
 async function submitAll(){
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
@@ -5502,24 +5643,34 @@ async function submitAll(){
     _submitCheckBusy=false;
     syncSubmitButtonState();
   }
+  _submitCheckBusy=true;
+  syncSubmitButtonState();
+  const stateCheckToken=showLoadingProgress('正在檢查 Holding／等待零件狀態，請稍等...');
+  let stateWarnings=[];
+  try{
+    stateWarnings=await collectSubmissionWarnings();
+  }catch(error){
+    warnings.push(`未能完成 Holding／等待零件檢查：${error.message||'請稍後再試'}`);
+  }finally{
+    hideLoadingProgress(stateCheckToken);
+    _submitCheckBusy=false;
+    syncSubmitButtonState();
+  }
   const seals=queue.map(item=>item.voidSeal).filter(Boolean);const repeatedSeals=[...new Set(seals.filter((seal,i)=>seals.indexOf(seal)!==i))];if(repeatedSeals.length)warnings.push(`Void Seal 重複：${repeatedSeals.join('、')}`);
-  const queueCasinos=[...new Set(queue.map(item=>item.casino||casino))];
   const queueDates=[...new Set(queue.map(item=>item.date||fmtDate(date)))];
-  const queuePoNumbers=[...new Set(queue.map(item=>item.poNumber??poNumber).filter(Boolean))];
   const today=new Date();today.setHours(0,0,0,0);if(queueDates.some(value=>new Date(value.replace(/\//g,'-')+'T00:00:00')>today))warnings.push('所選日期包含未來日期');
-  const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
-  document.getElementById('confirmInfo').innerHTML=`
-    <div><span>場地</span><span>${esc(queueCasinos.join('、'))}</span></div>
-    <div><span>日期</span><span>${esc(queueDates.join('、'))}</span></div>
-    ${queuePoNumbers.length?`<div><span>PO 號碼</span><span>${esc(queuePoNumbers.join('、'))}</span></div>`:''}
-    <div><span>機型</span><span>${esc(models)}</span></div>
-    ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(esc).join('<br>')}</div>`:''}`;
-  document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length?'（有提示，請確認）':''}`;
-  document.getElementById('confirmOkBtn').disabled=false;
-  document.getElementById('confirmOkBtn').textContent='提交';
-  document.getElementById('confirmModal').classList.add('show');
+  _pendingSubmissionRepairs=[];
+  _pendingSubmitSummary={warnings,stateWarnings};
+  if(stateWarnings.length){
+    openSubmissionWarningModal(stateWarnings);
+    return;
+  }
+  showSubmitConfirmation(warnings,stateWarnings);
 }
-function cancelConfirm(){document.getElementById('confirmModal').classList.remove('show');}
+function cancelConfirm(){
+  document.getElementById('confirmModal').classList.remove('show');
+  _pendingSubmissionRepairs=[];_pendingSubmitSummary=null;
+}
 function confirmSubmit(){
   const btn=document.getElementById('confirmOkBtn');
   btn.disabled=true;
@@ -5531,6 +5682,17 @@ function showSubmitProgress(completed,total){
   document.getElementById('submitProgress').classList.add('show');
 }
 function hideSubmitProgress(){document.getElementById('submitProgress').classList.remove('show');}
+function mergeSubmissionRepairs(repairs){
+  const merged=new Map();
+  (repairs||[]).forEach(item=>{
+    const record=item?.record||{};
+    const key=`${item?.company||activeCompany}\u0000${record.rowNumber||''}`;
+    const existing=merged.get(key);
+    if(existing)existing.record={...existing.record,...record};
+    else merged.set(key,{company:item?.company||activeCompany,record:{...record}});
+  });
+  return [...merged.values()];
+}
 async function doSubmit(){
   if(isSubmitting)return;
   isSubmitting=true;
@@ -5542,13 +5704,17 @@ async function doSubmit(){
   const btn=document.getElementById('submitBtn');
   btn.disabled=true;
   if(ensureSubmissionIds(queue))saveQueue();
+  const selectedRepairs=_pendingSubmissionRepairs.slice();
+  _pendingSubmissionRepairs=[];_pendingSubmitSummary=null;
   const records=queue.map(item=>({submissionId:item.submissionId,company:item.company||activeCompany,casino:item.casino||casino,date:item.date||fmtDate(date),poNumber:item.poNumber??poNumber,model:item.model||'SAE',serialNo:Number(item.sn),aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,actionTaken:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',brokenParts:item.brokenParts||'',bpDesc:item.bpDesc||'',bpColC:item.bpColC||'',bpQty:item.bpQty||'',bpRepairDay:item.bpRepairDay||'',bpRemark:item.bpRemark||'',bpUodActivationDate:item.bpUodActivationDate||(/^wait for unlock$/i.test(item.bpUodUnlockDay||'')?(item.date||fmtDate(date)):'')||'',bpUodUnlockDay:item.bpUodUnlockDay||'',bpHoldDate:item.bpHoldDate||'',bpHoldReleaseDate:item.bpHoldReleaseDate||''}));
   const clearQueue=(refreshToday=true)=>{queue=[];selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;localStorage.removeItem(queueStorageKey(activeCompany));clearMonthlyStatsCache();renderQueue();if(refreshToday)loadTodayRecords();};
   const CHUNK_SIZE=20;
   const chunks=[];
   for(let i=0;i<records.length;i+=CHUNK_SIZE){
     const chunkItems=queue.slice(i,i+CHUNK_SIZE);
-    const repairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>({company:item.company||activeCompany,record:{...item.poRepair.record,bpRepairDay:item.date||fmtDate(date)}}));
+    const poRepairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>({company:item.company||activeCompany,record:{...item.poRepair.record,bpRepairDay:item.date||fmtDate(date)}}));
+    const stateRepairs=selectedRepairs.filter(item=>Number(item.queueIndex)>=i&&Number(item.queueIndex)<i+CHUNK_SIZE).map(({queueIndex,...item})=>item);
+    const repairs=mergeSubmissionRepairs([...poRepairs,...stateRepairs]);
     chunks.push({records:records.slice(i,i+CHUNK_SIZE),repairs});
   }
   let savedCount=0,skippedCount=0,completedChunks=0;

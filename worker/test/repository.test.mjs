@@ -208,13 +208,14 @@ const companyData = {
   ],
 };
 
-test("implements all 14 GET action contracts against synthetic Sheets", async () => {
+test("implements all GET action contracts against synthetic Sheets", async () => {
   const harness = createSheetsHarness(companyData);
   const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
   const actions = [
     ["ping", {}],
     ["today", { company: "SCL" }],
     ["duplicateFault", { company: "SCL", serialNos: "1234", reason: "Hardware Problem", date: "2026/08/04" }],
+    ["submissionWarnings", { records: [{ company: "SCL", casino: "Venetian", model: "SAE", serialNo: "1234" }] }],
     ["dashboard", { company: "SCL", page: "1", pageSize: "10", serialNo: "1234" }],
     ["parts", {}],
     ["template", { company: "SCL" }],
@@ -235,12 +236,26 @@ test("implements all 14 GET action contracts against synthetic Sheets", async ()
     if (action === "parts") assert.ok(Array.isArray(result.parts), action);
     if (action === "aaTags") assert.ok(Array.isArray(result.tags), action);
     if (action === "template") assert.ok(Array.isArray(result.mappings), action);
+    if (action === "submissionWarnings") assert.ok(Array.isArray(result.warnings), action);
     if (["dashboard", "brokenPartsList", "monthlyStats", "monthlyStatsBase", "monthlyStatsCompany", "scheduleMachineCounts", "scheduleOverview", "monthlySettings"].includes(action)) {
       assert.equal(result.success, true, action);
     }
   }
   assert.equal((await repository.getAction({ action: "parts" })).parts.length, 2);
   assert.equal((await repository.getAction({ action: "aaTags", company: "MGM" })).tags[0].aaTag, "TAE0051");
+});
+
+test("returns current submission warnings with row identity", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+  const result = await repository.getAction({
+    action: "submissionWarnings",
+    records: [{ company: "SCL", casino: "Venetian", model: "SAE", serialNo: "1234" }],
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.warnings.map(({ company, rowNumber, model, serialNo, holding, waiting }) => ({
+    company, rowNumber, model, serialNo, holding, waiting,
+  })), [{ company: "SCL", rowNumber: 2, model: "SAE", serialNo: "1234", holding: false, waiting: true }]);
 });
 
 test("schedule overview keeps an afternoon remark beyond the legacy T-column range", async () => {
@@ -325,6 +340,37 @@ test("finds same non-PM serial and reason within the requested 30-day window", (
     date: "2026/08/04",
     timeZone: "Asia/Hong_Kong",
   }), {});
+});
+
+test("separates duplicate faults by model when a model is supplied", () => {
+  const rows = [
+    ["Venetian", "2026/08/04", "2608", "SAE", "1000", "Hardware Problem", "Repair", "", "", ""],
+    ["Venetian", "2026/08/03", "2608", "TAE", "1000", "Hardware Problem", "Repair", "", "", ""],
+  ];
+  assert.deepEqual(getDuplicateFaultsFromRows(rows, {
+    company: "SCL",
+    model: "TAE",
+    serialNos: ["1000"],
+    reason: "Hardware Problem",
+    date: "2026/08/04",
+    timeZone: "Asia/Hong_Kong",
+  }), { "1000": 1 });
+});
+
+test("passes the selected model through the duplicate read action", async () => {
+  const data = structuredClone(companyData);
+  data.scl[0].values.push(["Venetian", "2026/08/03", "2608", "TAE", "1000", "Hardware Problem", "Repair", "", "", ""]);
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+  const result = await repository.getAction({
+    action: "duplicateFault",
+    company: "SCL",
+    model: "TAE",
+    serialNos: "1000",
+    reason: "Hardware Problem",
+    date: "2026/08/04",
+  });
+  assert.deepEqual(result.duplicates, { "1000": 1 });
 });
 
 test("loads shared CVCS options and server-paged record and follow-up results", async () => {
@@ -439,6 +485,58 @@ test("does not read the Broken Parts List for a normal submission", async () => 
   });
   assert.equal(result.success, true);
   assert.equal(brokenReads, 0);
+});
+
+test("updates selected Hold release without clearing the existing Repair Day", async () => {
+  const data = structuredClone(companyData);
+  data.scl[1].values[1][12] = "2026/08/01";
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+  const result = await repository.postAction({
+    action: "submitRecords",
+    brokenPartsRepairs: [{
+      company: "SCL",
+      record: { rowNumber: 2, model: "SAE", serialNo: "1234", brokenParts: "AE-1", bpHoldReleaseDate: "2026/08/04" },
+    }],
+    records: [{
+      submissionId: "hold-release-submit",
+      company: "SCL",
+      casino: "Venetian",
+      date: "2026/08/04",
+      poNumber: "2608",
+      model: "SAE",
+      serialNo: "4321",
+      reason: "PM",
+      actionTaken: "Preventive Maintenance",
+    }],
+  });
+  assert.equal(result.success, true);
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][7], "Waiting");
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][13], "2026/08/04");
+});
+
+test("updates selected Waiting Parts status to today's Repair Day", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+  await repository.postAction({
+    action: "submitRecords",
+    brokenPartsRepairs: [{
+      company: "SCL",
+      record: { rowNumber: 2, model: "SAE", serialNo: "1234", brokenParts: "AE-1", bpRepairDay: "2026/08/04" },
+    }],
+    records: [{
+      submissionId: "waiting-parts-submit",
+      company: "SCL",
+      casino: "Venetian",
+      date: "2026/08/04",
+      poNumber: "2608",
+      model: "SAE",
+      serialNo: "4322",
+      reason: "PM",
+      actionTaken: "Preventive Maintenance",
+    }],
+  });
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][7], "2026/08/04");
 });
 
 test("shares monthly statistics for ten minutes across Worker instances", async () => {

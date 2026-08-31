@@ -165,6 +165,7 @@ test("maps every API action to its server-enforced permission group", () => {
   assert.equal(permissionForAction("updateScheduleRemark"), "schedule");
   assert.equal(permissionForAction("updateSchedulePeople"), "schedule");
   assert.equal(permissionForAction("submitRecords"), "ae");
+  assert.equal(permissionForAction("submissionWarnings"), "ae");
   assert.equal(permissionForAction("cvcsRecords"), "cvcs");
   assert.equal(permissionForAction("submitCvcsRecords"), "cvcs");
   assert.equal(permissionForAction("createAccessToken"), "admin");
