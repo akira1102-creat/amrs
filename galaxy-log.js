@@ -1,0 +1,583 @@
+(function attachAmrsGalaxyLog(root, factory) {
+  const api = factory(root);
+  if (typeof module === "object" && module.exports) module.exports = api;
+  if (root) root.AmrsGalaxyLog = api;
+}(typeof globalThis !== "undefined" ? globalThis : this, function createModule(root) {
+  "use strict";
+
+  const STORAGE_KEY = "_amrs_galaxy_log_v1";
+  const STATE_VERSION = 1;
+  const STATUS_LABELS = {
+    pending: "未取",
+    done: "已取",
+    needs_review: "需跟進",
+  };
+
+  function text(value) {
+    return String(value == null ? "" : value).trim();
+  }
+
+  function escapeHtml(value) {
+    return text(value).replace(/[&<>'"]/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "'": "&#39;",
+      '"': "&quot;",
+    }[char]));
+  }
+
+  function pad(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  function isoFromDate(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function formatLocalDateTime(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return `${isoFromDate(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function excelSerialToIso(value) {
+    const serial = Number(value);
+    if (!Number.isFinite(serial) || serial < 1 || serial > 100000) return "";
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function monthNameToNumber(value) {
+    const month = text(value).toLowerCase().slice(0, 3);
+    return {
+      jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
+      jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+    }[month] || 0;
+  }
+
+  function validIsoDate(year, month, day) {
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() + 1 !== Number(month) || date.getUTCDate() !== Number(day)) return "";
+    return `${String(year).padStart(4, "0")}-${pad(month)}-${pad(day)}`;
+  }
+
+  function normalizeDate(value, fallbackYear = new Date().getFullYear()) {
+    if (value instanceof Date) return isoFromDate(value);
+    if (typeof value === "number") return excelSerialToIso(value);
+    const raw = text(value);
+    if (!raw || /^=?#?N\/?A$/i.test(raw)) return "";
+
+    let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+    if (match) return validIsoDate(match[1], match[2], match[3]);
+
+    match = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+    if (match) {
+      const first = Number(match[1]);
+      const second = Number(match[2]);
+      const year = Number(match[3]);
+      if (second > 12) return validIsoDate(year, first, second);
+      if (first > 12) return validIsoDate(year, second, first);
+      return validIsoDate(year, first, second);
+    }
+
+    match = raw.match(/^(\d{1,2})[- ]([A-Za-z]{3,9})(?:[- ](\d{4}))?$/);
+    if (match) {
+      const month = monthNameToNumber(match[2]);
+      if (!month) return "";
+      return validIsoDate(match[3] || fallbackYear, month, match[1]);
+    }
+    return "";
+  }
+
+  function normalizeSerial(value) {
+    const raw = text(value).replace(/^'+/, "").replace(/\s+/g, "").toUpperCase();
+    if (!raw || /^=?#?N\/?A$/i.test(raw) || raw.startsWith("=")) return "";
+    return raw;
+  }
+
+  function serialLast4(value) {
+    const match = normalizeSerial(value).match(/(\d{4})$/);
+    return match ? match[1] : "";
+  }
+
+  function isSerialLike(value) {
+    const raw = normalizeSerial(value);
+    if (!raw || /^DATE$/i.test(raw) || /SERIAL|OCCURRED|COMPLETED|機身|號碼|日期/i.test(raw)) return false;
+    return /\d/.test(raw);
+  }
+
+  function hash(value) {
+    let result = 2166136261;
+    for (const char of String(value)) {
+      result ^= char.charCodeAt(0);
+      result = Math.imul(result, 16777619);
+    }
+    return (result >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function buildTaskId(fullSerial, targetDate, occurrenceIndex = 0) {
+    return `gx-${hash(`${normalizeSerial(fullSerial)}|${normalizeDate(targetDate)}|${Number(occurrenceIndex) || 0}`)}`;
+  }
+
+  function findHeaderInfo(rows) {
+    const limit = Math.min(Array.isArray(rows) ? rows.length : 0, 30);
+    for (let rowIndex = 0; rowIndex < limit; rowIndex += 1) {
+      const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
+      const labels = row.map((value) => text(value).toLowerCase());
+      const serialCol = labels.findIndex((value) => /serial|s\/?n|機身|機台|序號/.test(value));
+      const completedCol = labels.findIndex((value) => /completed|complete|取\s*log|完成/.test(value));
+      const targetCol = labels.findIndex((value) => /occurred|指定|log.*date|發生|日期/.test(value) && !/completed|complete|完成/.test(value));
+      const statusCol = labels.findIndex((value) => /status|狀態/.test(value));
+      const noteCol = labels.findIndex((value) => /note|remark|備註/.test(value));
+      if (serialCol >= 0 && completedCol >= 0 && targetCol >= 0) return { rowIndex, serialCol, targetCol, completedCol, statusCol, noteCol };
+    }
+    return null;
+  }
+
+  function taskFromValues({ fullSerial, targetDate, completedDate, status, note, sheetName, sourceRow, occurrenceIndex }) {
+    const serial = normalizeSerial(fullSerial);
+    const target = normalizeDate(targetDate);
+    const complete = normalizeDate(completedDate);
+    return {
+      id: buildTaskId(serial, target, occurrenceIndex),
+      fullSerial: serial,
+      serialLast4: serialLast4(serial),
+      targetDate: target,
+      completedDate: complete,
+      status: status || (complete ? "done" : "pending"),
+      note: text(note),
+      sourceSheet: text(sheetName),
+      sourceRow: Number(sourceRow) || 0,
+      duplicateIndex: Number(occurrenceIndex) || 0,
+    };
+  }
+
+  function parseGalaxyRows({ sheetName = "", rows = [] } = {}) {
+    const matrix = Array.isArray(rows) ? rows : [];
+    const header = findHeaderInfo(matrix);
+    const tasks = [];
+    const issues = [];
+    const occurrenceByKey = new Map();
+    const addTask = (values) => {
+      const key = `${normalizeSerial(values.fullSerial)}|${normalizeDate(values.targetDate)}`;
+      const occurrenceIndex = occurrenceByKey.get(key) || 0;
+      occurrenceByKey.set(key, occurrenceIndex + 1);
+      tasks.push(taskFromValues({ ...values, occurrenceIndex }));
+    };
+
+    if (header) {
+      let currentSerial = "";
+      for (let index = header.rowIndex + 1; index < matrix.length; index += 1) {
+        const row = Array.isArray(matrix[index]) ? matrix[index] : [];
+        const rawSerial = row[header.serialCol];
+        if (text(rawSerial)) currentSerial = normalizeSerial(rawSerial);
+        const rawTarget = row[header.targetCol];
+        const rawCompleted = row[header.completedCol];
+        const rawStatus = header.statusCol >= 0 ? row[header.statusCol] : "";
+        const rawNote = header.noteCol >= 0 ? row[header.noteCol] : "";
+        if (!text(rawTarget) && !text(rawSerial) && !text(rawCompleted)) continue;
+        const rawCompletionText = text(rawCompleted);
+        const rawCompletionDate = normalizeDate(rawCompleted);
+        const invalidCompletion = rawCompletionText && !rawCompletionDate && !/^(?:n\/?a|-)$/i.test(rawCompletionText);
+        if (!text(rawSerial) && invalidCompletion) currentSerial = "";
+        if (!currentSerial) {
+          issues.push({ row: index + 1, type: "missing-serial", message: "找不到 SN", value: text(rawSerial) || "" });
+          continue;
+        }
+        const targetDate = normalizeDate(rawTarget);
+        if (!targetDate) {
+          issues.push({ row: index + 1, type: "invalid-date", message: "指定 Log 日期格式無法辨識", value: text(rawTarget) });
+          continue;
+        }
+        const completedDate = rawCompletionDate;
+        const completionText = rawCompletionText;
+        const statusText = text(rawStatus).toLowerCase();
+        const explicitDone = /done|已取|complete|完成/.test(statusText);
+        const explicitNeedsReview = /needs?[\s_-]*review|需\s*跟進|跟進|review/.test(statusText);
+        const explicitPending = /pending|未取/.test(statusText);
+        const status = completedDate || explicitDone ? "done" : explicitNeedsReview || invalidCompletion ? "needs_review" : explicitPending ? "pending" : "pending";
+        if (invalidCompletion) {
+          issues.push({ row: index + 1, type: "completion-value", message: "完成欄不是日期，已保留作需跟進", value: completionText });
+        }
+        addTask({
+          fullSerial: currentSerial,
+          targetDate,
+          completedDate,
+          status,
+          note: text(rawNote) || (invalidCompletion ? completionText : ""),
+          sheetName,
+          sourceRow: index + 1,
+        });
+      }
+      return { kind: "source", sheetName, tasks, issues };
+    }
+
+    let currentSerial = "";
+    for (let index = 0; index < matrix.length; index += 1) {
+      const row = Array.isArray(matrix[index]) ? matrix[index] : [];
+      const rawSerial = row[0];
+      const rawTarget = row[1];
+      if (text(rawSerial) && isSerialLike(rawSerial)) currentSerial = normalizeSerial(rawSerial);
+      if (!text(rawTarget)) continue;
+      if (!currentSerial) {
+        issues.push({ row: index + 1, type: "missing-serial", message: "找不到 SN", value: text(rawSerial) });
+        continue;
+      }
+      const targetDate = normalizeDate(rawTarget);
+      if (!targetDate) {
+        issues.push({ row: index + 1, type: "invalid-date", message: "指定 Log 日期格式無法辨識", value: text(rawTarget) });
+        continue;
+      }
+      addTask({ fullSerial: currentSerial, targetDate, sheetName, sourceRow: index + 1 });
+    }
+    return { kind: "print", sheetName, tasks, issues };
+  }
+
+  function isSourceSheet(rows) {
+    return !!findHeaderInfo(rows);
+  }
+
+  function mergeImportedTasks(existing, imported, { importedAt = new Date().toISOString(), sourceName = "" } = {}) {
+    const tasks = (Array.isArray(existing) ? existing : []).map((task) => ({ ...task }));
+    const byId = new Map(tasks.map((task, index) => [task.id, { task, index }]));
+    let added = 0;
+    let updated = 0;
+    for (const incoming of Array.isArray(imported) ? imported : []) {
+      if (!incoming?.id || !incoming.fullSerial || !incoming.targetDate) continue;
+      const found = byId.get(incoming.id);
+      if (!found) {
+        tasks.push({ ...incoming, importedAt, sourceName, updatedAt: importedAt });
+        byId.set(incoming.id, { task: tasks[tasks.length - 1], index: tasks.length - 1 });
+        added += 1;
+        continue;
+      }
+      const current = found.task;
+      const localDone = current.status === "done" && current.completedDate;
+      const incomingDone = incoming.status === "done" && incoming.completedDate;
+      Object.assign(current, incoming, {
+        completedDate: localDone ? current.completedDate : (incoming.completedDate || current.completedDate || ""),
+        status: localDone ? "done" : (incomingDone ? "done" : (current.status === "done" ? "done" : incoming.status || current.status || "pending")),
+        note: current.note || incoming.note || "",
+        importedAt,
+        sourceName,
+        updatedAt: importedAt,
+      });
+      updated += 1;
+    }
+    return { tasks, added, updated };
+  }
+
+  function completeTask(tasks, id, completedDate = isoFromDate(new Date())) {
+    const date = normalizeDate(completedDate) || isoFromDate(new Date());
+    return (Array.isArray(tasks) ? tasks : []).map((task) => task.id === id ? { ...task, status: "done", completedDate: date, updatedAt: new Date().toISOString() } : { ...task });
+  }
+
+  function reopenTask(tasks, id) {
+    return (Array.isArray(tasks) ? tasks : []).map((task) => task.id === id ? { ...task, status: "pending", completedDate: "", updatedAt: new Date().toISOString() } : { ...task });
+  }
+
+  function filterTasks(tasks, { query = "", status = "pending" } = {}) {
+    const normalizedQuery = text(query).toLowerCase();
+    return (Array.isArray(tasks) ? tasks : [])
+      .filter((task) => !status || status === "all" || task.status === status)
+      .filter((task) => !normalizedQuery || [task.fullSerial, task.serialLast4, task.targetDate, task.completedDate].some((value) => text(value).toLowerCase().includes(normalizedQuery)))
+      .sort((left, right) => {
+        const statusWeight = { pending: 0, needs_review: 1, done: 2 };
+        return (statusWeight[left.status] ?? 9) - (statusWeight[right.status] ?? 9)
+          || text(left.targetDate).localeCompare(text(right.targetDate))
+          || text(left.fullSerial).localeCompare(text(right.fullSerial))
+          || Number(left.duplicateIndex || 0) - Number(right.duplicateIndex || 0);
+      });
+  }
+
+  function normalizeState(value) {
+    const state = value && typeof value === "object" ? value : {};
+    const tasks = Array.isArray(state.tasks) ? state.tasks.filter((task) => task && task.id && task.fullSerial && task.targetDate).map((task) => ({
+      ...task,
+      serialLast4: task.serialLast4 || serialLast4(task.fullSerial),
+      status: STATUS_LABELS[task.status] ? task.status : "pending",
+      completedDate: normalizeDate(task.completedDate),
+      note: text(task.note),
+    })) : [];
+    return {
+      version: STATE_VERSION,
+      tasks,
+      issues: Array.isArray(state.issues) ? state.issues.slice(0, 200) : [],
+      importedAt: text(state.importedAt),
+      sourceName: text(state.sourceName),
+      sourceSheet: text(state.sourceSheet),
+    };
+  }
+
+  function readStoredState(storage = root?.localStorage) {
+    try {
+      const raw = storage?.getItem?.(STORAGE_KEY);
+      return normalizeState(raw ? JSON.parse(raw) : null);
+    } catch {
+      return normalizeState(null);
+    }
+  }
+
+  function writeStoredState(storage, state) {
+    const normalized = normalizeState(state);
+    storage?.setItem?.(STORAGE_KEY, JSON.stringify(normalized));
+    return normalized;
+  }
+
+  function csvCell(value) {
+    const raw = text(value);
+    return /[",\r\n]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
+  }
+
+  function tasksToRows(tasks) {
+    return [
+      ["SN", "SN末4位", "指定 Log 日期", "取 Log 日期", "狀態", "備註"],
+      ...(Array.isArray(tasks) ? tasks : []).map((task) => [
+        task.fullSerial,
+        task.serialLast4 || serialLast4(task.fullSerial),
+        task.targetDate,
+        task.completedDate,
+        STATUS_LABELS[task.status] || task.status,
+        task.note,
+      ]),
+    ];
+  }
+
+  function tasksToCsv(tasks) {
+    return `\ufeff${tasksToRows(tasks).map((row) => row.map(csvCell).join(",")).join("\r\n")}\r\n`;
+  }
+
+  function parseCsvText(value) {
+    const source = String(value || "").replace(/^\ufeff/, "");
+    const rows = [];
+    let row = [];
+    let cell = "";
+    let quoted = false;
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index];
+      const next = source[index + 1];
+      if (char === '"' && quoted && next === '"') { cell += '"'; index += 1; continue; }
+      if (char === '"') { quoted = !quoted; continue; }
+      if (char === "," && !quoted) { row.push(cell); cell = ""; continue; }
+      if ((char === "\n" || char === "\r") && !quoted) {
+        if (char === "\r" && next === "\n") index += 1;
+        row.push(cell); cell = "";
+        if (row.some((value) => text(value))) rows.push(row);
+        row = [];
+        continue;
+      }
+      cell += char;
+    }
+    if (cell || row.length) { row.push(cell); if (row.some((value) => text(value))) rows.push(row); }
+    return rows;
+  }
+
+  function downloadBlob(blob, filename, documentRef = root?.document) {
+    if (!documentRef?.createElement || !root?.URL?.createObjectURL) return false;
+    const url = root.URL.createObjectURL(blob);
+    const link = documentRef.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.rel = "noopener";
+    link.click();
+    setTimeout(() => root.URL.revokeObjectURL(url), 0);
+    return true;
+  }
+
+  function exportTasksXlsx(tasks, xlsx = root?.XLSX, documentRef = root?.document) {
+    if (!xlsx?.utils?.aoa_to_sheet || !xlsx?.write) throw new Error("Excel 匯出元件未載入");
+    const workbook = xlsx.utils.book_new();
+    const worksheet = xlsx.utils.aoa_to_sheet(tasksToRows(tasks));
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Galaxy Log");
+    const output = xlsx.write(workbook, { bookType: "xlsx", type: "array" });
+    return downloadBlob(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `Galaxy-Log-${isoFromDate(new Date()) || "export"}.xlsx`, documentRef);
+  }
+
+  async function parseWorkbookFile(file, xlsx = root?.XLSX) {
+    if (!file) throw new Error("請選擇 Excel 或 CSV 檔案");
+    if (/\.csv$/i.test(file.name || "")) return parseGalaxyRows({ sheetName: file.name || "CSV", rows: parseCsvText(await file.text()) });
+    if (!xlsx?.read || !xlsx?.utils?.sheet_to_json) throw new Error("Excel 匯入元件未載入，請重新整理 AMRS");
+    const workbook = xlsx.read(await file.arrayBuffer(), { type: "array", cellDates: true, cellNF: true, cellText: true });
+    const candidateNames = Array.isArray(workbook.SheetNames) ? workbook.SheetNames : [];
+    const sourceName = candidateNames.find((name) => /p\.?mass|jm/i.test(name) && isSourceSheet(xlsx.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: true, defval: null })))
+      || candidateNames.find((name) => isSourceSheet(xlsx.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: true, defval: null })))
+      || candidateNames.find((name) => /print.?layout/i.test(name))
+      || candidateNames[0];
+    if (!sourceName) throw new Error("找不到可用工作表");
+    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sourceName], { header: 1, raw: true, defval: null });
+    const parsed = parseGalaxyRows({ sheetName: sourceName, rows });
+    parsed.sourceName = file.name || "";
+    parsed.ignoredSheets = candidateNames.filter((name) => name !== sourceName);
+    return parsed;
+  }
+
+  function createApplication(options = {}) {
+    const documentRef = options.document || root?.document;
+    const storage = options.storage || root?.localStorage;
+    let state = readStoredState(storage);
+    let filter = { query: "", status: "pending" };
+    let mounted = false;
+    let busy = false;
+
+    function notify(message, kind = "ok") {
+      if (typeof options.toast === "function") options.toast(message, kind === "err" ? "err" : kind === "warn" ? "warn" : "ok");
+      const status = documentRef?.getElementById?.("galaxyLogStatus");
+      if (status) { status.textContent = message; status.dataset.kind = kind; }
+    }
+
+    function shell() {
+      return `<div class="galaxy-page-shell">
+        <div class="galaxy-page-head">
+          <div><div class="galaxy-page-title">Galaxy 取 Log</div><div class="galaxy-page-subtitle">離線清單 · 出發前匯入，返公司再整理</div></div>
+          <div class="galaxy-page-actions">
+            <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">匯入 Excel / CSV</button>
+            <button class="galaxy-btn" id="galaxyExportXlsxBtn" type="button">匯出 Excel</button>
+            <button class="galaxy-btn" id="galaxyExportCsvBtn" type="button">匯出 CSV</button>
+            <input id="galaxyFileInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+          </div>
+        </div>
+        <div class="galaxy-status-strip"><span id="galaxyLogSummary"></span><span id="galaxyLogOfflineBadge"></span><span id="galaxyLogStatus" role="status" aria-live="polite"></span></div>
+        <div class="galaxy-filter-bar">
+          <input id="galaxyLogSearch" type="search" inputmode="search" placeholder="搜尋完整 SN 或末四位" autocomplete="off">
+          <select id="galaxyLogStatusFilter" aria-label="篩選狀態"><option value="pending">未取</option><option value="needs_review">需跟進</option><option value="done">已取</option><option value="all">全部</option></select>
+          <button class="galaxy-btn" id="galaxyLogClearBtn" type="button">清除本機清單</button>
+        </div>
+        <div id="galaxyLogIssues"></div>
+        <div id="galaxyLogList" class="galaxy-task-list"></div>
+      </div>`;
+    }
+
+    function bind() {
+      const fileInput = documentRef.getElementById("galaxyFileInput");
+      documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => fileInput?.click());
+      fileInput?.addEventListener("change", async () => {
+        const file = fileInput.files?.[0];
+        fileInput.value = "";
+        if (file) await importFile(file);
+      });
+      documentRef.getElementById("galaxyExportXlsxBtn")?.addEventListener("click", () => {
+        try { exportTasksXlsx(state.tasks); notify("✓ 已匯出 Excel"); } catch (error) { notify(error.message || "Excel 匯出失敗", "err"); }
+      });
+      documentRef.getElementById("galaxyExportCsvBtn")?.addEventListener("click", () => {
+        if (downloadBlob(new Blob([tasksToCsv(state.tasks)], { type: "text/csv;charset=utf-8" }), `Galaxy-Log-${isoFromDate(new Date()) || "export"}.csv`, documentRef)) notify("✓ 已匯出 CSV");
+        else notify("瀏覽器不允許下載檔案", "err");
+      });
+      documentRef.getElementById("galaxyLogSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; render(); });
+      documentRef.getElementById("galaxyLogStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; render(); });
+      documentRef.getElementById("galaxyLogClearBtn")?.addEventListener("click", () => {
+        if (!state.tasks.length) { notify("目前沒有本機清單", "warn"); return; }
+        if (!root.confirm?.("確定要清除這部 Surface 的 Galaxy 清單及完成記錄嗎？")) return;
+        state = writeStoredState(storage, { tasks: [], issues: [], importedAt: "", sourceName: "", sourceSheet: "" });
+        notify("已清除本機 Galaxy 清單");
+        render();
+      });
+      documentRef.getElementById("galaxyLogList")?.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-galaxy-action]");
+        if (!button) return;
+        const id = button.dataset.galaxyId;
+        const action = button.dataset.galaxyAction;
+        if (action === "complete") {
+          state = writeStoredState(storage, { ...state, tasks: completeTask(state.tasks, id) });
+          notify("✓ 已記錄取 Log 日期");
+        } else if (action === "reopen") {
+          state = writeStoredState(storage, { ...state, tasks: reopenTask(state.tasks, id) });
+          notify("已改回未取");
+        }
+        render();
+      });
+      root.addEventListener?.("online", render);
+      root.addEventListener?.("offline", render);
+    }
+
+    async function importFile(file) {
+      if (busy) return;
+      busy = true;
+      notify("讀取清單中…");
+      try {
+        const parsed = await parseWorkbookFile(file);
+        const merged = mergeImportedTasks(state.tasks, parsed.tasks, { importedAt: new Date().toISOString(), sourceName: file.name || "" });
+        state = writeStoredState(storage, { ...state, tasks: merged.tasks, issues: parsed.issues, importedAt: new Date().toISOString(), sourceName: file.name || "", sourceSheet: parsed.sheetName || "" });
+        const ignored = parsed.ignoredSheets?.length ? `，跳過 ${parsed.ignoredSheets.length} 張其他工作表` : "";
+        notify(`✓ 已匯入 ${merged.added} 筆新任務，更新 ${merged.updated} 筆${ignored}`);
+        filter.status = "pending";
+      } catch (error) {
+        notify(error.message || "匯入失敗", "err");
+      } finally {
+        busy = false;
+        render();
+      }
+    }
+
+    function render() {
+      const page = documentRef?.getElementById?.("galaxyLogPage");
+      if (!page || !mounted) return;
+      const tasks = filterTasks(state.tasks, filter);
+      const counts = state.tasks.reduce((result, task) => { result[task.status] = (result[task.status] || 0) + 1; return result; }, {});
+      const summary = documentRef.getElementById("galaxyLogSummary");
+      const importedAt = formatLocalDateTime(state.importedAt);
+      if (summary) summary.textContent = `全部 ${state.tasks.length} · 未取 ${counts.pending || 0} · 已取 ${counts.done || 0} · 需跟進 ${counts.needs_review || 0}${importedAt ? ` · 最後匯入 ${importedAt}` : ""}`;
+      const offline = documentRef.getElementById("galaxyLogOfflineBadge");
+      if (offline) { offline.textContent = root.navigator?.onLine === false ? "離線模式" : "本機資料已保存"; offline.className = root.navigator?.onLine === false ? "offline" : "local"; }
+      const search = documentRef.getElementById("galaxyLogSearch"); if (search && search.value !== filter.query) search.value = filter.query;
+      const statusSelect = documentRef.getElementById("galaxyLogStatusFilter"); if (statusSelect) statusSelect.value = filter.status;
+      const issueHost = documentRef.getElementById("galaxyLogIssues");
+      if (issueHost) issueHost.innerHTML = state.issues.length ? `<details class="galaxy-issues"><summary>匯入檢查：${state.issues.length} 項需要留意</summary><div>${state.issues.slice(0, 40).map((issue) => `<div>第 ${escapeHtml(issue.row)} 行：${escapeHtml(issue.message)}${issue.value ? `（${escapeHtml(issue.value)}）` : ""}</div>`).join("")}${state.issues.length > 40 ? "<div>其餘問題已省略，請修正原檔後重新匯入。</div>" : ""}</div></details>` : "";
+      const list = documentRef.getElementById("galaxyLogList");
+      if (!list) return;
+      if (!tasks.length) {
+        list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>返公司有網絡時先匯入 Excel；之後帶 Surface 到現場即可離線使用。</span></div>`;
+        return;
+      }
+      list.innerHTML = tasks.map((task) => `<article class="galaxy-task-card ${escapeHtml(task.status)}">
+        <div class="galaxy-task-main">
+          <div class="galaxy-task-serial">${escapeHtml(task.fullSerial)} <span>末4位 ${escapeHtml(task.serialLast4 || serialLast4(task.fullSerial))}</span>${task.duplicateIndex ? '<em>疑似重覆</em>' : ""}</div>
+          <div class="galaxy-task-target">指定 Log 日期 <strong>${escapeHtml(task.targetDate.replace(/-/g, "/"))}</strong></div>
+          ${task.note ? `<div class="galaxy-task-note">${escapeHtml(task.note)}</div>` : ""}
+        </div>
+        <div class="galaxy-task-state"><span class="galaxy-state-badge ${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>${task.completedDate ? `<span class="galaxy-complete-date">取 Log：${escapeHtml(task.completedDate.replace(/-/g, "/"))}</span>` : ""}</div>
+        <div class="galaxy-task-actions">${task.status === "done" ? `<button class="galaxy-btn small" data-galaxy-action="reopen" data-galaxy-id="${escapeHtml(task.id)}" type="button">改回未取</button>` : `<button class="galaxy-btn complete" data-galaxy-action="complete" data-galaxy-id="${escapeHtml(task.id)}" type="button">✓ 已取 Log</button>`}</div>
+      </article>`).join("");
+    }
+
+    function mount() {
+      const page = documentRef?.getElementById?.("galaxyLogPage");
+      if (!page) return false;
+      if (!mounted) { page.innerHTML = shell(); bind(); mounted = true; }
+      render();
+      return true;
+    }
+
+    return {
+      mount,
+      render,
+      importFile,
+      getState: () => normalizeState(state),
+      setFilter: (next) => { filter = { ...filter, ...(next || {}) }; render(); },
+    };
+  }
+
+  return {
+    STORAGE_KEY,
+    STATUS_LABELS,
+    buildTaskId,
+    completeTask,
+    createApplication,
+    exportTasksXlsx,
+    filterTasks,
+    formatLocalDateTime,
+    mergeImportedTasks,
+    normalizeDate,
+    normalizeSerial,
+    parseCsvText,
+    parseGalaxyRows,
+    parseWorkbookFile,
+    readStoredState,
+    reopenTask,
+    serialLast4,
+    tasksToCsv,
+    tasksToRows,
+    writeStoredState,
+  };
+}));

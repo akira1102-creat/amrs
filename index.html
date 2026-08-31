@@ -7,10 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260831a">
+  <link rel="manifest" href="manifest.json?v=20260831b">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260831a">
+  <link rel="stylesheet" href="./cvcs.css?v=20260831b">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260831b">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1134,6 +1135,8 @@
   <button class="menu-item" id="partsListMenuBtn" onclick="showPage('partsList')" type="button">零件列表</button>
   <button class="menu-item" id="brokenPartsMenuBtn" onclick="toggleBrokenPartsCompanyMenu()" type="button" aria-expanded="false"><span>壞零件/UOD/Hold機 列表</span><span class="menu-chevron">▼</span></button>
   <div class="menu-sub menu-collapsible" id="brokenPartsCompanyMenu"></div>
+  <div class="menu-section" id="toolsMenuSection">工作工具</div>
+  <button class="menu-item" id="galaxyLogMenuBtn" onclick="showPage('galaxyLog')" type="button">Galaxy 取 Log</button>
   <div class="menu-section" id="cvcsQueryMenuSection">CVCS 資料查詢</div>
   <button class="menu-item" id="cvcsQueryMenuBtn" onclick="showPage('cvcsQuery')" type="button">CVCS 資料查詢</button>
   <button class="menu-item" id="cvcsBrokenMenuBtn" onclick="showPage('cvcsBroken')" type="button">CVCS 壞零件 / 跟進</button>
@@ -1602,6 +1605,8 @@
   </div>
 </div><!-- /brokenPartsPage -->
 
+<div id="galaxyLogPage" class="app-page"></div>
+
 <div id="cvcsInputPage" class="app-page"></div>
 <div id="cvcsQueryPage" class="app-page"></div>
 <div id="cvcsBrokenPage" class="app-page"></div>
@@ -1648,16 +1653,18 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260831a"></script>
-<script src="./access-control.js?v=20260831a"></script>
-<script src="./cvcs.js?v=20260831a"></script>
-<script src="./token-admin.js?v=20260831a"></script>
+<script src="./cloud-api.js?v=20260831b"></script>
+<script src="./access-control.js?v=20260831b"></script>
+<script src="./cvcs.js?v=20260831b"></script>
+<script src="./token-admin.js?v=20260831b"></script>
+<script src="./xlsx.mini.min.js?v=20260831b"></script>
+<script src="./galaxy-log.js?v=20260831b"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.08.31-01';
-const _APP_VERSION='v1.072';
+const _APP_BUMP='2026.08.31-02';
+const _APP_VERSION='v1.073';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2091,11 +2098,15 @@ function initMobileMenuSwipe(){
 }
 initMobileMenuSwipe();
 let _accessPermissions=[];
-let _cvcsApp=null,_tokenAdminApp=null,_cvcsMenuOpen=false;
+let _cvcsApp=null,_tokenAdminApp=null,_galaxyLogApp=null,_cvcsMenuOpen=false;
 function hasAccess(permission){return window.AmrsAccessControl.hasPermission(_accessPermissions,permission);}
 function ensureFeatureApps(){
   if(!_cvcsApp&&window.AmrsCvcs)_cvcsApp=window.AmrsCvcs.createApplication({transport:_dualTransport,storage:localStorage,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
   if(!_tokenAdminApp&&window.AmrsTokenAdmin)_tokenAdminApp=window.AmrsTokenAdmin.createApplication({transport:_dualTransport,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
+}
+function ensureGalaxyLogApp(){
+  if(!_galaxyLogApp&&window.AmrsGalaxyLog)_galaxyLogApp=window.AmrsGalaxyLog.createApplication({document,storage:localStorage,toast:showToast});
+  return _galaxyLogApp;
 }
 async function refreshAccessSession(){
   if(!_dualTransport)return false;
@@ -2117,7 +2128,7 @@ function applyAccessPermissions(){
   const ae=hasAccess('ae'),cvcs=hasAccess('cvcs'),schedule=hasAccess('schedule'),admin=hasAccess('admin');
   document.getElementById('scheduleMenuBtn').style.display=schedule?'':'none';
   document.getElementById('companyMenu').style.display=ae?'':'none';
-  ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
+  ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu','galaxyLogMenuBtn','toolsMenuSection'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
   document.getElementById('cvcsInputMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsPropertyMenu').style.display=cvcs?'':'none';
   document.getElementById('cvcsQueryMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsBrokenMenuBtn').style.display=cvcs?'':'none';
   document.getElementById('dataInputMenuSection').style.display=(ae||cvcs)?'':'none';document.getElementById('dataQueryMenuSection').style.display=ae?'':'none';document.getElementById('cvcsQueryMenuSection').style.display=cvcs?'':'none';
@@ -2151,13 +2162,14 @@ function showPage(page){
   if(page!=='input'&&document.getElementById('snPad').classList.contains('show'))hideSnPad();
   activePage=page;
   document.body.classList.toggle('dashboard-view',page!=='input');
-  const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage'};
+  const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',galaxyLog:'galaxyLogPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage'};
   Object.entries(pageIds).forEach(([name,id])=>document.getElementById(id).classList.toggle('active',page===name));
   document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
   document.getElementById('scheduleMenuBtn').classList.toggle('active',page==='schedule');
   document.getElementById('monthlyStatsMenuBtn').classList.toggle('active',page==='monthlyStats');
   document.getElementById('partsListMenuBtn').classList.toggle('active',page==='partsList');
   document.getElementById('brokenPartsMenuBtn').classList.toggle('active',page==='brokenParts');
+  document.getElementById('galaxyLogMenuBtn').classList.toggle('active',page==='galaxyLog');
   document.getElementById('cvcsQueryMenuBtn').classList.toggle('active',page==='cvcsQuery');
   document.getElementById('cvcsBrokenMenuBtn').classList.toggle('active',page==='cvcsBroken');
   document.getElementById('tokenAdminMenuBtn').classList.toggle('active',page==='tokenAdmin');
@@ -2169,6 +2181,7 @@ function showPage(page){
   if(page==='monthlyStats')loadMonthlyStats();
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
+  if(page==='galaxyLog')ensureGalaxyLogApp()?.mount();
   if(page.startsWith('cvcs')){
     ensureFeatureApps();
     _cvcsApp.mount();

@@ -64,6 +64,22 @@ test("all frontend assets use one release URL so an old worker cannot mix JavaSc
   }
 });
 
+test("Galaxy Log stays in its own page and cached assets", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const worker = fs.readFileSync(new URL("../sw.js", import.meta.url), "utf8");
+  assert.match(html, /id="galaxyLogMenuBtn"/);
+  assert.match(html, /id="galaxyLogPage"/);
+  assert.match(html, /showPage\('galaxyLog'\)/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260831b/);
+  assert.match(html, /galaxy-log\.js\?v=20260831b/);
+  assert.match(html, /galaxy-log\.css\?v=20260831b/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260831b/);
+  assert.match(worker, /galaxy-log\.js\?v=20260831b/);
+  assert.match(worker, /galaxy-log\.css\?v=20260831b/);
+  assert.match(html, /function ensureGalaxyLogApp\(\)/);
+  assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
+});
+
 test("schedule remarks expose edit controls for both shifts", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /updateScheduleRemark/);
