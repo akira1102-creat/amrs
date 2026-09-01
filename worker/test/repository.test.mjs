@@ -760,6 +760,56 @@ test("reads Galaxy Log repeated column groups into stable tasks", async () => {
   ]);
 });
 
+test("reads a public CSV export when the configured Galaxy workbook is still an Office file", async () => {
+  const officeError = Object.assign(new Error("Google Sheets request failed (400)"), {
+    status: 400,
+    details: {
+      error: {
+        status: "FAILED_PRECONDITION",
+        message: "This operation is not supported for this document. The document must not be an Office file.",
+      },
+    },
+  });
+  const sheetsClient = {
+    async request() { throw officeError; },
+    async valuesGet() { throw officeError; },
+  };
+  const repository = createRepository({}, {
+    config,
+    sheetsClient,
+    publicFetch: async () => new Response("A02-001190,2026/5/17,,A02-002086,2026/6/18,2026/8/31\r\n", {
+      status: 200,
+      headers: { "content-type": "text/csv" },
+    }),
+  });
+
+  const result = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
+
+  assert.equal(result.success, true);
+  assert.equal(result.readOnly, true);
+  assert.deepEqual(result.tasks.map((task) => [task.serialLast4, task.targetDate, task.completedDate]), [
+    ["1190", "2026-05-17", ""],
+    ["2086", "2026-06-18", "2026-08-31"],
+  ]);
+});
+
+test("refuses Galaxy Log writes while the source is an Office file", async () => {
+  const officeError = Object.assign(new Error("Google Sheets request failed (400)"), {
+    status: 400,
+    details: { error: { status: "FAILED_PRECONDITION", message: "The document must not be an Office file." } },
+  });
+  const repository = createRepository({}, {
+    config,
+    sheetsClient: { async request() { throw officeError; }, async valuesGet() { throw officeError; } },
+    publicFetch: async () => new Response("1190,2026/5/17,\r\n", { status: 200 }),
+  });
+
+  await assert.rejects(
+    repository.postAction({ action: "syncGalaxyLog", mutations: [{ taskId: "gx-office", patch: { completedDate: "2026-09-01" } }] }),
+    /原生 Google 試算表/,
+  );
+});
+
 test("normalizes common locale-formatted Galaxy dates", async () => {
   const data = structuredClone(companyData);
   data["galaxy-log"] = [{ title: "Galaxy Log", values: [

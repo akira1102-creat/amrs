@@ -503,6 +503,7 @@
       cloudTasks,
       outbox,
       conflicts: Array.isArray(state.conflicts) ? state.conflicts.slice(0, 200) : [],
+      cloudReadOnly: Boolean(state.cloudReadOnly),
       lastCloudSyncAt: text(state.lastCloudSyncAt),
       lastCloudError: text(state.lastCloudError),
       issues: Array.isArray(state.issues) ? state.issues.slice(0, 200) : [],
@@ -693,7 +694,17 @@
     }
 
     function cloudErrorMessage(error) {
-      return text(error?.message) || "雲端連線失敗，已保留本機資料";
+      const raw = text(error?.details?.error?.message || error?.message);
+      if (/office file|not supported for this document|native google sheet/i.test(raw)) {
+        return "來源檔案仍是 Excel；已嘗試讀取，但要同步取 Log 日期，請先另存為原生 Google 試算表";
+      }
+      const status = Number(error?.httpStatus || error?.status || 0);
+      if (status === 401) return "雲端登入已失效，請重新輸入 Token";
+      if (status === 403) return "目前 Token 沒有 Galaxy/AE 權限，請聯絡管理員";
+      if (status >= 500 || /backend temporarily unavailable|network request failed|timed out/i.test(raw)) {
+        return "雲端服務暫時未能連線，請稍後再試";
+      }
+      return raw || "雲端連線失敗，已保留本機資料";
     }
 
     function transportAvailable() {
@@ -724,14 +735,21 @@
           outbox,
           issues: Array.isArray(response?.issues) ? response.issues : state.issues,
           conflicts: merged.conflicts,
+          cloudReadOnly: Boolean(response?.readOnly),
           lastCloudSyncAt: new Date().toISOString(),
           lastCloudError: "",
         });
-        if (!silent) notify(`✓ 已載入雲端清單（${cloudTasks.length} 筆）`);
+        if (!silent) notify(
+          response?.readOnly
+            ? `✓ 已載入雲端清單（${cloudTasks.length} 筆）；來源係 Excel，只能讀取，請轉為原生 Google 試算表後同步`
+            : `✓ 已載入雲端清單（${cloudTasks.length} 筆）`,
+          response?.readOnly ? "warn" : "ok",
+        );
         return true;
       } catch (error) {
-        persist({ ...state, lastCloudError: cloudErrorMessage(error) });
-        if (!silent) notify("雲端清單未能載入，現時使用本機資料", "warn");
+        const message = cloudErrorMessage(error);
+        persist({ ...state, lastCloudError: message });
+        if (!silent) notify(message, "warn");
         return false;
       } finally {
         cloudBusy = false;
@@ -793,8 +811,9 @@
         notify(`✓ 已同步 ${applied} 筆${conflicts ? `，${conflicts} 筆衝突` : ""}${failed ? `，${failed} 筆待重試` : ""}`, conflicts || failed ? "warn" : "ok");
         return true;
       } catch (error) {
-        persist({ ...state, lastCloudError: cloudErrorMessage(error) });
-        notify("同步未完成，未同步資料已保留，請稍後重試", "err");
+        const message = cloudErrorMessage(error);
+        persist({ ...state, lastCloudError: message });
+        notify(message, "err");
         return false;
       } finally {
         cloudBusy = false;
@@ -813,7 +832,7 @@
       documentRef.getElementById("galaxyLogClearBtn")?.addEventListener("click", () => {
         if (!state.tasks.length) { notify("目前沒有本機清單", "warn"); return; }
         if (!root.confirm?.("確定要清除這部 Surface 的 Galaxy 清單及完成記錄嗎？")) return;
-        state = writeStoredState(storage, { tasks: [], cloudTasks: [], outbox: [], conflicts: [], issues: [], importedAt: "", sourceName: "", sourceSheet: "", lastCloudSyncAt: "", lastCloudError: "" });
+        state = writeStoredState(storage, { tasks: [], cloudTasks: [], outbox: [], conflicts: [], issues: [], cloudReadOnly: false, importedAt: "", sourceName: "", sourceSheet: "", lastCloudSyncAt: "", lastCloudError: "" });
         notify("已清除本機 Galaxy 清單");
         render();
       });
@@ -903,8 +922,8 @@
       if (offline) {
         const offlineMode = !isOnline();
         const cloudError = Boolean(state.lastCloudError);
-        offline.textContent = offlineMode ? "離線模式" : cloudError ? "雲端讀取失敗" : pendingCount ? "有本機變更" : transportAvailable() ? "雲端已連接" : "本機資料已保存";
-        offline.className = offlineMode || cloudError ? "offline" : pendingCount ? "pending" : "local";
+        offline.textContent = offlineMode ? "離線模式" : cloudError ? "雲端讀取失敗" : state.cloudReadOnly ? "雲端只讀" : pendingCount ? "有本機變更" : transportAvailable() ? "雲端已連接" : "本機資料已保存";
+        offline.className = offlineMode || cloudError ? "offline" : state.cloudReadOnly ? "pending" : pendingCount ? "pending" : "local";
       }
       const syncButton = documentRef.getElementById("galaxySyncBtn");
       if (syncButton) {

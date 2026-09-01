@@ -64,6 +64,7 @@ const MAX_READ_COLUMNS = 200;
 const GALAXY_LOG_CACHE_SCOPE = "galaxy-log";
 const GALAXY_LOG_CACHE_TTL_MS = 15_000;
 const GALAXY_LOG_HEADERS = ["SN末4位", "指定 Log 日期", "取 Log 日期"];
+const GALAXY_OFFICE_WRITE_MESSAGE = "Galaxy Log 來源仍是 Excel，請先另存為原生 Google 試算表後再同步";
 
 function own(object, key) {
   return Object.prototype.hasOwnProperty.call(object || {}, key);
@@ -151,6 +152,63 @@ function galaxyHeaderRow(row = []) {
   const hasTarget = values.some((value) => /指定|target|occurred|日期|log/.test(value));
   const hasCompleted = values.some((value) => /取\s*log|completed|complete|完成/.test(value));
   return hasSerial && hasTarget && hasCompleted;
+}
+
+function parseCsvRows(value) {
+  const source = String(value || "").replace(/^\ufeff/, "");
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (character === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+      continue;
+    }
+    if (character === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (character === "," && !quoted) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      cell = "";
+      if (row.some((item) => text(item) !== "")) rows.push(row);
+      row = [];
+      continue;
+    }
+    cell += character;
+  }
+  if (cell || row.length) {
+    row.push(cell);
+    if (row.some((item) => text(item) !== "")) rows.push(row);
+  }
+  return rows;
+}
+
+function isOfficeSpreadsheetError(error) {
+  const status = Number(error?.status || error?.httpStatus || 0);
+  const message = text(error?.details?.error?.message || error?.message);
+  return status === 400 && /office file|not supported for this document|native google sheet/i.test(message);
+}
+
+async function readPublicGalaxyCsv(spreadsheetId, fetchImpl = globalThis.fetch) {
+  if (typeof fetchImpl !== "function") throw Object.assign(new Error("公開清單暫時未能讀取"), { status: 503, retryable: true });
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv`;
+  const response = await fetchImpl(url, { method: "GET", headers: { accept: "text/csv" } });
+  const status = Number(response?.status || 0);
+  const body = typeof response?.text === "function" ? await response.text() : "";
+  const ok = response?.ok ?? (status >= 200 && status < 300);
+  if (!ok) throw Object.assign(new Error("公開清單暫時未能讀取"), { status: status || 502, retryable: status >= 500 });
+  return parseCsvRows(body);
 }
 
 function parseGalaxyValues(values, timeZone) {
@@ -414,6 +472,7 @@ export function createRepository(env = {}, dependencies = {}) {
     retryBaseMs: 750,
     retryMaxMs: 8_000,
   });
+  const publicFetch = dependencies.publicFetch || globalThis.fetch;
   const memory = dependencies.memoryCache || new Map();
   const cacheAdapter = dependencies.cacheAdapter || dependencies.responseCache || createCloudflareCacheAdapter();
   const metadataMemory = new Map();
@@ -708,7 +767,7 @@ export function createRepository(env = {}, dependencies = {}) {
     return { spreadsheetId, sheet };
   }
 
-  async function readGalaxyTable(options = {}) {
+  async function readNativeGalaxyTable(spreadsheetId, options = {}) {
     const ensured = await ensureGalaxySheet({ refresh: options.refresh === true, create: true });
     const readColumns = Math.min(MAX_READ_COLUMNS, Math.max(3, Number(ensured.sheet.gridProperties?.columnCount || 0)));
     const cacheKey = `${ensured.spreadsheetId}:${ensured.sheet.title}`;
@@ -721,7 +780,26 @@ export function createRepository(env = {}, dependencies = {}) {
       await invalidateCache(db, memory, cacheAdapter, GALAXY_LOG_CACHE_SCOPE, now);
     }
     const parsed = parseGalaxyValues(values, config.timeZone);
-    return { ...ensured, values, ...parsed };
+    return { ...ensured, values, ...parsed, readOnly: false };
+  }
+
+  async function readGalaxyTable(options = {}) {
+    const spreadsheetId = galaxySpreadsheetId();
+    try {
+      return await readNativeGalaxyTable(spreadsheetId, options);
+    } catch (error) {
+      if (!isOfficeSpreadsheetError(error)) throw error;
+      const values = await readPublicGalaxyCsv(spreadsheetId, publicFetch);
+      const width = Math.max(3, values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
+      const parsed = parseGalaxyValues(values, config.timeZone);
+      return {
+        spreadsheetId,
+        sheet: { title: "Office export", gridProperties: { columnCount: width } },
+        values,
+        ...parsed,
+        readOnly: true,
+      };
+    }
   }
 
   function paddedGalaxyRows(values, width) {
@@ -755,6 +833,7 @@ export function createRepository(env = {}, dependencies = {}) {
       success: true,
       tasks: table.tasks,
       issues: table.issues,
+      readOnly: Boolean(table.readOnly),
       sheetName: table.sheet.title,
       serverUpdatedAt: new Date(nowMs(now)).toISOString(),
     };
@@ -764,6 +843,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!Array.isArray(payload.mutations)) throw Object.assign(new Error("Galaxy Log mutations must be an array"), { status: 400 });
     if (payload.mutations.length > 1000) throw Object.assign(new Error("Too many Galaxy Log mutations"), { status: 400 });
     const table = await readGalaxyTable({ refresh: true, cache: false });
+    if (table.readOnly) throw Object.assign(new Error(GALAXY_OFFICE_WRITE_MESSAGE), { status: 409, retryable: false });
     let width = Math.max(3, table.values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
     const values = paddedGalaxyRows(table.values, width);
     const currentTasks = parseGalaxyValues(values, config.timeZone).tasks;

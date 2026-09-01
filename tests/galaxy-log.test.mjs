@@ -335,3 +335,50 @@ test("loads the Google Sheet from the cloud import button", async () => {
   assert.equal(app.getState().tasks[0].id, "cloud-1");
   assert.equal(documentRef.elements.get("galaxyLogStatus").textContent, "✓ 已載入雲端清單（1 筆）");
 });
+
+test("shows that an Office workbook is read-only instead of hiding the cloud source problem", async () => {
+  const documentRef = fakeGalaxyDocument();
+  const transport = {
+    get: async () => ({
+      success: true,
+      readOnly: true,
+      tasks: [{ id: "office-1", fullSerial: "1190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending" }],
+      issues: [],
+    }),
+    post: async () => ({ success: true, results: [], tasks: [], issues: [] }),
+  };
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  documentRef.elements.get("galaxyImportBtn").listeners.get("click")();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(app.getState().cloudReadOnly, true);
+  assert.equal(documentRef.elements.get("galaxyLogOfflineBadge").textContent, "雲端只讀");
+  assert.match(documentRef.elements.get("galaxyLogStatus").textContent, /只能讀取/);
+});
+
+test("surfaces the native Google Sheet requirement when a cloud sync is rejected", async () => {
+  const documentRef = fakeGalaxyDocument();
+  const transport = {
+    get: async () => ({
+      success: true,
+      readOnly: true,
+      tasks: [{ id: "office-2", fullSerial: "1191", serialLast4: "1191", targetDate: "2026-09-02", completedDate: "", status: "pending" }],
+      issues: [],
+    }),
+    post: async () => { throw Object.assign(new Error("Galaxy Log 來源仍是 Excel，請先另存為原生 Google 試算表後再同步"), { httpStatus: 409 }); },
+  };
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  documentRef.elements.get("galaxyImportBtn").listeners.get("click")();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  documentRef.elements.get("galaxyLogList").listeners.get("click")({
+    target: { closest: () => ({ dataset: { galaxyAction: "complete", galaxyId: "office-2" } }) },
+  });
+  await app.syncCloud();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.match(documentRef.elements.get("galaxyLogStatus").textContent, /原生 Google 試算表/);
+});
