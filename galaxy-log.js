@@ -782,7 +782,9 @@
           <div class="galaxy-page-actions">
             <button class="galaxy-btn cloud" id="galaxySyncBtn" type="button">同步至雲端</button>
             <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">下載雲端資料</button>
+            <button class="galaxy-btn" id="galaxyCsvImportBtn" type="button">匯入 CSV</button>
             <button class="galaxy-btn" id="galaxyExportCsvBtn" type="button">匯出 CSV</button>
+            <input id="galaxyCsvFileInput" type="file" accept=".csv,text/csv" hidden>
           </div>
         </div>
         <div class="galaxy-status-strip"><span id="galaxyLogSummary"></span><span id="galaxyLogOfflineBadge"></span><span id="galaxyLogStatus" role="status" aria-live="polite"></span></div>
@@ -930,6 +932,13 @@
     function bind() {
       documentRef.getElementById("galaxySyncBtn")?.addEventListener("click", () => { void syncCloud(); });
       documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => { void loadCloud(); });
+      const csvFileInput = documentRef.getElementById("galaxyCsvFileInput");
+      documentRef.getElementById("galaxyCsvImportBtn")?.addEventListener("click", () => { csvFileInput?.click(); });
+      csvFileInput?.addEventListener("change", (event) => {
+        const file = event?.target?.files?.[0] || event?.currentTarget?.files?.[0];
+        if (file) void importFile(file);
+        if (event?.target) event.target.value = "";
+      });
       documentRef.getElementById("galaxyExportCsvBtn")?.addEventListener("click", () => {
         try { exportTasksCsv(state.tasks, documentRef); notify("✓ 已匯出 CSV"); } catch (error) { notify(error.message || "CSV 匯出失敗", "err"); }
       });

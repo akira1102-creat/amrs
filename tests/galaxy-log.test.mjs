@@ -47,7 +47,7 @@ class FakeElement {
 }
 
 function fakeGalaxyDocument() {
-  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
+  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
     getElementById(id) { return elements.get(id) || null; },
@@ -84,6 +84,15 @@ test("uses the new cloud wording in the Galaxy shell", () => {
   app.mount();
   assert.equal(documentRef.elements.get("galaxySyncBtn").textContent, "同步至雲端");
   assert.equal(documentRef.elements.get("galaxyImportBtn").textContent, "下載雲端資料");
+});
+
+test("opens the CSV file picker from the visible AMRS import button", () => {
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport: null });
+  app.mount();
+  const picker = documentRef.elements.get("galaxyCsvFileInput");
+  documentRef.elements.get("galaxyCsvImportBtn").listeners.get("click")();
+  assert.equal(picker.clicked, true);
 });
 
 test("shows and queues a no-log result beside the completed action", async () => {
