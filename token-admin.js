@@ -31,7 +31,7 @@
     constructor(options = {}) { this.transport = options.transport; this.toast = options.toast || (() => {}); this.showLoading = options.showLoading || (() => null); this.hideLoading = options.hideLoading || (() => {}); this.records = []; }
     mount() {
       const host = root?.document?.getElementById("tokenAdminPage"); if (!host) return;
-      host.innerHTML = `<div class="cvcs-shell"><div class="cvcs-page-head"><div><h2>Token 管理</h2><p>管理同事權限；完整 Token 只會在新增後顯示一次。</p></div><button class="cvcs-primary" id="token-create" type="button">＋ 新增 Token</button></div><section class="cvcs-panel"><div class="cvcs-toolbar"><button id="token-refresh" type="button">重新整理</button></div><div id="token-list" class="token-list"><div class="cvcs-empty">載入中...</div></div></section></div>`;
+      host.innerHTML = `<div class="cvcs-shell"><div class="cvcs-page-head"><div><h2>Token 管理</h2><p>管理同事權限；完整 Token 只會在新增後顯示一次。Galaxy 取 Log 使用「SAE / TAE」權限。</p></div><button class="cvcs-primary" id="token-create" type="button">＋ 新增 Token</button></div><section class="cvcs-panel"><div class="cvcs-toolbar"><button id="token-refresh" type="button">重新整理</button></div><div id="token-list" class="token-list"><div class="cvcs-empty">載入中...</div></div></section></div>`;
       root.document.getElementById("token-create").addEventListener("click", () => this.openForm()); root.document.getElementById("token-refresh").addEventListener("click", () => this.load()); this.load();
     }
     async load() {

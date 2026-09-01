@@ -421,3 +421,27 @@ test("surfaces the native Google Sheet requirement when a cloud sync is rejected
 
   assert.match(documentRef.elements.get("galaxyLogStatus").textContent, /原生 Google 試算表/);
 });
+
+test("distinguishes Google Sheet write permission from an AMRS Token permission error", async () => {
+  const documentRef = fakeGalaxyDocument();
+  const transport = {
+    get: async () => ({
+      success: true,
+      tasks: [{ id: "sheet-permission-1", fullSerial: "1190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending" }],
+      issues: [],
+    }),
+    post: async () => { throw Object.assign(new Error("Google Sheets request failed (403)"), { httpStatus: 403 }); },
+  };
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  documentRef.elements.get("galaxyLogList").listeners.get("click")({
+    target: { closest: () => ({ dataset: { galaxyAction: "complete", galaxyId: "sheet-permission-1" } }) },
+  });
+  await app.syncCloud();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const status = documentRef.elements.get("galaxyLogStatus").textContent;
+  assert.match(status, /Google Sheet.*編輯權限/);
+  assert.doesNotMatch(status, /Token 沒有 Galaxy\/AE 權限/);
+});

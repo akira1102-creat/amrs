@@ -35,6 +35,11 @@ test("Token management has no legacy administrator bootstrap", () => {
   assert.doesNotMatch(source, /bootstrapAccessToken|token-bootstrap|async bootstrap\(/);
 });
 
+test("Token management explains that Galaxy Log uses the existing AE permission", () => {
+  const source = fs.readFileSync(new URL("../token-admin.js", import.meta.url), "utf8");
+  assert.match(source, /Galaxy 取 Log 使用「SAE \/ TAE」權限/);
+});
+
 test("sidebar separates AE and CVCS query sections", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /id="dataQueryMenuSection">AE 資料查詢</);
@@ -70,12 +75,12 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901g/);
-  assert.match(html, /galaxy-log\.js\?v=20260901g/);
-  assert.match(html, /galaxy-log\.css\?v=20260901g/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901g/);
-  assert.match(worker, /galaxy-log\.js\?v=20260901g/);
-  assert.match(worker, /galaxy-log\.css\?v=20260901g/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901h/);
+  assert.match(html, /galaxy-log\.js\?v=20260901h/);
+  assert.match(html, /galaxy-log\.css\?v=20260901h/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901h/);
+  assert.match(worker, /galaxy-log\.js\?v=20260901h/);
+  assert.match(worker, /galaxy-log\.css\?v=20260901h/);
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
   const galaxy = fs.readFileSync(new URL("../galaxy-log.js", import.meta.url), "utf8");

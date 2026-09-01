@@ -729,6 +729,9 @@
       }
       const status = Number(error?.httpStatus || error?.status || 0);
       if (status === 401) return "雲端登入已失效，請重新輸入 Token";
+      if (status === 403 && /google\s+(?:sheets?|sheet)\s+request\s+failed|google\s+(?:sheets?|sheet).*permission|insufficient.*permission.*spreadsheet|caller does not have permission/i.test(raw)) {
+        return "Google Sheet 沒有編輯權限；請將 Galaxy 清單分享給 AMRS 雲端服務並設為「編輯者」，Token 本身已通過";
+      }
       if (status === 403) return "目前 Token 沒有 Galaxy/AE 權限，請聯絡管理員";
       if (status >= 500 || /backend temporarily unavailable|network request failed|timed out/i.test(raw)) {
         return "雲端服務暫時未能連線，請稍後再試";
