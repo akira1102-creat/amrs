@@ -25,8 +25,10 @@ static class CsvContractTests
         Assert(decision.Replaced && decision.Snapshot.Tasks.Count == 3, "newer snapshot replaces all rows");
         var filtered = GalaxyTaskFilter.Filter(imported.Tasks, "1193", "all");
         Assert(filtered.Count == 2 && filtered.All(task => task.SerialLast4 == "1193"), "search filter matches both Galaxy rows");
-        Assert(GalaxyLayout.CardWidth(389, 0, 17) == 372, "default card width");
-        Assert(GalaxyLayout.CardWidth(800, 0, 17) == 783, "wide window card width");
+        Assert(GalaxyLayout.Columns(389, 10, 17) == 1, "narrow window uses one card column");
+        Assert(GalaxyLayout.Columns(800, 10, 17) == 2, "wide window uses two card columns");
+        Assert(GalaxyLayout.Columns(1200, 10, 17) == 3, "large window uses three card columns");
+        Assert(GalaxyLayout.CardWidth(1200, 10, 17) == 381, "three-column card width");
         Console.WriteLine("CsvContractSmoke=PASS");
         return 0;
     }
