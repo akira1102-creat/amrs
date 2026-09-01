@@ -1000,7 +1000,7 @@
       }
       list.innerHTML = tasks.map((task) => `<article class="galaxy-task-card ${escapeHtml(task.status)}">
         <div class="galaxy-task-main">
-          <div class="galaxy-task-serial">${escapeHtml(task.fullSerial)} <span>末4位 ${escapeHtml(task.serialLast4 || serialLast4(task.fullSerial))}</span>${task.duplicateIndex ? '<em>疑似重覆</em>' : ""}</div>
+          <div class="galaxy-task-serial">${escapeHtml(task.serialLast4 || serialLast4(task.fullSerial))} <span>完整 SN ${escapeHtml(task.fullSerial)}</span>${task.duplicateIndex ? '<em>疑似重覆</em>' : ""}</div>
           <div class="galaxy-task-target">指定 Log 日期 <strong>${escapeHtml(task.targetDate.replace(/-/g, "/"))}</strong></div>
           ${task.note ? `<div class="galaxy-task-note">${escapeHtml(task.note)}</div>` : ""}
         </div>

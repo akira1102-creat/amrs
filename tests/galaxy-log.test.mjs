@@ -68,6 +68,7 @@ test("shows and queues a no-log result beside the completed action", async () =>
   const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
   app.mount();
   await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /galaxy-task-serial">1190 <span>完整 SN A02-001190<\/span>/);
   assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /data-galaxy-action="complete"/);
   assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /data-galaxy-action="no-log"/);
   documentRef.elements.get("galaxyLogList").listeners.get("click")({
