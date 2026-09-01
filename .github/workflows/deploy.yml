@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p _site
-          cp index.html cloud-api.js access-control.js cvcs.js cvcs.css token-admin.js manifest.json sw.js icon.png apple-touch-icon.png _site/
+          cp index.html cloud-api.js access-control.js cvcs.js cvcs.css token-admin.js galaxy-log.js galaxy-log.css xlsx.mini.min.js manifest.json sw.js icon.png apple-touch-icon.png _site/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

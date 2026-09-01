@@ -70,14 +70,22 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260831b/);
-  assert.match(html, /galaxy-log\.js\?v=20260831b/);
-  assert.match(html, /galaxy-log\.css\?v=20260831b/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260831b/);
-  assert.match(worker, /galaxy-log\.js\?v=20260831b/);
-  assert.match(worker, /galaxy-log\.css\?v=20260831b/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901a/);
+  assert.match(html, /galaxy-log\.js\?v=20260901a/);
+  assert.match(html, /galaxy-log\.css\?v=20260901a/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901a/);
+  assert.match(worker, /galaxy-log\.js\?v=20260901a/);
+  assert.match(worker, /galaxy-log\.css\?v=20260901a/);
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
+});
+
+test("GitHub Pages stages the independent Galaxy Log assets", () => {
+  const workflow = fs.readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
+  const copyCommand = workflow.match(/cp ([^\r\n]+) _site\//)?.[1] || "";
+  for (const asset of ["galaxy-log.js", "galaxy-log.css", "xlsx.mini.min.js"]) {
+    assert.ok(copyCommand.split(/\s+/).includes(asset), `missing ${asset} from Pages artifact`);
+  }
 });
 
 test("schedule remarks expose edit controls for both shifts", () => {
