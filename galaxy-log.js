@@ -738,6 +738,8 @@
     let mounted = false;
     let busy = false;
     let cloudBusy = false;
+    let pendingPanelOpen = false;
+    let pendingSelectedIds = new Set();
 
     function isOnline() {
       return root?.navigator?.onLine !== false;
@@ -775,6 +777,69 @@
       if (status) { status.textContent = message; status.dataset.kind = kind; }
     }
 
+    function pendingEntries() {
+      return pendingMutations(state).map((mutation) => ({
+        mutation,
+        task: state.tasks.find((candidate) => candidate.id === mutation.taskId) || null,
+      })).filter((entry) => entry.task);
+    }
+
+    function pendingBaseline(task) {
+      const cloud = Array.isArray(state.cloudTasks) ? state.cloudTasks : [];
+      return cloud.find((candidate) => candidate.id === task.id)
+        || cloud.find((candidate) => candidate.fullSerial === task.fullSerial
+          && candidate.targetDate === task.targetDate
+          && Number(candidate.groupIndex || 0) === Number(task.groupIndex || 0)
+          && Number(candidate.rowIndex || 0) === Number(task.rowIndex || 0))
+        || cloud.find((candidate) => candidate.fullSerial === task.fullSerial && candidate.targetDate === task.targetDate)
+        || null;
+    }
+
+    function removePendingChanges(taskIds) {
+      const ids = new Set((Array.isArray(taskIds) ? taskIds : []).map((id) => text(id)).filter(Boolean));
+      if (!ids.size) return 0;
+      const tasks = state.tasks.map((task) => {
+        if (!ids.has(task.id)) return task;
+        const baseline = pendingBaseline(task);
+        return baseline ? { ...baseline } : { ...task, status: "pending", completedDate: "", updatedAt: new Date().toISOString() };
+      });
+      persist({ ...state, tasks, outbox: state.outbox.filter((mutation) => !ids.has(mutation.taskId)) });
+      pendingSelectedIds = new Set([...pendingSelectedIds].filter((id) => !ids.has(id)));
+      return ids.size;
+    }
+
+    function applyPendingStatus(taskIds, status) {
+      const ids = (Array.isArray(taskIds) ? taskIds : []).map((id) => text(id)).filter(Boolean);
+      if (!ids.length || !["done", "no_log"].includes(status)) return 0;
+      const completedDate = isoFromDate(new Date());
+      ids.forEach((id) => {
+        const current = state.tasks.find((task) => task.id === id);
+        if (current) queueTaskMutation(id, { status, completedDate }, current.completedDate);
+      });
+      return ids.length;
+    }
+
+    function renderPendingPanel() {
+      const panel = documentRef.getElementById("galaxyPendingPanel");
+      if (!panel) return;
+      const entries = pendingEntries();
+      pendingSelectedIds = new Set([...pendingSelectedIds].filter((id) => entries.some((entry) => entry.task.id === id)));
+      panel.hidden = !pendingPanelOpen || !entries.length;
+      if (panel.hidden) { panel.innerHTML = ""; return; }
+      const selectedCount = entries.filter((entry) => pendingSelectedIds.has(entry.task.id)).length;
+      const allSelected = entries.length > 0 && selectedCount === entries.length;
+      panel.innerHTML = `<section class="galaxy-pending-panel-inner">
+        <div class="galaxy-pending-head"><div><strong>已按好，待同步（${entries.length}）</strong><span>可重新選擇狀態，或刪除選取的變更</span></div><button class="galaxy-btn small" data-pending-action="close" type="button">收起</button></div>
+        <div class="galaxy-pending-toolbar"><label class="galaxy-pending-select-all"><input id="galaxyPendingSelectAll" type="checkbox" ${allSelected ? "checked" : ""}> 全選</label><span>已選 ${selectedCount} 筆</span><button class="galaxy-btn small complete" data-pending-action="bulk-done" type="button" ${selectedCount ? "" : "disabled"}>已取 Log</button><button class="galaxy-btn small no-log" data-pending-action="bulk-no-log" type="button" ${selectedCount ? "" : "disabled"}>沒有當天 Log</button><button class="galaxy-btn small danger" data-pending-action="delete" type="button" ${selectedCount ? "" : "disabled"}>刪除選取</button></div>
+        <div class="galaxy-pending-list">${entries.map(({ mutation, task }) => {
+          const status = mutation.patch.status === "no_log" ? "沒有當天 Log" : "已取 Log";
+          const completedDate = text(mutation.patch.completedDate || task.completedDate);
+          const checked = pendingSelectedIds.has(task.id) ? "checked" : "";
+          return `<div class="galaxy-pending-row"><label><input type="checkbox" data-pending-select="1" data-task-id="${escapeHtml(task.id)}" ${checked}><span><strong>${escapeHtml(task.serialLast4 || serialLast4(task.fullSerial))}</strong><small>完整 SN ${escapeHtml(task.fullSerial)} · 指定日 ${escapeHtml(task.targetDate)}</small></span></label><div class="galaxy-pending-current"><em>${status}</em><small>${escapeHtml(completedDate || "未填日期")}</small></div><div class="galaxy-pending-actions"><button class="galaxy-btn small complete" data-pending-action="apply-one" data-pending-status="done" data-pending-task-id="${escapeHtml(task.id)}" type="button">已取 Log</button><button class="galaxy-btn small no-log" data-pending-action="apply-one" data-pending-status="no_log" data-pending-task-id="${escapeHtml(task.id)}" type="button">沒有當天 Log</button></div></div>`;
+        }).join("")}</div>
+      </section>`;
+    }
+
     function shell() {
       return `<div class="galaxy-page-shell">
         <div class="galaxy-page-head">
@@ -787,7 +852,8 @@
             <input id="galaxyCsvFileInput" type="file" accept=".csv,text/csv" hidden>
           </div>
         </div>
-        <div class="galaxy-status-strip"><span id="galaxyLogSummary"></span><span id="galaxyLogOfflineBadge"></span><span id="galaxyLogStatus" role="status" aria-live="polite"></span></div>
+        <div class="galaxy-status-strip"><span id="galaxyLogSummary"></span><button id="galaxyLogOfflineBadge" type="button" disabled></button><span id="galaxyLogStatus" role="status" aria-live="polite"></span></div>
+        <div id="galaxyPendingPanel" hidden></div>
         <div class="galaxy-filter-bar">
           <input id="galaxyLogSearch" type="search" inputmode="search" placeholder="搜尋完整 SN 或末四位" autocomplete="off">
           <select id="galaxyLogStatusFilter" aria-label="篩選狀態"><option value="pending">未取</option><option value="needs_review">需跟進</option><option value="done">已取</option><option value="no_log">沒有當天 Log</option><option value="all">全部</option></select>
@@ -939,6 +1005,56 @@
         if (file) void importFile(file);
         if (event?.target) event.target.value = "";
       });
+      const pendingBadge = documentRef.getElementById("galaxyLogOfflineBadge");
+      const togglePendingPanel = () => {
+        if (!pendingMutations(state).length) return;
+        pendingPanelOpen = !pendingPanelOpen;
+        if (!pendingPanelOpen) pendingSelectedIds.clear();
+        render();
+      };
+      pendingBadge?.addEventListener("click", togglePendingPanel);
+      pendingBadge?.addEventListener("keydown", (event) => {
+        if (event?.key === "Enter" || event?.key === " ") { event.preventDefault?.(); togglePendingPanel(); }
+      });
+      documentRef.getElementById("galaxyPendingPanel")?.addEventListener("change", (event) => {
+        const target = event?.target;
+        if (target?.dataset?.pendingSelect) {
+          if (target.checked) pendingSelectedIds.add(target.dataset.taskId);
+          else pendingSelectedIds.delete(target.dataset.taskId);
+          renderPendingPanel();
+        } else if (target?.id === "galaxyPendingSelectAll") {
+          pendingSelectedIds = target.checked ? new Set(pendingEntries().map(({ task }) => task.id)) : new Set();
+          renderPendingPanel();
+        }
+      });
+      documentRef.getElementById("galaxyPendingPanel")?.addEventListener("click", (event) => {
+        const button = event?.target?.closest?.("[data-pending-action]");
+        if (!button) return;
+        const action = button.dataset.pendingAction;
+        if (action === "close") { pendingPanelOpen = false; pendingSelectedIds.clear(); render(); return; }
+        if (action === "select-all") { pendingSelectedIds = new Set(pendingEntries().map(({ task }) => task.id)); renderPendingPanel(); return; }
+        if (action === "apply-one") {
+          const taskId = text(button.dataset.pendingTaskId);
+          applyPendingStatus([taskId], text(button.dataset.pendingStatus));
+          pendingSelectedIds.delete(taskId);
+          render();
+          return;
+        }
+        const selected = [...pendingSelectedIds];
+        if (!selected.length) return;
+        if (action === "bulk-done" || action === "bulk-no-log") {
+          applyPendingStatus(selected, action === "bulk-done" ? "done" : "no_log");
+          pendingSelectedIds.clear();
+          render();
+          return;
+        }
+        if (action === "delete") {
+          if (typeof root.confirm === "function" && !root.confirm(`確定刪除已選 ${selected.length} 筆待同步變更？`)) return;
+          removePendingChanges(selected);
+          pendingPanelOpen = pendingMutations(state).length > 0;
+          render();
+        }
+      });
       documentRef.getElementById("galaxyExportCsvBtn")?.addEventListener("click", () => {
         try { exportTasksCsv(state.tasks, documentRef); notify("✓ 已匯出 CSV"); } catch (error) { notify(error.message || "CSV 匯出失敗", "err"); }
       });
@@ -948,6 +1064,8 @@
         if (!state.tasks.length) { notify("目前沒有本機清單", "warn"); return; }
         if (!root.confirm?.("確定要清除這部 Surface 的 Galaxy 清單及完成記錄嗎？")) return;
         state = writeStoredState(storage, { tasks: [], cloudTasks: [], outbox: [], conflicts: [], issues: [], cloudReadOnly: false, importedAt: "", importedFileModifiedAt: 0, snapshotSource: "", sourceName: "", sourceSheet: "", lastCloudSyncAt: "", lastCloudError: "" });
+        pendingPanelOpen = false;
+        pendingSelectedIds.clear();
         notify("已清除本機 Galaxy 清單");
         render();
       });
@@ -1049,9 +1167,13 @@
       if (offline) {
         const offlineMode = !isOnline();
         const cloudError = Boolean(state.lastCloudError);
-        offline.textContent = offlineMode ? "離線模式" : cloudError ? "雲端讀取失敗" : state.cloudReadOnly ? "雲端只讀" : pendingCount ? "有本機變更" : transportAvailable() ? "雲端已連接" : "本機資料已保存";
-        offline.className = offlineMode || cloudError ? "offline" : state.cloudReadOnly ? "pending" : pendingCount ? "pending" : "local";
+        offline.textContent = pendingCount ? `有本機變更（${pendingCount}）` : offlineMode ? "離線模式" : cloudError ? "雲端讀取失敗" : state.cloudReadOnly ? "雲端只讀" : transportAvailable() ? "雲端已連接" : "本機資料已保存";
+        offline.className = `${offlineMode || cloudError ? "offline" : state.cloudReadOnly ? "pending" : pendingCount ? "pending" : "local"}${pendingCount ? " clickable" : ""}`;
+        offline.disabled = !pendingCount;
+        offline.setAttribute?.("aria-expanded", String(pendingPanelOpen));
+        offline.setAttribute?.("aria-label", pendingCount ? `開啟待同步變更清單，共 ${pendingCount} 筆` : "目前沒有待同步變更");
       }
+      renderPendingPanel();
       const syncButton = documentRef.getElementById("galaxySyncBtn");
       if (syncButton) {
         syncButton.disabled = cloudBusy || !isOnline() || !transportAvailable();

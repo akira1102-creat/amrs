@@ -47,7 +47,7 @@ class FakeElement {
 }
 
 function fakeGalaxyDocument() {
-  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
+  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyPendingPanel", "galaxyLogList"];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
     getElementById(id) { return elements.get(id) || null; },
@@ -93,6 +93,42 @@ test("opens the CSV file picker from the visible AMRS import button", () => {
   const picker = documentRef.elements.get("galaxyCsvFileInput");
   documentRef.elements.get("galaxyCsvImportBtn").listeners.get("click")();
   assert.equal(picker.clicked, true);
+});
+
+test("opens an editable pending changes list from the local change badge", () => {
+  const task = { id: "pending-1", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "2026-09-01", status: "done" };
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks: [task], cloudTasks: [{ ...task, completedDate: "", status: "pending" }], outbox: [{ mutationId: "m-1", taskId: task.id, patch: { status: "done", completedDate: "2026-09-01" }, baseCompletedDate: "" }] });
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage, transport: null });
+  app.mount();
+  documentRef.elements.get("galaxyLogOfflineBadge").listeners.get("click")();
+  const panel = documentRef.elements.get("galaxyPendingPanel");
+  assert.match(panel.innerHTML, /已按好，待同步/);
+  assert.match(panel.innerHTML, /A02-001190/);
+  assert.match(panel.innerHTML, /data-pending-action="delete"/);
+  assert.match(panel.innerHTML, /data-pending-action="bulk-done"/);
+  assert.match(panel.innerHTML, /data-pending-action="bulk-no-log"/);
+});
+
+test("applies a new result to multiple pending changes and deletes selected changes", () => {
+  const tasks = [1, 2].map((index) => ({ id: `pending-${index}`, fullSerial: `A02-00119${index}`, serialLast4: `119${index}`, targetDate: `2026-09-0${index}`, completedDate: `2026-09-0${index}`, status: "done" }));
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks, cloudTasks: tasks.map((task) => ({ ...task, completedDate: "", status: "pending" })), outbox: tasks.map((task) => ({ mutationId: `m-${task.id}`, taskId: task.id, patch: { status: "done", completedDate: task.completedDate }, baseCompletedDate: "" })) });
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage, transport: null });
+  app.mount();
+  const badge = documentRef.elements.get("galaxyLogOfflineBadge");
+  badge.listeners.get("click")();
+  const panel = documentRef.elements.get("galaxyPendingPanel");
+  const change = panel.listeners.get("change");
+  change({ target: { id: "galaxyPendingSelectAll", checked: true } });
+  panel.listeners.get("click")({ target: { closest: () => ({ dataset: { pendingAction: "bulk-no-log" } }) } });
+  assert.equal(app.getState().tasks.every((task) => task.status === "no_log"), true);
+  panel.listeners.get("change")({ target: { id: "galaxyPendingSelectAll", checked: true } });
+  panel.listeners.get("click")({ target: { closest: () => ({ dataset: { pendingAction: "delete" } }) } });
+  assert.equal(app.getState().outbox.length, 0);
+  assert.equal(app.getState().tasks.every((task) => task.status === "pending" && task.completedDate === ""), true);
 });
 
 test("shows and queues a no-log result beside the completed action", async () => {
