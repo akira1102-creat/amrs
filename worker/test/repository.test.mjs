@@ -786,6 +786,25 @@ test("carries merged serial numbers down within Galaxy Log columns", async () =>
   assert.equal(result.tasks[2].fullSerial, "A02-001193");
 });
 
+test("reads a compact A B C Galaxy sheet with full serial numbers and a header row", async () => {
+  const data = structuredClone(companyData);
+  data["galaxy-log"] = [{ title: "Galaxy Log", values: [
+    ["機身號碼", "指定取log日期", "成功取log日期"],
+    ["A02-001190", "2026/5/17", ""],
+    ["", "2026/5/16", "2026/9/1"],
+  ] }];
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+
+  const result = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
+
+  assert.equal(result.issues.length, 0);
+  assert.deepEqual(result.tasks.map((task) => [task.fullSerial, task.targetDate, task.completedDate, task.status]), [
+    ["A02-001190", "2026-05-17", "", "pending"],
+    ["A02-001190", "2026-05-16", "2026-09-01", "done"],
+  ]);
+});
+
 test("detects blank spacer columns between repeated Galaxy Log groups", async () => {
   const data = structuredClone(companyData);
   data["galaxy-log"] = [{ title: "Galaxy Log", values: [

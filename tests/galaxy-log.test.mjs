@@ -219,6 +219,23 @@ test("parses the source layout and maps completed dates without adding an operat
   assert.equal(Object.hasOwn(result.tasks[0], "completedBy"), false);
 });
 
+test("parses the compact A B C Galaxy sheet headers without treating target dates as completion dates", () => {
+  const result = parseGalaxyRows({
+    sheetName: "Galaxy Log",
+    rows: [
+      ["機身號碼", "指定取log日期", "成功取log日期"],
+      ["A02-001190", "2026/5/17", ""],
+      ["", "2026/5/16", "2026/9/1"],
+    ],
+  });
+
+  assert.equal(result.issues.length, 0);
+  assert.deepEqual(result.tasks.map((task) => [task.fullSerial, task.targetDate, task.completedDate, task.status]), [
+    ["A02-001190", "2026-05-17", "", "pending"],
+    ["A02-001190", "2026-05-16", "2026-09-01", "done"],
+  ]);
+});
+
 test("re-imports the standardized Galaxy export with spaced Log headers", () => {
   const result = parseGalaxyRows({
     sheetName: "Galaxy Log",

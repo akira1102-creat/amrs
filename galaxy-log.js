@@ -279,7 +279,8 @@
       const row = Array.isArray(rows[rowIndex]) ? rows[rowIndex] : [];
       const labels = row.map((value) => text(value).toLowerCase());
       const serialCol = labels.findIndex((value) => /serial|s\/?n|機身|機台|序號/.test(value));
-      const completedCol = labels.findIndex((value) => /completed|complete|取\s*log|完成/.test(value));
+      const completedCol = labels.findIndex((value) => /completed|complete|取\s*log|完成|成功/.test(value)
+        && !/指定|target|occurred|發生/.test(value));
       const targetCol = labels.findIndex((value) => /occurred|指定|log.*date|發生|日期/.test(value) && !/completed|complete|完成/.test(value));
       const statusCol = labels.findIndex((value) => /status|狀態/.test(value));
       const noteCol = labels.findIndex((value) => /note|remark|備註/.test(value));
