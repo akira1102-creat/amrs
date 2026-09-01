@@ -101,7 +101,6 @@ public partial class MainForm : Form
         var ids = tasks.Select(task => task.Id).ToHashSet(StringComparer.Ordinal);
         if (ids.Count == cardsById.Count && ids.SetEquals(cardsById.Keys)) return;
 
-        var wasVisible = taskList.Visible;
         taskList.Visible = false;
         taskList.SuspendLayout();
         try
@@ -122,7 +121,7 @@ public partial class MainForm : Form
         finally
         {
             taskList.ResumeLayout(false);
-            taskList.Visible = wasVisible;
+            taskList.Visible = true;
             taskList.PerformLayout();
         }
     }
