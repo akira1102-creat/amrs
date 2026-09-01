@@ -43,7 +43,7 @@ class FakeElement {
 }
 
 function fakeGalaxyDocument() {
-  const ids = ["galaxyLogPage", "galaxyFileInput", "galaxySyncBtn", "galaxyImportBtn", "galaxyExportXlsxBtn", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
+  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyExportXlsxBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
     getElementById(id) { return elements.get(id) || null; },
@@ -305,4 +305,33 @@ test("uploads Excel or CSV import mutations through cloud sync when online", asy
   assert.equal(calls[1].action, "syncGalaxyLog");
   assert.equal(calls[1].mutations.length, 1);
   assert.equal(app.getState().outbox.length, 0);
+});
+
+test("loads the Google Sheet from the cloud import button", async () => {
+  const documentRef = fakeGalaxyDocument();
+  const getCalls = [];
+  const transport = {
+    get: async (query) => {
+      getCalls.push(query);
+      return {
+        success: true,
+        tasks: [{ id: "cloud-1", fullSerial: "1190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending" }],
+        issues: [],
+      };
+    },
+    post: async () => ({ success: true, results: [], tasks: [], issues: [] }),
+  };
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  getCalls.length = 0;
+
+  const importButton = documentRef.elements.get("galaxyImportBtn");
+  assert.equal(importButton.disabled, false);
+  importButton.listeners.get("click")();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.deepEqual(getCalls, ["action=galaxyLogOverview&refresh=1"]);
+  assert.equal(app.getState().tasks[0].id, "cloud-1");
+  assert.equal(documentRef.elements.get("galaxyLogStatus").textContent, "✓ 已載入雲端清單（1 筆）");
 });

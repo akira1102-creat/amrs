@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task with verification checkpoints.
 
-**Goal:** Make Galaxy Log use the user-provided Google Sheet as its cloud source while preserving offline local work and automatic cloud upload for online Excel/CSV imports.
+**Goal:** Make Galaxy Log use the user-provided Google Sheet as its cloud source while preserving offline local work and a direct cloud reload action.
 
-**Architecture:** The browser keeps a normalized Galaxy task snapshot plus an idempotent mutation outbox in localStorage. The existing authenticated AMRS Worker reads and upserts a dedicated `Galaxy Log` worksheet in the configured Galaxy spreadsheet, so Google credentials never reach the PWA. The frontend reads cloud data when online, renders the local snapshot when offline, immediately syncs queued Excel/CSV imports when online, and lets field changes wait for the Sync action.
+**Architecture:** The browser keeps a normalized Galaxy task snapshot plus an idempotent mutation outbox in localStorage. The existing authenticated AMRS Worker reads and upserts a dedicated `Galaxy Log` worksheet in the configured Galaxy spreadsheet, so Google credentials never reach the PWA. The frontend reads cloud data when online, renders the local snapshot when offline, exposes `匯入雲端` as a forced cloud reload, and lets field changes wait for the Sync action.
 
 **Tech Stack:** Static HTML/CSS/JavaScript PWA, localStorage, existing `createDualTransport`, Cloudflare Worker ESM repository/API, Google Sheets API wrapper, Node test runner.
 
@@ -15,7 +15,7 @@
 - Use the existing AMRS Worker session and AE permission; do not add browser Google credentials.
 - Keep the supplied spreadsheet ID in protected Worker configuration, never in frontend source, localStorage, logs, tests, or exports.
 - Support any number of repeated three-column groups: SN last four, target log date, completed log date.
-- Keep Excel/CSV import and export behavior working.
+- Keep Excel export working, remove the CSV export control, and use the cloud sheet as the import source.
 - Offline completion and reopening must update the UI immediately and remain queued until Sync succeeds.
 - Stable task IDs must include the source group position so identical SN/date pairs in different groups remain separate.
 - Conflicts are surfaced and not silently overwritten.

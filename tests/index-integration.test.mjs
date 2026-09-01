@@ -70,17 +70,19 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901c/);
-  assert.match(html, /galaxy-log\.js\?v=20260901c/);
-  assert.match(html, /galaxy-log\.css\?v=20260901c/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901c/);
-  assert.match(worker, /galaxy-log\.js\?v=20260901c/);
-  assert.match(worker, /galaxy-log\.css\?v=20260901c/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901d/);
+  assert.match(html, /galaxy-log\.js\?v=20260901d/);
+  assert.match(html, /galaxy-log\.css\?v=20260901d/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901d/);
+  assert.match(worker, /galaxy-log\.js\?v=20260901d/);
+  assert.match(worker, /galaxy-log\.css\?v=20260901d/);
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
   const galaxy = fs.readFileSync(new URL("../galaxy-log.js", import.meta.url), "utf8");
   assert.match(galaxy, /id="galaxySyncBtn"/);
   assert.match(galaxy, /id="galaxyImportBtn"[^>]*>匯入雲端</);
+  assert.doesNotMatch(galaxy, /id="galaxyExportCsvBtn"/);
+  assert.doesNotMatch(galaxy, /galaxyFileInput/);
   assert.match(galaxy, /syncGalaxyLog/);
 });
 

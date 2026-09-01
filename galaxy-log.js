@@ -679,8 +679,6 @@
             <button class="galaxy-btn cloud" id="galaxySyncBtn" type="button">同步雲端</button>
             <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">匯入雲端</button>
             <button class="galaxy-btn" id="galaxyExportXlsxBtn" type="button">匯出 Excel</button>
-            <button class="galaxy-btn" id="galaxyExportCsvBtn" type="button">匯出 CSV</button>
-            <input id="galaxyFileInput" type="file" accept=".xlsx,.xls,.csv" hidden>
           </div>
         </div>
         <div class="galaxy-status-strip"><span id="galaxyLogSummary"></span><span id="galaxyLogOfflineBadge"></span><span id="galaxyLogStatus" role="status" aria-live="polite"></span></div>
@@ -805,20 +803,10 @@
     }
 
     function bind() {
-      const fileInput = documentRef.getElementById("galaxyFileInput");
       documentRef.getElementById("galaxySyncBtn")?.addEventListener("click", () => { void syncCloud(); });
-      documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => fileInput?.click());
-      fileInput?.addEventListener("change", async () => {
-        const file = fileInput.files?.[0];
-        fileInput.value = "";
-        if (file) await importFile(file);
-      });
+      documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => { void loadCloud(); });
       documentRef.getElementById("galaxyExportXlsxBtn")?.addEventListener("click", () => {
         try { exportTasksXlsx(state.tasks); notify("✓ 已匯出 Excel"); } catch (error) { notify(error.message || "Excel 匯出失敗", "err"); }
-      });
-      documentRef.getElementById("galaxyExportCsvBtn")?.addEventListener("click", () => {
-        if (downloadBlob(new Blob([tasksToCsv(state.tasks)], { type: "text/csv;charset=utf-8" }), `Galaxy-Log-${isoFromDate(new Date()) || "export"}.csv`, documentRef)) notify("✓ 已匯出 CSV");
-        else notify("瀏覽器不允許下載檔案", "err");
       });
       documentRef.getElementById("galaxyLogSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; render(); });
       documentRef.getElementById("galaxyLogStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; render(); });
@@ -923,6 +911,11 @@
         syncButton.disabled = cloudBusy || !isOnline() || !transportAvailable();
         syncButton.textContent = cloudBusy ? "同步中…" : pendingCount ? `同步雲端（${pendingCount}）` : "同步雲端";
       }
+      const importButton = documentRef.getElementById("galaxyImportBtn");
+      if (importButton) {
+        importButton.disabled = cloudBusy || !isOnline() || !transportAvailable();
+        importButton.textContent = cloudBusy ? "讀取中…" : "匯入雲端";
+      }
       const search = documentRef.getElementById("galaxyLogSearch"); if (search && search.value !== filter.query) search.value = filter.query;
       const statusSelect = documentRef.getElementById("galaxyLogStatusFilter"); if (statusSelect) statusSelect.value = filter.status;
       const issueHost = documentRef.getElementById("galaxyLogIssues");
@@ -934,7 +927,7 @@
       const list = documentRef.getElementById("galaxyLogList");
       if (!list) return;
       if (!tasks.length) {
-        list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>返公司有網絡時按「匯入雲端」；之後帶 Surface 到現場即可離線使用。</span></div>`;
+        list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>按「匯入雲端」讀取 Google Sheet；之後帶 Surface 到現場即可離線使用。</span></div>`;
         return;
       }
       list.innerHTML = tasks.map((task) => `<article class="galaxy-task-card ${escapeHtml(task.status)}">
