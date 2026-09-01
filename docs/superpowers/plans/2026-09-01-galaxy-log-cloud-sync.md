@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task with verification checkpoints.
 
-**Goal:** Make Galaxy Log use the user-provided Google Sheet as its cloud source while preserving offline local work and explicit company-network synchronization.
+**Goal:** Make Galaxy Log use the user-provided Google Sheet as its cloud source while preserving offline local work and automatic cloud upload for online Excel/CSV imports.
 
-**Architecture:** The browser keeps a normalized Galaxy task snapshot plus an idempotent mutation outbox in localStorage. The existing authenticated AMRS Worker reads and upserts a dedicated `Galaxy Log` worksheet in the configured Galaxy spreadsheet, so Google credentials never reach the PWA. The frontend reads cloud data when online, renders the local snapshot when offline, and only writes queued changes when the user presses Sync.
+**Architecture:** The browser keeps a normalized Galaxy task snapshot plus an idempotent mutation outbox in localStorage. The existing authenticated AMRS Worker reads and upserts a dedicated `Galaxy Log` worksheet in the configured Galaxy spreadsheet, so Google credentials never reach the PWA. The frontend reads cloud data when online, renders the local snapshot when offline, immediately syncs queued Excel/CSV imports when online, and lets field changes wait for the Sync action.
 
 **Tech Stack:** Static HTML/CSS/JavaScript PWA, localStorage, existing `createDualTransport`, Cloudflare Worker ESM repository/API, Google Sheets API wrapper, Node test runner.
 

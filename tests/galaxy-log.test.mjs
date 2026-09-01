@@ -6,6 +6,7 @@ const {
   buildTaskId,
   completeTask,
   createMutationOutbox,
+  createApplication,
   filterTasks,
   formatLocalDateTime,
   mergeCloudTasks,
@@ -23,6 +24,31 @@ class MemoryStorage {
 
   getItem(key) { return this.#values.has(key) ? this.#values.get(key) : null; }
   setItem(key, value) { this.#values.set(key, String(value)); }
+}
+
+class FakeElement {
+  constructor(id) {
+    this.id = id;
+    this.innerHTML = "";
+    this.textContent = "";
+    this.value = "";
+    this.disabled = false;
+    this.files = [];
+    this.dataset = {};
+    this.listeners = new Map();
+  }
+
+  addEventListener(type, listener) { this.listeners.set(type, listener); }
+  click() { this.clicked = true; }
+}
+
+function fakeGalaxyDocument() {
+  const ids = ["galaxyLogPage", "galaxyFileInput", "galaxySyncBtn", "galaxyImportBtn", "galaxyExportXlsxBtn", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
+  const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
+  return {
+    getElementById(id) { return elements.get(id) || null; },
+    elements,
+  };
 }
 
 test("parses the print layout while carrying merged serial numbers down", () => {
@@ -227,4 +253,56 @@ test("merges pre-cloud local ids into the matching repeated-column task", () => 
   assert.equal(merged.tasks[0].id, "new-column-id");
   assert.equal(merged.tasks[0].completedDate, "2026-09-03");
   assert.deepEqual(merged.idRemaps, [{ from: "old-print-id", to: "new-column-id" }]);
+});
+
+test("uploads Excel or CSV import mutations through cloud sync when online", async () => {
+  const documentRef = fakeGalaxyDocument();
+  const calls = [];
+  const transport = {
+    get: async () => ({ success: true, tasks: [], issues: [] }),
+    post: async (payload) => {
+      calls.push(payload);
+      return {
+        success: true,
+        results: payload.mutations.map((mutation) => ({ mutationId: mutation.mutationId, taskId: mutation.taskId, status: "applied" })),
+        tasks: [],
+        issues: [],
+      };
+    },
+  };
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  await app.importFile({
+    name: "Galaxy.csv",
+    text: async () => "SN末4位,指定 Log 日期,取 Log 日期\r\n1190,2026/09/01,\r\n",
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].action, "syncGalaxyLog");
+  assert.equal(calls[0].mutations.length, 1);
+  assert.equal(app.getState().outbox.length, 0);
+
+  const previousXlsx = globalThis.XLSX;
+  globalThis.XLSX = {
+    read: () => ({ SheetNames: ["Galaxy"], Sheets: { Galaxy: {} } }),
+    utils: {
+      sheet_to_json: () => [
+        ["SN末4位", "指定 Log 日期", "取 Log 日期"],
+        ["1191", "2026/09/02", ""],
+      ],
+    },
+  };
+  try {
+    await app.importFile({ name: "Galaxy.xlsx", arrayBuffer: async () => new ArrayBuffer(0) });
+  } finally {
+    if (previousXlsx === undefined) delete globalThis.XLSX;
+    else globalThis.XLSX = previousXlsx;
+  }
+
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].action, "syncGalaxyLog");
+  assert.equal(calls[1].mutations.length, 1);
+  assert.equal(app.getState().outbox.length, 0);
 });

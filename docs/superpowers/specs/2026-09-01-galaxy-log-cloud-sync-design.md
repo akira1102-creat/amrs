@@ -6,8 +6,8 @@
 
 - 公司有網絡時，可以讀取及同步指定的 Google Sheet。
 - 現場無網絡時，Surface 仍可查看清單、標記已取 Log，以及保留未同步變更。
-- 回公司後由使用者按「同步」才寫回 Google Sheet。
-- 保留既有 Excel／CSV 匯入及匯出功能，不影響 AMRS 其他公司及功能。
+- 有網絡時按「匯入雲端」匯入 Excel／CSV 後會直接寫回 Google Sheet；現場完成取 Log 的變更則先留在本機，之後按「同步」寫回。
+- 保留 Excel／CSV 匯出功能，不影響 AMRS 其他公司及功能。
 
 ## 雲端資料來源
 
@@ -34,7 +34,7 @@ Worker 內部 task 會附帶狀態、來源欄組／列位置及更新時間等�
 localStorage 保存：
 
 - 最近一次成功從雲端下載的 task snapshot。
-- Excel／CSV 匯入後的本機清單。
+- Excel／CSV 匯入後的本機清單；有網絡時同時上傳雲端，離線時保留待同步佇列。
 - 未同步的 mutation outbox（完成、改回未取、匯入新增／更新）。
 - `lastCloudSyncAt`、最後同步結果及需要留意的錯誤。
 
@@ -58,6 +58,12 @@ localStorage 保存：
 3. Worker 在同一個寫入鎖內讀取最新 Sheet、套用變更、寫回及清除快取。
 4. 成功後重新下載雲端清單，更新本機 snapshot、`lastCloudSyncAt`，只移除已確認的 mutation。
 5. 部分失敗時保留未成功 mutation，顯示失敗數量，讓使用者稍後再次同步。
+
+### 匯入雲端
+
+1. 使用者選取 Excel／CSV 後，瀏覽器先在本機解析既有格式。
+2. 解析出的新增／更新資料先寫入本機及 outbox；有網絡及有效 session 時立即呼叫同步流程。
+3. 離線或雲端暫時不可用時保留本機資料，稍後按「同步雲端」重試。
 
 ## 衝突規則
 

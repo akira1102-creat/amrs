@@ -674,10 +674,10 @@
     function shell() {
       return `<div class="galaxy-page-shell">
         <div class="galaxy-page-head">
-          <div><div class="galaxy-page-title">Galaxy 取 Log</div><div class="galaxy-page-subtitle">離線清單 · 出發前匯入，返公司再整理</div></div>
+          <div><div class="galaxy-page-title">Galaxy 取 Log</div><div class="galaxy-page-subtitle">雲端清單 · 現場離線使用，返公司同步</div></div>
           <div class="galaxy-page-actions">
             <button class="galaxy-btn cloud" id="galaxySyncBtn" type="button">同步雲端</button>
-            <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">匯入 Excel / CSV</button>
+            <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">匯入雲端</button>
             <button class="galaxy-btn" id="galaxyExportXlsxBtn" type="button">匯出 Excel</button>
             <button class="galaxy-btn" id="galaxyExportCsvBtn" type="button">匯出 CSV</button>
             <input id="galaxyFileInput" type="file" accept=".xlsx,.xls,.csv" hidden>
@@ -700,6 +700,12 @@
 
     function transportAvailable() {
       return !!transport && typeof transport.get === "function" && typeof transport.post === "function";
+    }
+
+    async function waitForCloudIdle(timeoutMs = 30_000) {
+      const deadline = Date.now() + timeoutMs;
+      while (cloudBusy && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+      return !cloudBusy;
     }
 
     async function loadCloud({ silent = false } = {}) {
@@ -876,8 +882,17 @@
         }
         persist(nextState);
         const ignored = parsed.ignoredSheets?.length ? `，跳過 ${parsed.ignoredSheets.length} 張其他工作表` : "";
-        notify(`✓ 已匯入 ${merged.added} 筆新任務，更新 ${merged.updated} 筆${ignored}`);
         filter.status = "pending";
+        const pendingCount = pendingMutations(nextState).length;
+        if (pendingCount && isOnline() && transportAvailable()) {
+          notify("檔案已讀取，正在匯入雲端…");
+          if (await waitForCloudIdle()) await syncCloud();
+          else notify("雲端仍在讀取，資料已保存本機，稍後按「同步雲端」", "warn");
+        } else if (pendingCount) {
+          notify(`✓ 已保存本機：新增 ${merged.added} 筆、更新 ${merged.updated} 筆；返公司有網絡時按「同步雲端」${ignored}`, "warn");
+        } else {
+          notify(`✓ 清單沒有新變更${ignored}`);
+        }
       } catch (error) {
         notify(error.message || "匯入失敗", "err");
       } finally {
@@ -919,7 +934,7 @@
       const list = documentRef.getElementById("galaxyLogList");
       if (!list) return;
       if (!tasks.length) {
-        list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>返公司有網絡時先匯入 Excel；之後帶 Surface 到現場即可離線使用。</span></div>`;
+        list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>返公司有網絡時按「匯入雲端」；之後帶 Surface 到現場即可離線使用。</span></div>`;
         return;
       }
       list.innerHTML = tasks.map((task) => `<article class="galaxy-task-card ${escapeHtml(task.status)}">
