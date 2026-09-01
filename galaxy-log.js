@@ -135,20 +135,44 @@
     return hasSerialLabel && hasTargetLabel && hasCompletionLabel;
   }
 
+  function galaxyColumnBases(matrix, startRow) {
+    const values = Array.isArray(matrix) ? matrix : [];
+    const width = values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
+    const header = startRow > 0 && Array.isArray(values[startRow - 1]) ? values[startRow - 1] : [];
+    const bases = [];
+    const serialHeader = /sn|serial|機身|機台|序號|號碼/;
+    const targetHeader = /指定|target|occurred|日期|log/;
+    for (let column = 0; column < Math.max(1, width - 1); column += 1) {
+      const headerPair = startRow > 0
+        && serialHeader.test(text(header[column]).toLowerCase())
+        && targetHeader.test(text(header[column + 1]).toLowerCase());
+      const dataPair = values.slice(startRow).some((row) => Array.isArray(row)
+        && serialLast4(row[column])
+        && !normalizeDate(row[column])
+        && normalizeDate(row[column + 1]));
+      if (headerPair || dataPair) bases.push(column);
+    }
+    if (bases.length) return bases;
+    const stride = width > 3 && width % 4 === 0 ? 4 : 3;
+    return Array.from({ length: Math.max(1, Math.ceil(width / stride)) }, (_, index) => index * stride)
+      .filter((base) => base < Math.max(width, 3));
+  }
+
   function parseGalaxyColumnGroups({ rows = [], sheetName = "Galaxy Log" } = {}) {
     const matrix = Array.isArray(rows) ? rows : [];
     const tasks = [];
     const issues = [];
     const width = matrix.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
-    const groupCount = Math.ceil(width / 3);
     const startRow = columnHeaderRow(matrix[0]) ? 1 : 0;
+    const groupBases = galaxyColumnBases(matrix, startRow);
+    const groupCount = groupBases.length;
     const occurrenceByKey = new Map();
 
     for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
       let currentSerial = "";
       for (let rowOffset = startRow; rowOffset < matrix.length; rowOffset += 1) {
         const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
-        const base = groupIndex * 3;
+        const base = groupBases[groupIndex];
         const rawSerial = row[base];
         const rawTarget = row[base + 1];
         const rawCompleted = row[base + 2];
@@ -194,7 +218,7 @@
         });
       }
     }
-    return { kind: "columns", sheetName, tasks, issues, groupCount };
+    return { kind: "columns", sheetName, tasks, issues, groupCount, groupBases };
   }
 
   function tasksToColumnGroups(tasks) {

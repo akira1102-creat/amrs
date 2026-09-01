@@ -211,11 +211,35 @@ async function readPublicGalaxyCsv(spreadsheetId, fetchImpl = globalThis.fetch) 
   return parseCsvRows(body);
 }
 
+function galaxyColumnBases(matrix, startRow, timeZone) {
+  const values = Array.isArray(matrix) ? matrix : [];
+  const width = values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
+  const header = startRow > 0 && Array.isArray(values[startRow - 1]) ? values[startRow - 1] : [];
+  const bases = [];
+  const serialHeader = /sn|serial|機身|機台|序號|號碼/;
+  const targetHeader = /指定|target|occurred|日期|log/;
+  for (let column = 0; column < Math.max(1, width - 1); column += 1) {
+    const headerPair = startRow > 0
+      && serialHeader.test(text(header[column]).toLowerCase())
+      && targetHeader.test(text(header[column + 1]).toLowerCase());
+    const dataPair = values.slice(startRow).some((row) => Array.isArray(row)
+      && galaxySerial(row[column])
+      && !galaxyDate(row[column], timeZone)
+      && galaxyDate(row[column + 1], timeZone));
+    if (headerPair || dataPair) bases.push(column);
+  }
+  if (bases.length) return bases;
+  const stride = width > 3 && width % 4 === 0 ? 4 : 3;
+  return Array.from({ length: Math.max(1, Math.ceil(width / stride)) }, (_, index) => index * stride)
+    .filter((base) => base < Math.max(width, 3));
+}
+
 function parseGalaxyValues(values, timeZone) {
   const matrix = Array.isArray(values) ? values : [];
   const width = matrix.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
-  const groupCount = Math.max(1, Math.ceil(width / 3));
   const headerRow = galaxyHeaderRow(matrix[0]) ? 1 : 0;
+  const groupBases = galaxyColumnBases(matrix, headerRow, timeZone);
+  const groupCount = groupBases.length;
   const tasks = [];
   const issues = [];
   const occurrenceByKey = new Map();
@@ -223,7 +247,7 @@ function parseGalaxyValues(values, timeZone) {
     let currentSerial = "";
     for (let rowOffset = headerRow; rowOffset < matrix.length; rowOffset += 1) {
       const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
-      const base = groupIndex * 3;
+      const base = groupBases[groupIndex];
       const rawSerial = arrayValue(row, base + 1);
       const rawTarget = arrayValue(row, base + 2);
       const rawCompleted = arrayValue(row, base + 3);
@@ -260,13 +284,14 @@ function parseGalaxyValues(values, timeZone) {
         status: completedDate ? "done" : (completedText ? "needs_review" : "pending"),
         note: completedText && !completedDate ? completedText : "",
         groupIndex,
+        columnBase: base,
         rowIndex,
         duplicateIndex: occurrenceIndex,
         sourceFormat: "columns",
       });
     }
   }
-  return { tasks, issues, groupCount, headerRow };
+  return { tasks, issues, groupCount, groupBases, headerRow };
 }
 
 function rowsFrom(result) {
@@ -819,17 +844,26 @@ export function createRepository(env = {}, dependencies = {}) {
     values[rowNumber - 1][columnNumber - 1] = value;
   }
 
-  function firstAvailableGalaxyPosition(values, groupIndex, headerRow) {
+  function galaxyColumnBaseForGroup(groupBases, groupIndex) {
+    const bases = Array.isArray(groupBases) && groupBases.length ? groupBases : [0];
+    const selectedGroup = Number.isFinite(Number(groupIndex)) && Number(groupIndex) >= 0 ? Math.floor(Number(groupIndex)) : bases.length - 1;
+    if (Number.isFinite(Number(bases[selectedGroup]))) return Number(bases[selectedGroup]);
+    const stride = bases.length > 1 ? Math.max(1, Number(bases[1]) - Number(bases[0])) : 3;
+    return Number(bases[bases.length - 1]) + stride * (selectedGroup - bases.length + 1);
+  }
+
+  function firstAvailableGalaxyPosition(values, groupIndex, headerRow, groupBases = []) {
     const width = Math.max(3, values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
-    const groupCount = Math.max(1, Math.ceil(width / 3));
+    const bases = Array.isArray(groupBases) && groupBases.length ? groupBases : galaxyColumnBases(values, headerRow, config.timeZone);
+    const groupCount = Math.max(1, bases.length);
     const requestedGroup = Number(groupIndex);
     const selectedGroup = Number.isFinite(requestedGroup) && requestedGroup >= 0 ? Math.floor(requestedGroup) : groupCount - 1;
-    const base = selectedGroup * 3;
+    const base = galaxyColumnBaseForGroup(bases, selectedGroup);
     for (let rowNumber = Math.max(2, headerRow + 1); rowNumber <= Math.max(values.length + 1, 2); rowNumber += 1) {
       const row = values[rowNumber - 1] || [];
-      if (!text(row[base]) && !text(row[base + 1]) && !text(row[base + 2])) return { rowNumber, groupIndex: selectedGroup };
+      if (!text(row[base]) && !text(row[base + 1]) && !text(row[base + 2])) return { rowNumber, groupIndex: selectedGroup, columnBase: base };
     }
-    return { rowNumber: Math.max(values.length + 1, headerRow + 1), groupIndex: selectedGroup };
+    return { rowNumber: Math.max(values.length + 1, headerRow + 1), groupIndex: selectedGroup, columnBase: base };
   }
 
   async function getGalaxyLogOverview(params = {}) {
@@ -851,7 +885,9 @@ export function createRepository(env = {}, dependencies = {}) {
     if (table.readOnly) throw Object.assign(new Error(GALAXY_OFFICE_WRITE_MESSAGE), { status: 409, retryable: false });
     let width = Math.max(3, table.values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
     const values = paddedGalaxyRows(table.values, width);
-    const currentTasks = parseGalaxyValues(values, config.timeZone).tasks;
+    const parsedCurrent = parseGalaxyValues(values, config.timeZone);
+    const currentTasks = parsedCurrent.tasks;
+    const groupBases = parsedCurrent.groupBases;
     const byId = new Map(currentTasks.map((task) => [task.id, task]));
     const results = [];
     let changed = false;
@@ -877,12 +913,12 @@ export function createRepository(env = {}, dependencies = {}) {
         const serialLast4 = galaxySerial(patch.serialLast4 || patch.fullSerial || mutation?.serialLast4);
         const targetDate = galaxyDate(patch.targetDate || mutation?.targetDate, config.timeZone);
         if (!serialLast4 || !targetDate) { results.push({ mutationId: text(mutation?.mutationId), taskId, status: "failed", message: "Galaxy task was not found" }); continue; }
-        const position = firstAvailableGalaxyPosition(values, mutation?.groupIndex ?? patch.groupIndex, table.headerRow);
+        const position = firstAvailableGalaxyPosition(values, mutation?.groupIndex ?? patch.groupIndex, table.headerRow, groupBases);
         const occurrenceIndex = 0;
         const id = galaxyTaskId(serialLast4, targetDate, position.groupIndex, position.rowNumber, occurrenceIndex);
-        setGalaxyCell(values, position.rowNumber, position.groupIndex * 3 + 1, serialLast4);
-        setGalaxyCell(values, position.rowNumber, position.groupIndex * 3 + 2, targetDate);
-        task = { id, serialLast4, targetDate, completedDate: "", groupIndex: position.groupIndex, rowIndex: position.rowNumber };
+        setGalaxyCell(values, position.rowNumber, position.columnBase + 1, serialLast4);
+        setGalaxyCell(values, position.rowNumber, position.columnBase + 2, targetDate);
+        task = { id, serialLast4, targetDate, completedDate: "", groupIndex: position.groupIndex, columnBase: position.columnBase, rowIndex: position.rowNumber };
         byId.set(id, task);
         canonicalTaskId = id;
         changed = true;
@@ -898,7 +934,7 @@ export function createRepository(env = {}, dependencies = {}) {
         results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "conflict", completedDate: currentCompleted, message: "Cloud completed date changed" });
         continue;
       }
-      const targetColumn = task.groupIndex * 3 + 3;
+      const targetColumn = (Number.isFinite(Number(task.columnBase)) ? Number(task.columnBase) : galaxyColumnBaseForGroup(groupBases, task.groupIndex)) + 3;
       setGalaxyCell(values, task.rowIndex, targetColumn, desiredCompleted);
       task.completedDate = desiredCompleted;
       changed = true;

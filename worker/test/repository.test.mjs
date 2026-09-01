@@ -785,6 +785,46 @@ test("carries merged serial numbers down within Galaxy Log columns", async () =>
   ]);
 });
 
+test("detects blank spacer columns between repeated Galaxy Log groups", async () => {
+  const data = structuredClone(companyData);
+  data["galaxy-log"] = [{ title: "Galaxy Log", values: [
+    ["A02-001190", "2026/5/17", "", "", "A02-001193", "2026/6/2", "", ""],
+    ["", "2026/5/16", "", "", "", "2026/5/30", "", ""],
+  ] }];
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+
+  const result = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
+
+  assert.equal(result.issues.length, 0);
+  assert.deepEqual(result.tasks.map((task) => [task.serialLast4, task.targetDate, task.groupIndex]), [
+    ["1190", "2026-05-17", 0],
+    ["1190", "2026-05-16", 0],
+    ["1193", "2026-06-02", 1],
+    ["1193", "2026-05-30", 1],
+  ]);
+});
+
+test("writes Galaxy completion into the completion column after a spacer", async () => {
+  const data = structuredClone(companyData);
+  data["galaxy-log"] = [{ title: "Galaxy Log", values: [
+    ["A02-001190", "2026/5/17", "", "", "A02-001193", "2026/6/2", "", ""],
+  ] }];
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+  const overview = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
+  const target = overview.tasks.find((task) => task.serialLast4 === "1193");
+
+  const result = await repository.postAction({
+    action: "syncGalaxyLog",
+    mutations: [{ taskId: target.id, patch: { completedDate: "2026/9/1", status: "done" }, baseCompletedDate: "" }],
+  });
+
+  assert.equal(result.results[0].status, "applied");
+  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[0][2], "");
+  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[0][6], "2026-09-01");
+});
+
 test("reads a public CSV export when the configured Galaxy workbook is still an Office file", async () => {
   const officeError = Object.assign(new Error("Google Sheets request failed (400)"), {
     status: 400,

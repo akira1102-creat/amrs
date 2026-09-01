@@ -207,6 +207,23 @@ test("carries merged serial numbers down within repeated Galaxy Log columns", ()
   ]);
 });
 
+test("detects blank spacer columns between repeated Galaxy Log groups", () => {
+  const result = parseGalaxyColumnGroups({
+    rows: [
+      ["A02-001190", "2026/5/17", "", "", "A02-001193", "2026/6/2", "", ""],
+      ["", "2026/5/16", "", "", "", "2026/5/30", "", ""],
+    ],
+  });
+
+  assert.equal(result.issues.length, 0);
+  assert.deepEqual(result.tasks.map((task) => [task.serialLast4, task.targetDate, task.groupIndex]), [
+    ["1190", "2026-05-17", 0],
+    ["1190", "2026-05-16", 0],
+    ["1193", "2026-06-02", 1],
+    ["1193", "2026-05-30", 1],
+  ]);
+});
+
 test("serializes Galaxy tasks back into repeated three-column groups", () => {
   const tasks = [
     { id: "gx-a", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", groupIndex: 0, rowIndex: 2 },

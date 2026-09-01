@@ -70,12 +70,12 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901f/);
-  assert.match(html, /galaxy-log\.js\?v=20260901f/);
-  assert.match(html, /galaxy-log\.css\?v=20260901f/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901f/);
-  assert.match(worker, /galaxy-log\.js\?v=20260901f/);
-  assert.match(worker, /galaxy-log\.css\?v=20260901f/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901g/);
+  assert.match(html, /galaxy-log\.js\?v=20260901g/);
+  assert.match(html, /galaxy-log\.css\?v=20260901g/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901g/);
+  assert.match(worker, /galaxy-log\.js\?v=20260901g/);
+  assert.match(worker, /galaxy-log\.css\?v=20260901g/);
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
   const galaxy = fs.readFileSync(new URL("../galaxy-log.js", import.meta.url), "utf8");
