@@ -117,14 +117,15 @@ public static class CsvContract
         return "\ufeff" + string.Join("\r\n", rows.Select(row => string.Join(",", row.Select(Escape)))) + "\r\n";
     }
 
-    public static SnapshotDecision ReplaceIfNewer(LocalSnapshot local, ImportedSnapshot imported)
+    public static SnapshotDecision ReplaceIfNewer(LocalSnapshot local, ImportedSnapshot imported, bool allowOlder = false)
     {
         var existing = local ?? new LocalSnapshot();
         var incomingAt = imported?.ModifiedAtUtcTicks ?? 0;
         var existingAt = existing.ModifiedAtUtcTicks;
-        if (existingAt > 0 && incomingAt <= existingAt)
+        var older = existingAt > 0 && incomingAt > 0 && incomingAt < existingAt;
+        if (existingAt > 0 && incomingAt <= existingAt && !(allowOlder && older))
         {
-            return new SnapshotDecision { Replaced = false, Reason = "older-or-same", Snapshot = existing };
+            return new SnapshotDecision { Replaced = false, Reason = older ? "older" : "same", Snapshot = existing };
         }
         return new SnapshotDecision
         {

@@ -70,8 +70,22 @@ public partial class MainForm : Form
             var decision = CsvContract.ReplaceIfNewer(new LocalSnapshot { Tasks = tasks, ModifiedAtUtcTicks = modifiedAtUtcTicks }, imported);
             if (!decision.Replaced)
             {
-                SetStatus("這份 CSV 比本機資料舊或相同，已保留本機資料", Color.FromArgb(210, 153, 34));
-                return;
+                if (decision.Reason != "older")
+                {
+                    SetStatus("這份 CSV 與本機資料相同或無法判斷較新，已保留本機資料", Color.FromArgb(210, 153, 34));
+                    return;
+                }
+                var incomingTime = File.GetLastWriteTime(dialog.FileName).ToString("yyyy-MM-dd HH:mm");
+                var currentTime = modifiedAtUtcTicks > 0 ? new DateTime(modifiedAtUtcTicks, DateTimeKind.Utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "未知";
+                var confirm = MessageBox.Show(this,
+                    $"這份 CSV 的修改時間（{incomingTime}）比本機資料（{currentTime}）舊。\r\n\r\n仍要用這份 CSV 取代現有本機清單嗎？",
+                    "確認匯入較舊 CSV", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+                if (confirm != DialogResult.Yes)
+                {
+                    SetStatus("已取消匯入，保留本機資料", Color.FromArgb(210, 153, 34));
+                    return;
+                }
+                decision = CsvContract.ReplaceIfNewer(new LocalSnapshot { Tasks = tasks, ModifiedAtUtcTicks = modifiedAtUtcTicks }, imported, allowOlder: true);
             }
             tasks = decision.Snapshot.Tasks; modifiedAtUtcTicks = decision.Snapshot.ModifiedAtUtcTicks; SaveState();
             SetStatus($"✓ 已匯入 {tasks.Count} 筆 CSV", Color.FromArgb(63, 185, 80)); RenderTasks();

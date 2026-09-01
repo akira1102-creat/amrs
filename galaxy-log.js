@@ -429,12 +429,13 @@
     return Number.isFinite(number) && number > 0 ? number : 0;
   }
 
-  function mergeImportedSnapshot(value, parsed, fileModifiedAt = 0) {
+  function mergeImportedSnapshot(value, parsed, fileModifiedAt = 0, { allowOlder = false } = {}) {
     const current = normalizeState(value);
     const incomingAt = snapshotTimestamp(fileModifiedAt);
     const currentAt = snapshotTimestamp(current.importedFileModifiedAt);
-    const replace = currentAt <= 0 ? true : incomingAt > currentAt;
-    if (!replace) return { replaced: false, state: current, reason: "older-or-same" };
+    const reason = currentAt > 0 && incomingAt > 0 && incomingAt < currentAt ? "older" : "same";
+    const replace = currentAt <= 0 || incomingAt > currentAt || (allowOlder && reason === "older");
+    if (!replace) return { replaced: false, state: current, reason };
     const importedAt = new Date().toISOString();
     const tasks = (Array.isArray(parsed?.tasks) ? parsed.tasks : []).map(normalizeTask).filter(Boolean)
       .map((task) => ({ ...task, importedAt, sourceName: text(parsed?.sourceName), updatedAt: importedAt }));
@@ -1223,10 +1224,20 @@
         const beforeById = new Map(beforeTasks.map((task) => [task.id, task]));
         const isCsv = /\.csv$/i.test(file.name || "");
         const baselineTasks = state.cloudTasks.length ? state.cloudTasks : beforeTasks;
-        const snapshot = isCsv ? mergeImportedSnapshot(state, parsed, file.lastModified || 0) : { replaced: false, state, reason: "workbook-merge" };
+        let snapshot = isCsv ? mergeImportedSnapshot(state, parsed, file.lastModified || 0) : { replaced: false, state, reason: "workbook-merge" };
         if (isCsv && !snapshot.replaced) {
-          notify("這份 CSV 比本機資料舊或相同，已保留本機資料", "warn");
-          return;
+          if (snapshot.reason !== "older") {
+            notify("這份 CSV 與本機資料相同或無法判斷較新，已保留本機資料", "warn");
+            return;
+          }
+          const incomingTime = formatLocalDateTime(file.lastModified || 0) || "未知";
+          const currentTime = formatLocalDateTime(state.importedFileModifiedAt) || "未知";
+          const confirmed = typeof root.confirm === "function" && root.confirm(`這份 CSV 的修改時間（${incomingTime}）比本機資料（${currentTime}）舊。\n\n仍要用這份 CSV 取代現有本機清單嗎？`);
+          if (!confirmed) {
+            notify("已取消匯入，保留本機資料", "warn");
+            return;
+          }
+          snapshot = mergeImportedSnapshot(state, parsed, file.lastModified || 0, { allowOlder: true });
         }
         const importedAt = snapshot.state.importedAt || new Date().toISOString();
         const reconciled = isCsv ? reconcileImportedTasks(parsed.tasks, baselineTasks) : null;

@@ -98,7 +98,11 @@ test("replaces the local Galaxy snapshot only when the imported CSV is newer", (
 
   const older = mergeImportedSnapshot(state, { tasks: [newTask], issues: [], sheetName: "Galaxy Log" }, 500);
   assert.equal(older.replaced, false);
+  assert.equal(older.reason, "older");
   assert.deepEqual(older.state.tasks.map((task) => task.id), ["old"]);
+  const confirmed = mergeImportedSnapshot(state, { tasks: [newTask], issues: [], sheetName: "Galaxy Log" }, 500, { allowOlder: true });
+  assert.equal(confirmed.replaced, true);
+  assert.deepEqual(confirmed.state.tasks.map((task) => task.id), ["new"]);
 });
 
 test("uses the new cloud wording in the Galaxy shell", () => {
@@ -568,6 +572,31 @@ test("imports an offline CSV and queues only rows that differ from the cloud sna
   assert.deepEqual(app.getState().tasks.map((task) => task.id), ["cloud-1190-17", "cloud-1190-16", "cloud-1193-02"]);
   assert.deepEqual(app.getState().outbox.map((mutation) => mutation.taskId), ["cloud-1190-17", "cloud-1190-16"]);
   assert.match(documentRef.elements.get("galaxyPendingPanel").innerHTML, /已按好，待同步（2）/);
+});
+
+test("asks before replacing the local snapshot with an older CSV", async () => {
+  const currentTask = { id: "current", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending" };
+  const olderTask = { id: "older", fullSerial: "A02-001193", serialLast4: "1193", targetDate: "2026-06-02", completedDate: "", status: "pending" };
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks: [currentTask], cloudTasks: [currentTask], importedFileModifiedAt: 2000 });
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage, transport: null });
+  const previousConfirm = globalThis.confirm;
+  let confirmCalls = 0;
+  globalThis.confirm = () => { confirmCalls += 1; return confirmCalls > 1; };
+  const file = { name: "older.csv", lastModified: 1000, text: async () => "SN,SN末4位,指定 Log 日期,取 Log 日期,狀態\r\nA02-001193,1193,2026-06-02,,未取\r\n" };
+  try {
+    app.mount();
+    await app.importFile(file);
+    assert.deepEqual(app.getState().tasks.map((task) => task.id), ["current"]);
+    assert.match(documentRef.elements.get("galaxyLogStatus").textContent, /已取消匯入/);
+    await app.importFile(file);
+  } finally {
+    if (previousConfirm === undefined) delete globalThis.confirm;
+    else globalThis.confirm = previousConfirm;
+  }
+  assert.equal(confirmCalls, 2);
+  assert.deepEqual(app.getState().tasks.map((task) => task.fullSerial), ["A02-001193"]);
 });
 
 test("loads the Google Sheet from the cloud import button", async () => {

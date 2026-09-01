@@ -19,7 +19,13 @@ static class CsvContractTests
         Assert(output.StartsWith("\ufeffSN,SN末4位,指定 Log 日期,取 Log 日期,狀態"), "UTF-8 BOM and headers");
         Assert(!output.Contains("備註", StringComparison.Ordinal), "no notes column");
         var local = new LocalSnapshot { Tasks = new() { imported.Tasks[0] }, ModifiedAtUtcTicks = 200 };
-        Assert(!CsvContract.ReplaceIfNewer(local, imported).Replaced, "older snapshot must not replace");
+        var older = CsvContract.ReplaceIfNewer(local, imported);
+        Assert(!older.Replaced && older.Reason == "same", "same snapshot must not replace");
+        var olderImport = CsvContract.Parse(output, 100);
+        var olderDecision = CsvContract.ReplaceIfNewer(local, olderImport);
+        Assert(!olderDecision.Replaced && olderDecision.Reason == "older", "older snapshot must ask before replacing");
+        var confirmedOlder = CsvContract.ReplaceIfNewer(local, olderImport, allowOlder: true);
+        Assert(confirmedOlder.Replaced && confirmedOlder.Snapshot.Tasks.Count == 3, "confirmed older snapshot replaces all rows");
         var newer = CsvContract.Parse(output, 300);
         var decision = CsvContract.ReplaceIfNewer(local, newer);
         Assert(decision.Replaced && decision.Snapshot.Tasks.Count == 3, "newer snapshot replaces all rows");
