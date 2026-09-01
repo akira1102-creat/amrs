@@ -496,6 +496,113 @@
     };
   }
 
+  function taskIdentityKey(task) {
+    const serial = normalizeSerial(task?.fullSerial || task?.serialLast4);
+    const targetDate = normalizeDate(task?.targetDate);
+    return serial && targetDate ? `${serial}|${targetDate}` : "";
+  }
+
+  function taskResultSignature(task) {
+    const normalized = normalizeTask(task);
+    if (!normalized) return "";
+    return [
+      normalizeSerial(normalized.fullSerial || normalized.serialLast4),
+      normalizeDate(normalized.targetDate),
+      normalized.status,
+      normalizeDate(normalized.completedDate),
+    ].join("|");
+  }
+
+  function mutationPatchForTask(task) {
+    const normalized = normalizeTask(task);
+    if (!normalized) return null;
+    return {
+      fullSerial: normalized.fullSerial,
+      serialLast4: normalized.serialLast4 || serialLast4(normalized.fullSerial),
+      targetDate: normalized.targetDate,
+      completedDate: normalized.completedDate || "",
+      status: normalized.status,
+      groupIndex: Number(normalized.groupIndex) || 0,
+      rowIndex: Number(normalized.rowIndex) || 0,
+      duplicateIndex: Number(normalized.duplicateIndex) || 0,
+    };
+  }
+
+  /**
+   * Match an imported snapshot to the current cloud snapshot by meaning rather
+   * than by the generated task id. Offline CSV exports generate different ids
+   * from repeated-column Google Sheet rows, so only changed results should be
+   * queued for sync.
+   */
+  function reconcileImportedTasks(imported, baseline) {
+    const incoming = (Array.isArray(imported) ? imported : []).map(normalizeTask).filter(Boolean);
+    const cloud = (Array.isArray(baseline) ? baseline : []).map(normalizeTask).filter(Boolean);
+    const cloudById = new Map(cloud.map((task) => [task.id, task]));
+    const cloudByIdentity = new Map();
+    for (const task of cloud) {
+      const key = taskIdentityKey(task);
+      if (!key) continue;
+      const entries = cloudByIdentity.get(key) || [];
+      entries.push(task);
+      cloudByIdentity.set(key, entries);
+    }
+    for (const entries of cloudByIdentity.values()) {
+      entries.sort((left, right) => Number(left.duplicateIndex || 0) - Number(right.duplicateIndex || 0)
+        || Number(left.groupIndex || 0) - Number(right.groupIndex || 0)
+        || Number(left.rowIndex || 0) - Number(right.rowIndex || 0));
+    }
+
+    const usedCloudIds = new Set();
+    const occurrenceByIdentity = new Map();
+    const tasks = [];
+    const changes = [];
+    let added = 0;
+    let updated = 0;
+
+    for (const original of incoming) {
+      const key = taskIdentityKey(original);
+      const candidates = key ? (cloudByIdentity.get(key) || []) : [];
+      let match = cloudById.get(original.id);
+      if (match && usedCloudIds.has(match.id)) match = null;
+      if (!match && candidates.length) {
+        const requestedOccurrence = Number.isFinite(Number(original.duplicateIndex)) ? Number(original.duplicateIndex) : 0;
+        match = candidates.find((candidate) => !usedCloudIds.has(candidate.id)
+          && Number(candidate.duplicateIndex || 0) === requestedOccurrence);
+        if (!match) {
+          const occurrence = occurrenceByIdentity.get(key) || 0;
+          match = candidates.filter((candidate) => !usedCloudIds.has(candidate.id))[occurrence] || null;
+        }
+        occurrenceByIdentity.set(key, (occurrenceByIdentity.get(key) || 0) + 1);
+      }
+
+      if (!match) {
+        const patch = mutationPatchForTask(original);
+        const task = { ...original };
+        tasks.push(task);
+        if (patch) changes.push({ taskId: task.id, patch, baseCompletedDate: "" });
+        added += 1;
+        continue;
+      }
+
+      usedCloudIds.add(match.id);
+      const task = {
+        ...match,
+        ...original,
+        id: match.id,
+        groupIndex: match.groupIndex,
+        rowIndex: match.rowIndex,
+        duplicateIndex: match.duplicateIndex,
+      };
+      tasks.push(task);
+      if (taskResultSignature(task) !== taskResultSignature(match)) {
+        const patch = mutationPatchForTask(task);
+        if (patch) changes.push({ taskId: match.id, patch, baseCompletedDate: match.completedDate || "" });
+        updated += 1;
+      }
+    }
+    return { tasks, changes, added, updated };
+  }
+
   function stablePatchKey(patch = {}) {
     return Object.keys(patch).sort().map((key) => `${key}:${text(patch[key])}`).join("|");
   }
@@ -1115,24 +1222,32 @@
         const beforeTasks = state.tasks.slice();
         const beforeById = new Map(beforeTasks.map((task) => [task.id, task]));
         const isCsv = /\.csv$/i.test(file.name || "");
+        const baselineTasks = state.cloudTasks.length ? state.cloudTasks : beforeTasks;
         const snapshot = isCsv ? mergeImportedSnapshot(state, parsed, file.lastModified || 0) : { replaced: false, state, reason: "workbook-merge" };
         if (isCsv && !snapshot.replaced) {
           notify("這份 CSV 比本機資料舊或相同，已保留本機資料", "warn");
           return;
         }
         const importedAt = snapshot.state.importedAt || new Date().toISOString();
-        const merged = isCsv ? { tasks: snapshot.state.tasks, added: snapshot.state.tasks.length, updated: 0 } : mergeImportedTasks(state.tasks, parsed.tasks, { importedAt, sourceName: file.name || "" });
+        const reconciled = isCsv ? reconcileImportedTasks(parsed.tasks, baselineTasks) : null;
+        const merged = isCsv
+          ? {
+            tasks: reconciled.tasks.map((task) => ({ ...task, importedAt, sourceName: file.name || "", updatedAt: importedAt })),
+            added: reconciled.added,
+            updated: reconciled.updated,
+          }
+          : mergeImportedTasks(state.tasks, parsed.tasks, { importedAt, sourceName: file.name || "" });
         let nextState = isCsv ? { ...snapshot.state, outbox: [] } : { ...state, tasks: merged.tasks, issues: parsed.issues, importedAt, sourceName: file.name || "", sourceSheet: parsed.sheetName || "" };
-        for (const incoming of parsed.tasks || []) {
-          const previous = beforeById.get(incoming.id);
-          const changed = !previous
-            || text(previous.completedDate) !== text(incoming.completedDate)
-            || text(previous.targetDate) !== text(incoming.targetDate)
-            || text(previous.fullSerial) !== text(incoming.fullSerial);
-          if (!changed) continue;
-          nextState = createMutationOutbox(nextState, {
-            taskId: incoming.id,
-            patch: {
+        if (isCsv) nextState = { ...nextState, tasks: merged.tasks };
+        const changes = isCsv
+          ? reconciled.changes
+          : (parsed.tasks || []).flatMap((incoming) => {
+            const previous = beforeById.get(incoming.id);
+            const changed = !previous
+              || text(previous.completedDate) !== text(incoming.completedDate)
+              || text(previous.targetDate) !== text(incoming.targetDate)
+              || text(previous.fullSerial) !== text(incoming.fullSerial);
+            return changed ? [{ taskId: incoming.id, patch: {
               fullSerial: incoming.fullSerial,
               serialLast4: incoming.serialLast4 || serialLast4(incoming.fullSerial),
               targetDate: incoming.targetDate,
@@ -1141,8 +1256,13 @@
               groupIndex: Number(incoming.groupIndex) || 0,
               rowIndex: Number(incoming.rowIndex) || 0,
               duplicateIndex: Number(incoming.duplicateIndex) || 0,
-            },
-            baseCompletedDate: previous?.completedDate || "",
+            }, baseCompletedDate: previous?.completedDate || "" }] : [];
+          });
+        for (const change of changes) {
+          nextState = createMutationOutbox(nextState, {
+            taskId: change.taskId,
+            patch: change.patch,
+            baseCompletedDate: change.baseCompletedDate,
           });
         }
         persist(nextState);
@@ -1262,6 +1382,7 @@
     parseGalaxyRows,
     parseWorkbookFile,
     pendingMutations,
+    reconcileImportedTasks,
     readStoredState,
     reopenTask,
     serialLast4,

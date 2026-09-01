@@ -16,12 +16,35 @@ const {
   parseGalaxyRows,
   parseWorkbookFile,
   pendingMutations,
+  reconcileImportedTasks,
   readStoredState,
   tasksToCsv,
   tasksToColumnGroups,
   tasksToRows,
   writeStoredState,
 } = galaxyModule;
+
+test("reconciles offline CSV rows against cloud tasks instead of treating regenerated IDs as changes", () => {
+  const cloudTasks = [
+    { id: "cloud-1190-17", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 2, duplicateIndex: 0 },
+    { id: "cloud-1190-16", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-16", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 3, duplicateIndex: 0 },
+    { id: "cloud-1193-02", fullSerial: "A02-001193", serialLast4: "1193", targetDate: "2026-06-02", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 4, duplicateIndex: 0 },
+  ];
+  const importedTasks = [
+    { id: "offline-1", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "2026-09-01", status: "done" },
+    { id: "offline-2", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-16", completedDate: "2026-09-01", status: "done" },
+    { id: "offline-3", fullSerial: "A02-001193", serialLast4: "1193", targetDate: "2026-06-02", completedDate: "", status: "pending" },
+  ];
+
+  const result = reconcileImportedTasks(importedTasks, cloudTasks);
+  assert.deepEqual(result.tasks.map((task) => task.id), ["cloud-1190-17", "cloud-1190-16", "cloud-1193-02"]);
+  assert.deepEqual(result.changes.map((change) => [change.taskId, change.patch.completedDate]), [
+    ["cloud-1190-17", "2026-09-01"],
+    ["cloud-1190-16", "2026-09-01"],
+  ]);
+  assert.equal(result.added, 0);
+  assert.equal(result.updated, 2);
+});
 
 class MemoryStorage {
   #values = new Map();
@@ -522,6 +545,29 @@ test("opens the pending changes panel instead of uploading imported files immedi
   assert.equal(calls.length, 0);
   assert.equal(app.getState().outbox.length, 2);
   assert.match(documentRef.elements.get("galaxyPendingPanel").innerHTML, /已按好，待同步/);
+});
+
+test("imports an offline CSV and queues only rows that differ from the cloud snapshot", async () => {
+  const cloudTasks = [
+    { id: "cloud-1190-17", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 2, duplicateIndex: 0 },
+    { id: "cloud-1190-16", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-16", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 3, duplicateIndex: 0 },
+    { id: "cloud-1193-02", fullSerial: "A02-001193", serialLast4: "1193", targetDate: "2026-06-02", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 4, duplicateIndex: 0 },
+  ];
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks: cloudTasks, cloudTasks, importedFileModifiedAt: 1000 });
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage, transport: null });
+  app.mount();
+  await app.importFile({
+    name: "Galaxy.csv",
+    lastModified: 2000,
+    text: async () => "SN,SN末4位,指定 Log 日期,取 Log 日期,狀態\r\nA02-001190,1190,2026-05-17,2026-09-01,已取\r\nA02-001190,1190,2026-05-16,2026-09-01,已取\r\nA02-001193,1193,2026-06-02,,未取\r\n",
+  });
+
+  assert.equal(app.getState().tasks.length, 3);
+  assert.deepEqual(app.getState().tasks.map((task) => task.id), ["cloud-1190-17", "cloud-1190-16", "cloud-1193-02"]);
+  assert.deepEqual(app.getState().outbox.map((mutation) => mutation.taskId), ["cloud-1190-17", "cloud-1190-16"]);
+  assert.match(documentRef.elements.get("galaxyPendingPanel").innerHTML, /已按好，待同步（2）/);
 });
 
 test("loads the Google Sheet from the cloud import button", async () => {
