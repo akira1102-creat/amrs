@@ -151,6 +151,14 @@
     return hasSerialLabel && hasTargetLabel && hasCompletionLabel;
   }
 
+  function standardizedTaskHeaderRow(row = []) {
+    const values = Array.isArray(row) ? row.map((value) => text(value).toLowerCase()) : [];
+    return values.some((value) => /^sn$|^serial(?: number)?$/.test(value))
+      && values.some((value) => /末\s*4|last\s*4/.test(value))
+      && values.some((value) => /指定\s*log\s*日期|target\s*date/.test(value))
+      && values.some((value) => /取\s*log\s*日期|completed\s*date/.test(value));
+  }
+
   function galaxyColumnBases(matrix, startRow) {
     const values = Array.isArray(matrix) ? matrix : [];
     const width = values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
@@ -415,6 +423,35 @@
     return { tasks, added, updated };
   }
 
+  function snapshotTimestamp(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : 0;
+  }
+
+  function mergeImportedSnapshot(value, parsed, fileModifiedAt = 0) {
+    const current = normalizeState(value);
+    const incomingAt = snapshotTimestamp(fileModifiedAt);
+    const currentAt = snapshotTimestamp(current.importedFileModifiedAt);
+    const replace = currentAt <= 0 ? true : incomingAt > currentAt;
+    if (!replace) return { replaced: false, state: current, reason: "older-or-same" };
+    const importedAt = new Date().toISOString();
+    const tasks = (Array.isArray(parsed?.tasks) ? parsed.tasks : []).map(normalizeTask).filter(Boolean)
+      .map((task) => ({ ...task, importedAt, sourceName: text(parsed?.sourceName), updatedAt: importedAt }));
+    return {
+      replaced: true,
+      state: {
+        ...current,
+        tasks,
+        issues: Array.isArray(parsed?.issues) ? parsed.issues.slice(0, 200) : [],
+        importedAt,
+        importedFileModifiedAt: incomingAt || Date.now(),
+        sourceName: text(parsed?.sourceName),
+        sourceSheet: text(parsed?.sheetName),
+        snapshotSource: text(parsed?.sourceName),
+      },
+    };
+  }
+
   function completeTask(tasks, id, completedDate = isoFromDate(new Date())) {
     const date = normalizeDate(completedDate) || isoFromDate(new Date());
     return (Array.isArray(tasks) ? tasks : []).map((task) => task.id === id ? { ...task, status: "done", completedDate: date, updatedAt: new Date().toISOString() } : { ...task });
@@ -561,6 +598,8 @@
       lastCloudError: text(state.lastCloudError),
       issues: Array.isArray(state.issues) ? state.issues.slice(0, 200) : [],
       importedAt: text(state.importedAt),
+      importedFileModifiedAt: snapshotTimestamp(state.importedFileModifiedAt),
+      snapshotSource: text(state.snapshotSource),
       sourceName: text(state.sourceName),
       sourceSheet: text(state.sourceSheet),
     };
@@ -657,9 +696,11 @@
     if (!file) throw new Error("請選擇 Excel 或 CSV 檔案");
     if (/\.csv$/i.test(file.name || "")) {
       const rows = parseCsvText(await file.text());
-      return columnHeaderRow(rows[0])
-        ? parseGalaxyColumnGroups({ sheetName: file.name || "CSV", rows })
-        : parseGalaxyRows({ sheetName: file.name || "CSV", rows });
+      return standardizedTaskHeaderRow(rows[0])
+        ? parseGalaxyRows({ sheetName: file.name || "CSV", rows })
+        : columnHeaderRow(rows[0])
+          ? parseGalaxyColumnGroups({ sheetName: file.name || "CSV", rows })
+          : parseGalaxyRows({ sheetName: file.name || "CSV", rows });
     }
     if (!xlsx?.read || !xlsx?.utils?.sheet_to_json) throw new Error("Excel 匯入元件未載入，請重新整理 AMRS");
     const workbook = xlsx.read(await file.arrayBuffer(), { type: "array", cellDates: true, cellNF: true, cellText: true });
@@ -670,6 +711,12 @@
       || candidateNames[0];
     if (!sourceName) throw new Error("找不到可用工作表");
     const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sourceName], { header: 1, raw: true, defval: null });
+    if (standardizedTaskHeaderRow(rows[0])) {
+      const parsedStandard = parseGalaxyRows({ sheetName: sourceName, rows });
+      parsedStandard.sourceName = file.name || "";
+      parsedStandard.ignoredSheets = candidateNames.filter((name) => name !== sourceName);
+      return parsedStandard;
+    }
     if (columnHeaderRow(rows[0])) {
       const parsedColumns = parseGalaxyColumnGroups({ sheetName: sourceName, rows });
       parsedColumns.sourceName = file.name || "";
@@ -733,8 +780,8 @@
         <div class="galaxy-page-head">
           <div><div class="galaxy-page-title">Galaxy 取 Log</div><div class="galaxy-page-subtitle">雲端清單 · 現場離線使用，返公司同步</div></div>
           <div class="galaxy-page-actions">
-            <button class="galaxy-btn cloud" id="galaxySyncBtn" type="button">同步雲端</button>
-            <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">匯入雲端</button>
+            <button class="galaxy-btn cloud" id="galaxySyncBtn" type="button">同步至雲端</button>
+            <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">下載雲端資料</button>
             <button class="galaxy-btn" id="galaxyExportCsvBtn" type="button">匯出 CSV</button>
           </div>
         </div>
@@ -891,7 +938,7 @@
       documentRef.getElementById("galaxyLogClearBtn")?.addEventListener("click", () => {
         if (!state.tasks.length) { notify("目前沒有本機清單", "warn"); return; }
         if (!root.confirm?.("確定要清除這部 Surface 的 Galaxy 清單及完成記錄嗎？")) return;
-        state = writeStoredState(storage, { tasks: [], cloudTasks: [], outbox: [], conflicts: [], issues: [], cloudReadOnly: false, importedAt: "", sourceName: "", sourceSheet: "", lastCloudSyncAt: "", lastCloudError: "" });
+        state = writeStoredState(storage, { tasks: [], cloudTasks: [], outbox: [], conflicts: [], issues: [], cloudReadOnly: false, importedAt: "", importedFileModifiedAt: 0, snapshotSource: "", sourceName: "", sourceSheet: "", lastCloudSyncAt: "", lastCloudError: "" });
         notify("已清除本機 Galaxy 清單");
         render();
       });
@@ -924,10 +971,18 @@
       notify("讀取清單中…");
       try {
         const parsed = await parseWorkbookFile(file);
-        const beforeById = new Map(state.tasks.map((task) => [task.id, task]));
-        const importedAt = new Date().toISOString();
-        const merged = mergeImportedTasks(state.tasks, parsed.tasks, { importedAt, sourceName: file.name || "" });
-        let nextState = { ...state, tasks: merged.tasks, issues: parsed.issues, importedAt, sourceName: file.name || "", sourceSheet: parsed.sheetName || "" };
+        parsed.sourceName = file.name || "";
+        const beforeTasks = state.tasks.slice();
+        const beforeById = new Map(beforeTasks.map((task) => [task.id, task]));
+        const isCsv = /\.csv$/i.test(file.name || "");
+        const snapshot = isCsv ? mergeImportedSnapshot(state, parsed, file.lastModified || 0) : { replaced: false, state, reason: "workbook-merge" };
+        if (isCsv && !snapshot.replaced) {
+          notify("這份 CSV 比本機資料舊或相同，已保留本機資料", "warn");
+          return;
+        }
+        const importedAt = snapshot.state.importedAt || new Date().toISOString();
+        const merged = isCsv ? { tasks: snapshot.state.tasks, added: snapshot.state.tasks.length, updated: 0 } : mergeImportedTasks(state.tasks, parsed.tasks, { importedAt, sourceName: file.name || "" });
+        let nextState = isCsv ? { ...snapshot.state, outbox: [] } : { ...state, tasks: merged.tasks, issues: parsed.issues, importedAt, sourceName: file.name || "", sourceSheet: parsed.sheetName || "" };
         for (const incoming of parsed.tasks || []) {
           const previous = beforeById.get(incoming.id);
           const changed = !previous
@@ -955,11 +1010,11 @@
         filter.status = "pending";
         const pendingCount = pendingMutations(nextState).length;
         if (pendingCount && isOnline() && transportAvailable()) {
-          notify("檔案已讀取，正在匯入雲端…");
+          notify("檔案已讀取，正在同步至雲端…");
           if (await waitForCloudIdle()) await syncCloud();
-          else notify("雲端仍在讀取，資料已保存本機，稍後按「同步雲端」", "warn");
+          else notify("雲端仍在讀取，資料已保存本機，稍後按「同步至雲端」", "warn");
         } else if (pendingCount) {
-          notify(`✓ 已保存本機：新增 ${merged.added} 筆、更新 ${merged.updated} 筆；返公司有網絡時按「同步雲端」${ignored}`, "warn");
+          notify(`✓ 已保存本機：新增 ${merged.added} 筆、更新 ${merged.updated} 筆；返公司有網絡時按「同步至雲端」${ignored}`, "warn");
         } else {
           notify(`✓ 清單沒有新變更${ignored}`);
         }
@@ -991,12 +1046,12 @@
       const syncButton = documentRef.getElementById("galaxySyncBtn");
       if (syncButton) {
         syncButton.disabled = cloudBusy || !isOnline() || !transportAvailable();
-        syncButton.textContent = cloudBusy ? "同步中…" : pendingCount ? `同步雲端（${pendingCount}）` : "同步雲端";
+        syncButton.textContent = cloudBusy ? "同步中…" : pendingCount ? `同步至雲端（${pendingCount}）` : "同步至雲端";
       }
       const importButton = documentRef.getElementById("galaxyImportBtn");
       if (importButton) {
         importButton.disabled = cloudBusy || !isOnline() || !transportAvailable();
-        importButton.textContent = cloudBusy ? "讀取中…" : "匯入雲端";
+        importButton.textContent = cloudBusy ? "讀取中…" : "下載雲端資料";
       }
       const search = documentRef.getElementById("galaxyLogSearch"); if (search && search.value !== filter.query) search.value = filter.query;
       const statusSelect = documentRef.getElementById("galaxyLogStatusFilter"); if (statusSelect) statusSelect.value = filter.status;
@@ -1009,7 +1064,7 @@
       const list = documentRef.getElementById("galaxyLogList");
       if (!list) return;
       if (!tasks.length) {
-        list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>按「匯入雲端」讀取 Google Sheet；之後帶 Surface 到現場即可離線使用。</span></div>`;
+        list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>按「下載雲端資料」讀取 Google Sheet；之後帶 Surface 到現場即可離線使用。</span></div>`;
         return;
       }
       list.innerHTML = tasks.map((task) => `<article class="galaxy-task-card ${escapeHtml(task.status)}">
@@ -1060,6 +1115,7 @@
     filterTasks,
     formatLocalDateTime,
     mergeCloudTasks,
+    mergeImportedSnapshot,
     mergeImportedTasks,
     normalizeDate,
     normalizeSerial,

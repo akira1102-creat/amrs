@@ -1,0 +1,7 @@
+bin/
+obj/
+.work/
+release/*.exe
+release/*.pdb
+*.user
+*.suo

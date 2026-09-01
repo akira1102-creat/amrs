@@ -10,9 +10,11 @@ const {
   filterTasks,
   formatLocalDateTime,
   mergeCloudTasks,
+  mergeImportedSnapshot,
   mergeImportedTasks,
   parseGalaxyColumnGroups,
   parseGalaxyRows,
+  parseWorkbookFile,
   pendingMutations,
   readStoredState,
   tasksToCsv,
@@ -60,6 +62,28 @@ test("exports CSV with the complete SN first and last four digits second", () =>
   assert.equal(tasksToRows(tasks)[1].length, 5);
   assert.match(tasksToCsv(tasks), /A02-001190,1190,2026-05-17/);
   assert.doesNotMatch(tasksToCsv(tasks), /備註/);
+});
+
+test("replaces the local Galaxy snapshot only when the imported CSV is newer", () => {
+  const oldTask = { id: "old", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending" };
+  const newTask = { id: "new", fullSerial: "A02-001193", serialLast4: "1193", targetDate: "2026-06-02", completedDate: "2026-09-01", status: "done" };
+  const state = { tasks: [oldTask], cloudTasks: [oldTask], outbox: [], importedFileModifiedAt: 1000, sourceName: "old.csv" };
+  const newer = mergeImportedSnapshot(state, { tasks: [newTask], issues: [], sheetName: "Galaxy Log" }, 2000);
+  assert.equal(newer.replaced, true);
+  assert.deepEqual(newer.state.tasks.map((task) => task.id), ["new"]);
+  assert.equal(newer.state.importedFileModifiedAt, 2000);
+
+  const older = mergeImportedSnapshot(state, { tasks: [newTask], issues: [], sheetName: "Galaxy Log" }, 500);
+  assert.equal(older.replaced, false);
+  assert.deepEqual(older.state.tasks.map((task) => task.id), ["old"]);
+});
+
+test("uses the new cloud wording in the Galaxy shell", () => {
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport: null });
+  app.mount();
+  assert.equal(documentRef.elements.get("galaxySyncBtn").textContent, "同步至雲端");
+  assert.equal(documentRef.elements.get("galaxyImportBtn").textContent, "下載雲端資料");
 });
 
 test("shows and queues a no-log result beside the completed action", async () => {
@@ -138,6 +162,15 @@ test("re-imports the standardized Galaxy export with spaced Log headers", () => 
   assert.equal(result.tasks[1].status, "pending");
   assert.equal(result.tasks[2].status, "needs_review");
   assert.equal(result.tasks[2].note, "formating, Can't log collection");
+});
+
+test("reads the standardized CSV with full SN instead of treating the last-four column as SN", async () => {
+  const result = await parseWorkbookFile({
+    name: "Galaxy.csv",
+    text: async () => "SN,SN末4位,指定 Log 日期,取 Log 日期,狀態\r\nA02-001190,1190,2026-05-17,,未取\r\n",
+  });
+  assert.equal(result.tasks[0].fullSerial, "A02-001190");
+  assert.equal(result.tasks[0].serialLast4, "1190");
 });
 
 test("keeps duplicate source rows as separate tasks and merges re-imports by stable task id", () => {
