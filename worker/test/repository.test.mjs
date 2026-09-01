@@ -760,6 +760,31 @@ test("reads Galaxy Log repeated column groups into stable tasks", async () => {
   ]);
 });
 
+test("carries merged serial numbers down within Galaxy Log columns", async () => {
+  const data = structuredClone(companyData);
+  data["galaxy-log"] = [{ title: "Galaxy Log", values: [
+    ["SN末4位", "指定 Log 日期", "取 Log 日期"],
+    ["A02-001190", "2026/5/17", ""],
+    ["", "2026/5/16", ""],
+    ["A02-001193", "2026/6/2", ""],
+    ["", "2026/6/2", ""],
+    ["", "2026/5/30", ""],
+  ] }];
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+
+  const result = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
+
+  assert.equal(result.issues.length, 0);
+  assert.deepEqual(result.tasks.map((task) => [task.serialLast4, task.targetDate]), [
+    ["1190", "2026-05-17"],
+    ["1190", "2026-05-16"],
+    ["1193", "2026-06-02"],
+    ["1193", "2026-06-02"],
+    ["1193", "2026-05-30"],
+  ]);
+});
+
 test("reads a public CSV export when the configured Galaxy workbook is still an Office file", async () => {
   const officeError = Object.assign(new Error("Google Sheets request failed (400)"), {
     status: 400,

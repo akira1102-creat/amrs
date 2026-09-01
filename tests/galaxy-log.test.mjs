@@ -185,6 +185,28 @@ test("parses repeated three-column Galaxy Log groups and keeps group identity", 
   assert.notEqual(result.tasks[0].id, result.tasks[2].id);
 });
 
+test("carries merged serial numbers down within repeated Galaxy Log columns", () => {
+  const result = parseGalaxyColumnGroups({
+    rows: [
+      ["SN末4位", "指定 Log 日期", "取 Log 日期"],
+      ["A02-001190", "2026/5/17", ""],
+      ["", "2026/5/16", ""],
+      ["A02-001193", "2026/6/2", ""],
+      ["", "2026/6/2", ""],
+      ["", "2026/5/30", ""],
+    ],
+  });
+
+  assert.equal(result.issues.length, 0);
+  assert.deepEqual(result.tasks.map((task) => [task.serialLast4, task.targetDate]), [
+    ["1190", "2026-05-17"],
+    ["1190", "2026-05-16"],
+    ["1193", "2026-06-02"],
+    ["1193", "2026-06-02"],
+    ["1193", "2026-05-30"],
+  ]);
+});
+
 test("serializes Galaxy tasks back into repeated three-column groups", () => {
   const tasks = [
     { id: "gx-a", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", groupIndex: 0, rowIndex: 2 },

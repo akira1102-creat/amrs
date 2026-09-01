@@ -145,15 +145,20 @@
     const occurrenceByKey = new Map();
 
     for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+      let currentSerial = "";
       for (let rowOffset = startRow; rowOffset < matrix.length; rowOffset += 1) {
         const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
         const base = groupIndex * 3;
         const rawSerial = row[base];
         const rawTarget = row[base + 1];
         const rawCompleted = row[base + 2];
-        if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) continue;
+        if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) {
+          currentSerial = "";
+          continue;
+        }
 
-        const serial = serialLast4(rawSerial) || normalizeSerial(rawSerial);
+        if (text(rawSerial)) currentSerial = serialLast4(rawSerial) || normalizeSerial(rawSerial);
+        const serial = currentSerial;
         const targetDate = normalizeDate(rawTarget);
         const completedText = text(rawCompleted);
         const completedDate = normalizeDate(rawCompleted);

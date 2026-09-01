@@ -220,14 +220,19 @@ function parseGalaxyValues(values, timeZone) {
   const issues = [];
   const occurrenceByKey = new Map();
   for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+    let currentSerial = "";
     for (let rowOffset = headerRow; rowOffset < matrix.length; rowOffset += 1) {
       const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
       const base = groupIndex * 3;
       const rawSerial = arrayValue(row, base + 1);
       const rawTarget = arrayValue(row, base + 2);
       const rawCompleted = arrayValue(row, base + 3);
-      if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) continue;
-      const serialLast4 = galaxySerial(rawSerial);
+      if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) {
+        currentSerial = "";
+        continue;
+      }
+      if (text(rawSerial)) currentSerial = galaxySerial(rawSerial);
+      const serialLast4 = currentSerial;
       const targetDate = galaxyDate(rawTarget, timeZone);
       const completedText = text(rawCompleted);
       const completedDate = galaxyDate(rawCompleted, timeZone);
