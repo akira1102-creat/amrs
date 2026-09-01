@@ -30,3 +30,12 @@ test("prefers the dedicated CVCS spreadsheet secret", () => {
   });
   assert.equal(config.cvcsSheetId, "dedicated-cvcs");
 });
+
+test("loads the Galaxy Log spreadsheet from protected runtime configuration", () => {
+  const sheets = Object.fromEntries(["Melco", "MGM", "SJM", "SCL", "GEG", "Wynn"].map((company) => [company, `synthetic-${company}`]));
+  const config = loadRuntimeConfig({
+    AMRS_CONFIG: JSON.stringify({ sheets, partsSheetId: "synthetic-parts", scheduleSheetId: "synthetic-schedule" }),
+    GALAXY_LOG_SHEET_ID: "synthetic-galaxy-log",
+  });
+  assert.equal(config.galaxyLogSheetId, "synthetic-galaxy-log");
+});

@@ -6,7 +6,8 @@
   "use strict";
 
   const STORAGE_KEY = "_amrs_galaxy_log_v1";
-  const STATE_VERSION = 1;
+  const STATE_VERSION = 2;
+  const COLUMN_GROUP_HEADERS = ["SN末4位", "指定 Log 日期", "取 Log 日期"];
   const STATUS_LABELS = {
     pending: "未取",
     done: "已取",
@@ -118,7 +119,99 @@
   }
 
   function buildTaskId(fullSerial, targetDate, occurrenceIndex = 0) {
-    return `gx-${hash(`${normalizeSerial(fullSerial)}|${normalizeDate(targetDate)}|${Number(occurrenceIndex) || 0}`)}`;
+    return `gx-${hash(`${normalizeSerial(fullSerial)}|${normalizeDate(targetDate)}|${String(occurrenceIndex)}`)}`;
+  }
+
+  function buildColumnTaskId(serial, targetDate, groupIndex, rowIndex, occurrenceIndex = 0) {
+    return buildTaskId(serial, targetDate, `g${Number(groupIndex) || 0}r${Number(rowIndex) || 0}o${Number(occurrenceIndex) || 0}`);
+  }
+
+  function columnHeaderRow(row = []) {
+    const values = Array.isArray(row) ? row.map((value) => text(value).toLowerCase()) : [];
+    if (!values.length) return false;
+    const hasSerialLabel = values.some((value) => /sn|serial|機身|機台|序號|號碼/.test(value));
+    const hasTargetLabel = values.some((value) => /指定|target|occurred|日期|log/.test(value));
+    const hasCompletionLabel = values.some((value) => /取\s*log|completed|complete|完成/.test(value));
+    return hasSerialLabel && hasTargetLabel && hasCompletionLabel;
+  }
+
+  function parseGalaxyColumnGroups({ rows = [], sheetName = "Galaxy Log" } = {}) {
+    const matrix = Array.isArray(rows) ? rows : [];
+    const tasks = [];
+    const issues = [];
+    const width = matrix.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
+    const groupCount = Math.ceil(width / 3);
+    const startRow = columnHeaderRow(matrix[0]) ? 1 : 0;
+    const occurrenceByKey = new Map();
+
+    for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+      for (let rowOffset = startRow; rowOffset < matrix.length; rowOffset += 1) {
+        const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
+        const base = groupIndex * 3;
+        const rawSerial = row[base];
+        const rawTarget = row[base + 1];
+        const rawCompleted = row[base + 2];
+        if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) continue;
+
+        const serial = serialLast4(rawSerial) || normalizeSerial(rawSerial);
+        const targetDate = normalizeDate(rawTarget);
+        const completedText = text(rawCompleted);
+        const completedDate = normalizeDate(rawCompleted);
+        if (!serial) {
+          issues.push({ row: rowOffset + 1, groupIndex, type: "missing-serial", message: "找不到機身號碼（最後 4 位）", value: text(rawSerial) });
+          continue;
+        }
+        if (!targetDate) {
+          issues.push({ row: rowOffset + 1, groupIndex, type: "invalid-date", message: "指定 Log 日期格式無法辨識", value: text(rawTarget) });
+          continue;
+        }
+        if (completedText && !completedDate && !/^(?:n\/?a|-)$/i.test(completedText)) {
+          issues.push({ row: rowOffset + 1, groupIndex, type: "completion-value", message: "取 Log 日期格式無法辨識", value: completedText });
+        }
+        const key = `${serial}|${targetDate}`;
+        const occurrenceIndex = occurrenceByKey.get(`${groupIndex}|${key}`) || 0;
+        occurrenceByKey.set(`${groupIndex}|${key}`, occurrenceIndex + 1);
+        const rowIndex = rowOffset + 1;
+        tasks.push({
+          id: buildColumnTaskId(serial, targetDate, groupIndex, rowIndex, occurrenceIndex),
+          fullSerial: serial,
+          serialLast4: serial,
+          targetDate,
+          completedDate,
+          status: completedDate ? "done" : (completedText ? "needs_review" : "pending"),
+          note: completedText && !completedDate ? completedText : "",
+          sourceSheet: text(sheetName),
+          sourceRow: rowIndex,
+          groupIndex,
+          rowIndex,
+          duplicateIndex: occurrenceIndex,
+          sourceFormat: "columns",
+        });
+      }
+    }
+    return { kind: "columns", sheetName, tasks, issues, groupCount };
+  }
+
+  function tasksToColumnGroups(tasks) {
+    const values = Array.isArray(tasks) ? tasks : [];
+    const groupCount = Math.max(1, ...values.map((task) => Number(task?.groupIndex) >= 0 ? Number(task.groupIndex) + 1 : 1));
+    const rows = [Array.from({ length: groupCount }, () => COLUMN_GROUP_HEADERS).flat()];
+    const nextRowByGroup = Array(groupCount).fill(2);
+    const sorted = values.slice().sort((left, right) => Number(left?.groupIndex || 0) - Number(right?.groupIndex || 0)
+      || Number(left?.rowIndex || 0) - Number(right?.rowIndex || 0)
+      || text(left?.targetDate).localeCompare(text(right?.targetDate)));
+    for (const task of sorted) {
+      const groupIndex = Math.max(0, Number(task?.groupIndex) || 0);
+      const rowIndex = Number(task?.rowIndex) >= 2 ? Number(task.rowIndex) : nextRowByGroup[groupIndex];
+      nextRowByGroup[groupIndex] = Math.max(nextRowByGroup[groupIndex], rowIndex + 1);
+      while (rows.length < rowIndex) rows.push(Array(groupCount * 3).fill(""));
+      while (rows[rowIndex - 1].length < groupCount * 3) rows[rowIndex - 1].push("");
+      const base = groupIndex * 3;
+      rows[rowIndex - 1][base] = text(task.serialLast4 || serialLast4(task.fullSerial));
+      rows[rowIndex - 1][base + 1] = text(task.targetDate);
+      rows[rowIndex - 1][base + 2] = text(task.completedDate);
+    }
+    return rows;
   }
 
   function findHeaderInfo(rows) {
@@ -292,18 +385,126 @@
       });
   }
 
+  function normalizeTask(task) {
+    if (!task || typeof task !== "object") return null;
+    const serial = normalizeSerial(task.fullSerial || task.serialLast4);
+    const targetDate = normalizeDate(task.targetDate);
+    if (!task.id || !serial || !targetDate) return null;
+    const completedDate = normalizeDate(task.completedDate);
+    const status = STATUS_LABELS[task.status] ? task.status : (completedDate ? "done" : "pending");
+    return {
+      ...task,
+      fullSerial: serial,
+      serialLast4: task.serialLast4 || serialLast4(serial),
+      targetDate,
+      completedDate,
+      status,
+      note: text(task.note),
+      groupIndex: Number.isFinite(Number(task.groupIndex)) ? Number(task.groupIndex) : 0,
+      rowIndex: Number.isFinite(Number(task.rowIndex)) ? Number(task.rowIndex) : 0,
+    };
+  }
+
+  function stablePatchKey(patch = {}) {
+    return Object.keys(patch).sort().map((key) => `${key}:${text(patch[key])}`).join("|");
+  }
+
+  function createMutationOutbox(state, mutation) {
+    const source = state && typeof state === "object" ? state : {};
+    const taskId = text(mutation?.taskId);
+    if (!taskId || !mutation?.patch || typeof mutation.patch !== "object") return { ...source, outbox: Array.isArray(source.outbox) ? source.outbox.slice() : [] };
+    const patch = { ...mutation.patch };
+    const mutationId = text(mutation.mutationId) || `gm-${hash(`${taskId}|${stablePatchKey(patch)}`)}`;
+    const previous = (Array.isArray(source.outbox) ? source.outbox : []).find((item) => text(item?.taskId) === taskId);
+    const next = {
+      mutationId,
+      taskId,
+      patch,
+      baseCompletedDate: previous ? text(previous.baseCompletedDate) : text(mutation.baseCompletedDate),
+      createdAt: text(mutation.createdAt) || new Date().toISOString(),
+    };
+    const outbox = (Array.isArray(source.outbox) ? source.outbox : []).filter((item) => text(item?.taskId) !== taskId);
+    outbox.push(next);
+    return { ...source, outbox };
+  }
+
+  function pendingMutations(state) {
+    return (Array.isArray(state?.outbox) ? state.outbox : []).filter((mutation) => text(mutation?.taskId) && mutation?.patch && typeof mutation.patch === "object");
+  }
+
+  function mergeCloudTasks(localTasks, cloudTasks, outbox = []) {
+    const local = (Array.isArray(localTasks) ? localTasks : []).map(normalizeTask).filter(Boolean);
+    const cloud = (Array.isArray(cloudTasks) ? cloudTasks : []).map(normalizeTask).filter(Boolean);
+    const pendingById = new Map((Array.isArray(outbox) ? outbox : []).map((mutation) => [text(mutation?.taskId), mutation]));
+    const tasks = [];
+    const conflicts = [];
+    const idRemaps = [];
+    const seen = new Set();
+
+    const samePosition = (left, right) => Number(left?.groupIndex) === Number(right?.groupIndex)
+      && Number(left?.rowIndex) >= 2
+      && Number(left?.rowIndex) === Number(right?.rowIndex);
+    const sameIdentity = (left, right) => text(left?.serialLast4 || serialLast4(left?.fullSerial))
+      === text(right?.serialLast4 || serialLast4(right?.fullSerial))
+      && text(left?.targetDate) === text(right?.targetDate);
+    const localEntryFor = (remote) => {
+      const exact = local.find((candidate) => !seen.has(candidate.id) && candidate.id === remote.id);
+      if (exact) return exact;
+      const positioned = local.find((candidate) => !seen.has(candidate.id) && sameIdentity(candidate, remote) && samePosition(candidate, remote));
+      if (positioned) return positioned;
+      const duplicateIndex = Number(remote.duplicateIndex || 0);
+      const duplicate = local.find((candidate) => !seen.has(candidate.id) && sameIdentity(candidate, remote) && Number(candidate.duplicateIndex || 0) === duplicateIndex);
+      if (duplicate) return duplicate;
+      return local.find((candidate) => !seen.has(candidate.id) && sameIdentity(candidate, remote)) || null;
+    };
+
+    for (const remote of cloud) {
+      const current = localEntryFor(remote);
+      if (current && current.id !== remote.id) idRemaps.push({ from: current.id, to: remote.id });
+      const pending = pendingById.get(remote.id) || (current && pendingById.get(current.id));
+      let merged = { ...remote };
+      if (pending) {
+        const desired = { ...remote, ...pending.patch };
+        const localCompleted = normalizeDate(pending.patch.completedDate || current?.completedDate);
+        const cloudCompleted = normalizeDate(remote.completedDate);
+        if (localCompleted && cloudCompleted && localCompleted !== cloudCompleted) {
+          merged = { ...remote, ...(current || {}), ...pending.patch, status: "needs_review", conflict: true };
+          conflicts.push({ taskId: remote.id, localCompletedDate: localCompleted, cloudCompletedDate: cloudCompleted });
+        } else {
+          merged = desired;
+        }
+      } else if (current && !remote.completedDate && current.completedDate) {
+        merged = { ...remote, ...current };
+      }
+      merged.id = remote.id;
+      tasks.push(merged);
+      if (current) seen.add(current.id);
+    }
+    for (const current of local) {
+      if (!seen.has(current.id)) tasks.push({ ...current });
+    }
+    return { tasks, conflicts, idRemaps };
+  }
+
   function normalizeState(value) {
     const state = value && typeof value === "object" ? value : {};
-    const tasks = Array.isArray(state.tasks) ? state.tasks.filter((task) => task && task.id && task.fullSerial && task.targetDate).map((task) => ({
-      ...task,
-      serialLast4: task.serialLast4 || serialLast4(task.fullSerial),
-      status: STATUS_LABELS[task.status] ? task.status : "pending",
-      completedDate: normalizeDate(task.completedDate),
-      note: text(task.note),
+    const tasks = Array.isArray(state.tasks) ? state.tasks.map(normalizeTask).filter(Boolean) : [];
+    const cloudTasks = Array.isArray(state.cloudTasks) ? state.cloudTasks.map(normalizeTask).filter(Boolean) : [];
+    const outbox = Array.isArray(state.outbox) ? state.outbox.filter((mutation) => text(mutation?.taskId) && mutation?.patch && typeof mutation.patch === "object").map((mutation) => ({
+      mutationId: text(mutation.mutationId) || `gm-${hash(`${text(mutation.taskId)}|${stablePatchKey(mutation.patch)}`)}`,
+      taskId: text(mutation.taskId),
+      patch: { ...mutation.patch },
+      baseCompletedDate: text(mutation.baseCompletedDate),
+      createdAt: text(mutation.createdAt),
     })) : [];
     return {
       version: STATE_VERSION,
       tasks,
+      cloudTasks,
+      outbox,
+      conflicts: Array.isArray(state.conflicts) ? state.conflicts.slice(0, 200) : [],
+      lastCloudSyncAt: text(state.lastCloudSyncAt),
+      lastCloudError: text(state.lastCloudError),
       issues: Array.isArray(state.issues) ? state.issues.slice(0, 200) : [],
       importedAt: text(state.importedAt),
       sourceName: text(state.sourceName),
@@ -397,7 +598,12 @@
 
   async function parseWorkbookFile(file, xlsx = root?.XLSX) {
     if (!file) throw new Error("請選擇 Excel 或 CSV 檔案");
-    if (/\.csv$/i.test(file.name || "")) return parseGalaxyRows({ sheetName: file.name || "CSV", rows: parseCsvText(await file.text()) });
+    if (/\.csv$/i.test(file.name || "")) {
+      const rows = parseCsvText(await file.text());
+      return columnHeaderRow(rows[0])
+        ? parseGalaxyColumnGroups({ sheetName: file.name || "CSV", rows })
+        : parseGalaxyRows({ sheetName: file.name || "CSV", rows });
+    }
     if (!xlsx?.read || !xlsx?.utils?.sheet_to_json) throw new Error("Excel 匯入元件未載入，請重新整理 AMRS");
     const workbook = xlsx.read(await file.arrayBuffer(), { type: "array", cellDates: true, cellNF: true, cellText: true });
     const candidateNames = Array.isArray(workbook.SheetNames) ? workbook.SheetNames : [];
@@ -407,6 +613,12 @@
       || candidateNames[0];
     if (!sourceName) throw new Error("找不到可用工作表");
     const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sourceName], { header: 1, raw: true, defval: null });
+    if (columnHeaderRow(rows[0])) {
+      const parsedColumns = parseGalaxyColumnGroups({ sheetName: sourceName, rows });
+      parsedColumns.sourceName = file.name || "";
+      parsedColumns.ignoredSheets = candidateNames.filter((name) => name !== sourceName);
+      return parsedColumns;
+    }
     const parsed = parseGalaxyRows({ sheetName: sourceName, rows });
     parsed.sourceName = file.name || "";
     parsed.ignoredSheets = candidateNames.filter((name) => name !== sourceName);
@@ -416,10 +628,42 @@
   function createApplication(options = {}) {
     const documentRef = options.document || root?.document;
     const storage = options.storage || root?.localStorage;
+    const transport = options.transport;
     let state = readStoredState(storage);
     let filter = { query: "", status: "pending" };
     let mounted = false;
     let busy = false;
+    let cloudBusy = false;
+
+    function isOnline() {
+      return root?.navigator?.onLine !== false;
+    }
+
+    function persist(next) {
+      state = writeStoredState(storage, next);
+      return state;
+    }
+
+    function queueTaskMutation(taskId, patch, baseCompletedDate = "") {
+      const current = state.tasks.find((task) => task.id === taskId);
+      if (!current) return false;
+      const nextTasks = state.tasks.map((task) => task.id === taskId ? { ...task, ...patch, updatedAt: new Date().toISOString() } : { ...task });
+      const next = createMutationOutbox({ ...state, tasks: nextTasks }, {
+        taskId,
+        patch: {
+          fullSerial: current.fullSerial,
+          serialLast4: current.serialLast4 || serialLast4(current.fullSerial),
+          targetDate: current.targetDate,
+          groupIndex: current.groupIndex,
+          rowIndex: current.rowIndex,
+          duplicateIndex: current.duplicateIndex,
+          ...patch,
+        },
+        baseCompletedDate: baseCompletedDate || current.completedDate,
+      });
+      persist(next);
+      return true;
+    }
 
     function notify(message, kind = "ok") {
       if (typeof options.toast === "function") options.toast(message, kind === "err" ? "err" : kind === "warn" ? "warn" : "ok");
@@ -432,6 +676,7 @@
         <div class="galaxy-page-head">
           <div><div class="galaxy-page-title">Galaxy 取 Log</div><div class="galaxy-page-subtitle">離線清單 · 出發前匯入，返公司再整理</div></div>
           <div class="galaxy-page-actions">
+            <button class="galaxy-btn cloud" id="galaxySyncBtn" type="button">同步雲端</button>
             <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">匯入 Excel / CSV</button>
             <button class="galaxy-btn" id="galaxyExportXlsxBtn" type="button">匯出 Excel</button>
             <button class="galaxy-btn" id="galaxyExportCsvBtn" type="button">匯出 CSV</button>
@@ -449,8 +694,113 @@
       </div>`;
     }
 
+    function cloudErrorMessage(error) {
+      return text(error?.message) || "雲端連線失敗，已保留本機資料";
+    }
+
+    function transportAvailable() {
+      return !!transport && typeof transport.get === "function" && typeof transport.post === "function";
+    }
+
+    async function loadCloud({ silent = false } = {}) {
+      if (cloudBusy || !isOnline() || !transport || typeof transport.get !== "function") return false;
+      cloudBusy = true;
+      render();
+      try {
+        const response = await transport.get("action=galaxyLogOverview&refresh=1", { timeoutMs: 20_000 });
+        if (response?.success === false) throw new Error(response.message || "雲端清單讀取失敗");
+        const cloudTasks = Array.isArray(response?.tasks) ? response.tasks : [];
+        const merged = mergeCloudTasks(state.tasks, cloudTasks, state.outbox);
+        const remaps = new Map(merged.idRemaps.map(({ from, to }) => [from, to]));
+        const outbox = state.outbox.map((mutation) => remaps.has(mutation.taskId) ? { ...mutation, taskId: remaps.get(mutation.taskId) } : { ...mutation });
+        persist({
+          ...state,
+          tasks: merged.tasks,
+          cloudTasks,
+          outbox,
+          issues: Array.isArray(response?.issues) ? response.issues : state.issues,
+          conflicts: merged.conflicts,
+          lastCloudSyncAt: new Date().toISOString(),
+          lastCloudError: "",
+        });
+        if (!silent) notify(`✓ 已載入雲端清單（${cloudTasks.length} 筆）`);
+        return true;
+      } catch (error) {
+        persist({ ...state, lastCloudError: cloudErrorMessage(error) });
+        if (!silent) notify("雲端清單未能載入，現時使用本機資料", "warn");
+        return false;
+      } finally {
+        cloudBusy = false;
+        render();
+      }
+    }
+
+    function remapTaskId(tasks, fromId, toId) {
+      return (Array.isArray(tasks) ? tasks : []).map((task) => task.id === fromId ? { ...task, id: toId } : { ...task });
+    }
+
+    async function syncCloud() {
+      if (cloudBusy) return false;
+      if (!isOnline()) { notify("目前離線，返公司有網絡時先同步", "warn"); return false; }
+      if (!transportAvailable()) { notify("雲端同步尚未連接，現時只保存本機資料", "warn"); return false; }
+      const mutations = pendingMutations(state);
+      if (!mutations.length) {
+        await loadCloud();
+        if (!cloudBusy) notify("目前沒有待同步變更");
+        return true;
+      }
+      cloudBusy = true;
+      render();
+      try {
+        const requestId = `galaxy-sync-${hash(mutations.map((item) => item.mutationId || item.taskId).join("|"))}`;
+        const response = await transport.post({ action: "syncGalaxyLog", requestId, mutations }, { timeoutMs: 30_000, requestId });
+        if (response?.success === false) throw new Error(response.message || "雲端同步失敗");
+        const results = Array.isArray(response?.results) ? response.results : [];
+        let tasks = state.tasks.slice();
+        let outbox = pendingMutations(state).slice();
+        const resultByMutation = new Map(results.map((result) => [text(result.mutationId), result]));
+        for (const mutation of mutations) {
+          const result = resultByMutation.get(text(mutation.mutationId));
+          const canonicalId = text(result?.canonicalTaskId);
+          if (canonicalId && canonicalId !== mutation.taskId) {
+            tasks = remapTaskId(tasks, mutation.taskId, canonicalId);
+            outbox = outbox.map((item) => item.mutationId === mutation.mutationId ? { ...item, taskId: canonicalId } : item);
+          }
+          if (result?.status === "applied") {
+            outbox = outbox.filter((item) => item.mutationId !== mutation.mutationId);
+          }
+        }
+        const cloudTasks = Array.isArray(response?.tasks) ? response.tasks : [];
+        const merged = mergeCloudTasks(tasks, cloudTasks, outbox);
+        const remaps = new Map(merged.idRemaps.map(({ from, to }) => [from, to]));
+        outbox = outbox.map((item) => remaps.has(item.taskId) ? { ...item, taskId: remaps.get(item.taskId) } : { ...item });
+        persist({
+          ...state,
+          tasks: merged.tasks,
+          cloudTasks,
+          outbox,
+          conflicts: merged.conflicts.concat(results.filter((result) => result.status === "conflict").map((result) => ({ taskId: result.taskId, message: result.message || "雲端資料有衝突" }))),
+          lastCloudSyncAt: new Date().toISOString(),
+          lastCloudError: "",
+        });
+        const applied = results.filter((result) => result.status === "applied").length;
+        const conflicts = results.filter((result) => result.status === "conflict").length;
+        const failed = results.filter((result) => result.status === "failed").length;
+        notify(`✓ 已同步 ${applied} 筆${conflicts ? `，${conflicts} 筆衝突` : ""}${failed ? `，${failed} 筆待重試` : ""}`, conflicts || failed ? "warn" : "ok");
+        return true;
+      } catch (error) {
+        persist({ ...state, lastCloudError: cloudErrorMessage(error) });
+        notify("同步未完成，未同步資料已保留，請稍後重試", "err");
+        return false;
+      } finally {
+        cloudBusy = false;
+        render();
+      }
+    }
+
     function bind() {
       const fileInput = documentRef.getElementById("galaxyFileInput");
+      documentRef.getElementById("galaxySyncBtn")?.addEventListener("click", () => { void syncCloud(); });
       documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => fileInput?.click());
       fileInput?.addEventListener("change", async () => {
         const file = fileInput.files?.[0];
@@ -469,7 +819,7 @@
       documentRef.getElementById("galaxyLogClearBtn")?.addEventListener("click", () => {
         if (!state.tasks.length) { notify("目前沒有本機清單", "warn"); return; }
         if (!root.confirm?.("確定要清除這部 Surface 的 Galaxy 清單及完成記錄嗎？")) return;
-        state = writeStoredState(storage, { tasks: [], issues: [], importedAt: "", sourceName: "", sourceSheet: "" });
+        state = writeStoredState(storage, { tasks: [], cloudTasks: [], outbox: [], conflicts: [], issues: [], importedAt: "", sourceName: "", sourceSheet: "", lastCloudSyncAt: "", lastCloudError: "" });
         notify("已清除本機 Galaxy 清單");
         render();
       });
@@ -479,15 +829,16 @@
         const id = button.dataset.galaxyId;
         const action = button.dataset.galaxyAction;
         if (action === "complete") {
-          state = writeStoredState(storage, { ...state, tasks: completeTask(state.tasks, id) });
-          notify("✓ 已記錄取 Log 日期");
+          const current = state.tasks.find((task) => task.id === id);
+          const completedDate = isoFromDate(new Date());
+          if (current && queueTaskMutation(id, { status: "done", completedDate }, current.completedDate)) notify("✓ 已記錄取 Log 日期（待同步）");
         } else if (action === "reopen") {
-          state = writeStoredState(storage, { ...state, tasks: reopenTask(state.tasks, id) });
-          notify("已改回未取");
+          const current = state.tasks.find((task) => task.id === id);
+          if (current && queueTaskMutation(id, { status: "pending", completedDate: "" }, current.completedDate)) notify("已改回未取（待同步）");
         }
         render();
       });
-      root.addEventListener?.("online", render);
+      root.addEventListener?.("online", () => { render(); void loadCloud({ silent: true }); });
       root.addEventListener?.("offline", render);
     }
 
@@ -497,8 +848,33 @@
       notify("讀取清單中…");
       try {
         const parsed = await parseWorkbookFile(file);
-        const merged = mergeImportedTasks(state.tasks, parsed.tasks, { importedAt: new Date().toISOString(), sourceName: file.name || "" });
-        state = writeStoredState(storage, { ...state, tasks: merged.tasks, issues: parsed.issues, importedAt: new Date().toISOString(), sourceName: file.name || "", sourceSheet: parsed.sheetName || "" });
+        const beforeById = new Map(state.tasks.map((task) => [task.id, task]));
+        const importedAt = new Date().toISOString();
+        const merged = mergeImportedTasks(state.tasks, parsed.tasks, { importedAt, sourceName: file.name || "" });
+        let nextState = { ...state, tasks: merged.tasks, issues: parsed.issues, importedAt, sourceName: file.name || "", sourceSheet: parsed.sheetName || "" };
+        for (const incoming of parsed.tasks || []) {
+          const previous = beforeById.get(incoming.id);
+          const changed = !previous
+            || text(previous.completedDate) !== text(incoming.completedDate)
+            || text(previous.targetDate) !== text(incoming.targetDate)
+            || text(previous.fullSerial) !== text(incoming.fullSerial);
+          if (!changed) continue;
+          nextState = createMutationOutbox(nextState, {
+            taskId: incoming.id,
+            patch: {
+              fullSerial: incoming.fullSerial,
+              serialLast4: incoming.serialLast4 || serialLast4(incoming.fullSerial),
+              targetDate: incoming.targetDate,
+              completedDate: incoming.completedDate || "",
+              status: incoming.status || (incoming.completedDate ? "done" : "pending"),
+              groupIndex: Number(incoming.groupIndex) || 0,
+              rowIndex: Number(incoming.rowIndex) || 0,
+              duplicateIndex: Number(incoming.duplicateIndex) || 0,
+            },
+            baseCompletedDate: previous?.completedDate || "",
+          });
+        }
+        persist(nextState);
         const ignored = parsed.ignoredSheets?.length ? `，跳過 ${parsed.ignoredSheets.length} 張其他工作表` : "";
         notify(`✓ 已匯入 ${merged.added} 筆新任務，更新 ${merged.updated} 筆${ignored}`);
         filter.status = "pending";
@@ -517,13 +893,29 @@
       const counts = state.tasks.reduce((result, task) => { result[task.status] = (result[task.status] || 0) + 1; return result; }, {});
       const summary = documentRef.getElementById("galaxyLogSummary");
       const importedAt = formatLocalDateTime(state.importedAt);
-      if (summary) summary.textContent = `全部 ${state.tasks.length} · 未取 ${counts.pending || 0} · 已取 ${counts.done || 0} · 需跟進 ${counts.needs_review || 0}${importedAt ? ` · 最後匯入 ${importedAt}` : ""}`;
+      const cloudSyncAt = formatLocalDateTime(state.lastCloudSyncAt);
+      const pendingCount = pendingMutations(state).length;
+      if (summary) summary.textContent = `全部 ${state.tasks.length} · 未取 ${counts.pending || 0} · 已取 ${counts.done || 0} · 需跟進 ${counts.needs_review || 0}${importedAt ? ` · 最後匯入 ${importedAt}` : ""}${cloudSyncAt ? ` · 最後同步 ${cloudSyncAt}` : ""}${pendingCount ? ` · 待同步 ${pendingCount}` : ""}`;
       const offline = documentRef.getElementById("galaxyLogOfflineBadge");
-      if (offline) { offline.textContent = root.navigator?.onLine === false ? "離線模式" : "本機資料已保存"; offline.className = root.navigator?.onLine === false ? "offline" : "local"; }
+      if (offline) {
+        const offlineMode = !isOnline();
+        const cloudError = Boolean(state.lastCloudError);
+        offline.textContent = offlineMode ? "離線模式" : cloudError ? "雲端讀取失敗" : pendingCount ? "有本機變更" : transportAvailable() ? "雲端已連接" : "本機資料已保存";
+        offline.className = offlineMode || cloudError ? "offline" : pendingCount ? "pending" : "local";
+      }
+      const syncButton = documentRef.getElementById("galaxySyncBtn");
+      if (syncButton) {
+        syncButton.disabled = cloudBusy || !isOnline() || !transportAvailable();
+        syncButton.textContent = cloudBusy ? "同步中…" : pendingCount ? `同步雲端（${pendingCount}）` : "同步雲端";
+      }
       const search = documentRef.getElementById("galaxyLogSearch"); if (search && search.value !== filter.query) search.value = filter.query;
       const statusSelect = documentRef.getElementById("galaxyLogStatusFilter"); if (statusSelect) statusSelect.value = filter.status;
       const issueHost = documentRef.getElementById("galaxyLogIssues");
-      if (issueHost) issueHost.innerHTML = state.issues.length ? `<details class="galaxy-issues"><summary>匯入檢查：${state.issues.length} 項需要留意</summary><div>${state.issues.slice(0, 40).map((issue) => `<div>第 ${escapeHtml(issue.row)} 行：${escapeHtml(issue.message)}${issue.value ? `（${escapeHtml(issue.value)}）` : ""}</div>`).join("")}${state.issues.length > 40 ? "<div>其餘問題已省略，請修正原檔後重新匯入。</div>" : ""}</div></details>` : "";
+      if (issueHost) {
+        const conflictMarkup = state.conflicts.length ? `<details class="galaxy-issues conflicts" open><summary>同步衝突：${state.conflicts.length} 筆需要留意</summary><div>${state.conflicts.slice(0, 40).map((conflict) => `<div>${escapeHtml(conflict.message || `Task ${conflict.taskId || ""} 的雲端資料與本機不同`)}</div>`).join("")}</div></details>` : "";
+        const issueMarkup = state.issues.length ? `<details class="galaxy-issues"><summary>匯入檢查：${state.issues.length} 項需要留意</summary><div>${state.issues.slice(0, 40).map((issue) => `<div>第 ${escapeHtml(issue.row)} 行：${escapeHtml(issue.message)}${issue.value ? `（${escapeHtml(issue.value)}）` : ""}</div>`).join("")}${state.issues.length > 40 ? "<div>其餘問題已省略，請修正原檔後重新匯入。</div>" : ""}</div></details>` : "";
+        issueHost.innerHTML = conflictMarkup + issueMarkup;
+      }
       const list = documentRef.getElementById("galaxyLogList");
       if (!list) return;
       if (!tasks.length) {
@@ -544,7 +936,12 @@
     function mount() {
       const page = documentRef?.getElementById?.("galaxyLogPage");
       if (!page) return false;
-      if (!mounted) { page.innerHTML = shell(); bind(); mounted = true; }
+      if (!mounted) {
+        page.innerHTML = shell();
+        bind();
+        mounted = true;
+      }
+      if (isOnline() && transportAvailable()) void loadCloud({ silent: true });
       render();
       return true;
     }
@@ -553,6 +950,8 @@
       mount,
       render,
       importFile,
+      loadCloud,
+      syncCloud,
       getState: () => normalizeState(state),
       setFilter: (next) => { filter = { ...filter, ...(next || {}) }; render(); },
     };
@@ -563,19 +962,24 @@
     STATUS_LABELS,
     buildTaskId,
     completeTask,
+    createMutationOutbox,
     createApplication,
     exportTasksXlsx,
     filterTasks,
     formatLocalDateTime,
+    mergeCloudTasks,
     mergeImportedTasks,
     normalizeDate,
     normalizeSerial,
     parseCsvText,
+    parseGalaxyColumnGroups,
     parseGalaxyRows,
     parseWorkbookFile,
+    pendingMutations,
     readStoredState,
     reopenTask,
     serialLast4,
+    tasksToColumnGroups,
     tasksToCsv,
     tasksToRows,
     writeStoredState,

@@ -5,11 +5,16 @@ import galaxyModule from "../galaxy-log.js";
 const {
   buildTaskId,
   completeTask,
+  createMutationOutbox,
   filterTasks,
   formatLocalDateTime,
+  mergeCloudTasks,
   mergeImportedTasks,
+  parseGalaxyColumnGroups,
   parseGalaxyRows,
+  pendingMutations,
   readStoredState,
+  tasksToColumnGroups,
   writeStoredState,
 } = galaxyModule;
 
@@ -133,4 +138,93 @@ test("does not carry a previous serial into a source row with an error note and 
   assert.equal(result.tasks.length, 1);
   assert.equal(result.tasks[0].fullSerial, "A02-001999");
   assert.equal(result.issues.some((issue) => issue.type === "missing-serial"), true);
+});
+
+test("parses repeated three-column Galaxy Log groups and keeps group identity", () => {
+  const result = parseGalaxyColumnGroups({
+    rows: [
+      ["SN末4位", "指定 Log 日期", "取 Log 日期", "SN末4位", "指定 Log 日期", "取 Log 日期"],
+      ["1190", "2026/09/01", "", "1190", "2026/09/01", "2026/09/02"],
+      ["1191", "2026/09/05", "", "", "", ""],
+    ],
+  });
+
+  assert.equal(result.issues.length, 0);
+  assert.equal(result.tasks.length, 3);
+  assert.deepEqual(result.tasks.map((task) => [task.serialLast4, task.targetDate, task.completedDate, task.groupIndex]), [
+    ["1190", "2026-09-01", "", 0],
+    ["1191", "2026-09-05", "", 0],
+    ["1190", "2026-09-01", "2026-09-02", 1],
+  ]);
+  assert.notEqual(result.tasks[0].id, result.tasks[2].id);
+});
+
+test("serializes Galaxy tasks back into repeated three-column groups", () => {
+  const tasks = [
+    { id: "gx-a", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", groupIndex: 0, rowIndex: 2 },
+    { id: "gx-b", serialLast4: "1191", targetDate: "2026-09-05", completedDate: "2026-09-06", groupIndex: 0, rowIndex: 3 },
+    { id: "gx-c", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "2026-09-02", groupIndex: 1, rowIndex: 2 },
+  ];
+
+  assert.deepEqual(tasksToColumnGroups(tasks), [
+    ["SN末4位", "指定 Log 日期", "取 Log 日期", "SN末4位", "指定 Log 日期", "取 Log 日期"],
+    ["1190", "2026-09-01", "", "1190", "2026-09-01", "2026-09-02"],
+    ["1191", "2026-09-05", "2026-09-06", "", "", ""],
+  ]);
+});
+
+test("queues one idempotent local mutation and exposes only pending mutations", () => {
+  const base = { tasks: [], outbox: [] };
+  const mutation = { taskId: "gx-a", patch: { completedDate: "2026-09-02", status: "done" } };
+  const once = createMutationOutbox(base, mutation);
+  const twice = createMutationOutbox(once, mutation);
+
+  assert.equal(once.outbox.length, 1);
+  assert.equal(twice.outbox.length, 1);
+  assert.equal(pendingMutations(twice)[0].taskId, "gx-a");
+});
+
+test("keeps the original cloud base when a local mutation is changed before sync", () => {
+  const first = createMutationOutbox({ tasks: [], outbox: [] }, {
+    taskId: "gx-a",
+    patch: { completedDate: "2026-09-02", status: "done" },
+    baseCompletedDate: "",
+  });
+  const changed = createMutationOutbox(first, {
+    taskId: "gx-a",
+    patch: { completedDate: "", status: "pending" },
+    baseCompletedDate: "2026-09-02",
+  });
+
+  assert.equal(changed.outbox.length, 1);
+  assert.equal(changed.outbox[0].baseCompletedDate, "");
+});
+
+test("merges cloud completion while preserving local pending changes and flags conflicts", () => {
+  const local = [{ id: "gx-a", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending" }];
+  const cloud = [{ id: "gx-a", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "2026-09-02", status: "done" }];
+  const retained = mergeCloudTasks(local, cloud, []);
+  assert.equal(retained.tasks[0].completedDate, "2026-09-02");
+  assert.equal(retained.tasks[0].status, "done");
+
+  const conflict = mergeCloudTasks(local, [{ ...cloud[0], completedDate: "2026-09-03" }], [
+    { mutationId: "m-1", taskId: "gx-a", patch: { completedDate: "2026-09-02", status: "done" } },
+  ]);
+  assert.equal(conflict.conflicts.length, 1);
+  assert.equal(conflict.tasks[0].completedDate, "2026-09-02");
+});
+
+test("merges pre-cloud local ids into the matching repeated-column task", () => {
+  const merged = mergeCloudTasks([
+    { id: "old-print-id", fullSerial: "1190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 2 },
+  ], [
+    { id: "new-column-id", fullSerial: "1190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 2 },
+  ], [
+    { mutationId: "m-old", taskId: "old-print-id", patch: { completedDate: "2026-09-03", status: "done" }, baseCompletedDate: "" },
+  ]);
+
+  assert.equal(merged.tasks.length, 1);
+  assert.equal(merged.tasks[0].id, "new-column-id");
+  assert.equal(merged.tasks[0].completedDate, "2026-09-03");
+  assert.deepEqual(merged.idRemaps, [{ from: "old-print-id", to: "new-column-id" }]);
 });

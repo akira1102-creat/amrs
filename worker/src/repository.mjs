@@ -3,6 +3,7 @@ import {
   BROKEN_PARTS_HEADERS,
   BROKEN_PARTS_SHEET,
   COMPANIES,
+  GALAXY_LOG_SHEET,
   MONTHLY_SHEET,
   SUBMISSION_HEADER,
   TEMPLATE_SHEET,
@@ -60,6 +61,9 @@ const DEFAULT_CACHE_TTL_MS = 15_000;
 const LONG_CACHE_TTL_MS = 5 * 60_000;
 const MONTHLY_STATS_CACHE_TTL_MS = 10 * 60_000;
 const MAX_READ_COLUMNS = 200;
+const GALAXY_LOG_CACHE_SCOPE = "galaxy-log";
+const GALAXY_LOG_CACHE_TTL_MS = 15_000;
+const GALAXY_LOG_HEADERS = ["SN末4位", "指定 Log 日期", "取 Log 日期"];
 
 function own(object, key) {
   return Object.prototype.hasOwnProperty.call(object || {}, key);
@@ -88,6 +92,118 @@ function nowMs(now) {
   const value = typeof now === "function" ? now() : now;
   const timestamp = value instanceof Date ? value.getTime() : Number(value);
   return Number.isFinite(timestamp) ? Math.floor(timestamp) : Date.now();
+}
+
+function galaxyHash(value) {
+  let result = 2166136261;
+  for (const character of String(value)) {
+    result ^= character.charCodeAt(0);
+    result = Math.imul(result, 16777619);
+  }
+  return (result >>> 0).toString(16).padStart(8, "0");
+}
+
+function galaxyDate(value, timeZone) {
+  const normalized = normalizeDateParam(value, timeZone);
+  if (normalized) return normalized.replaceAll("/", "-");
+  if (typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 100000) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86_400_000);
+    if (!Number.isNaN(date.getTime())) return date.toISOString().slice(0, 10);
+  }
+  const raw = text(value);
+  let match = raw.match(/^(\d{4})[.](\d{1,2})[.](\d{1,2})/);
+  if (match) return validGalaxyDate(match[1], match[2], match[3]);
+  match = raw.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (match) {
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    return first > 12 ? validGalaxyDate(match[3], second, first) : validGalaxyDate(match[3], first, second);
+  }
+  match = raw.match(/^(\d{1,2})[- ]([A-Za-z]{3,9})(?:[- ](\d{4}))?/);
+  if (match) {
+    const month = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }[match[2].slice(0, 3).toLowerCase()];
+    if (month) return validGalaxyDate(match[3] || new Date().getFullYear(), month, match[1]);
+  }
+  return "";
+}
+
+function validGalaxyDate(year, month, day) {
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.getUTCFullYear() !== Number(year) || date.getUTCMonth() + 1 !== Number(month) || date.getUTCDate() !== Number(day)) return "";
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function galaxySerial(value) {
+  const raw = text(value).replace(/^'+/, "").replace(/\s+/g, "").toUpperCase();
+  if (!raw || /^=?#?N\/?A$/i.test(raw) || raw.startsWith("=")) return "";
+  const match = raw.match(/(\d{4})$/);
+  return match ? match[1] : "";
+}
+
+function galaxyTaskId(serialLast4, targetDate, groupIndex, rowIndex, occurrenceIndex = 0) {
+  return `gx-${galaxyHash(`${galaxySerial(serialLast4)}|${galaxyDate(targetDate)}|g${Number(groupIndex) || 0}r${Number(rowIndex) || 0}o${Number(occurrenceIndex) || 0}`)}`;
+}
+
+function galaxyHeaderRow(row = []) {
+  const values = Array.isArray(row) ? row.map((value) => text(value).toLowerCase()) : [];
+  if (!values.length) return false;
+  const hasSerial = values.some((value) => /sn|serial|機身|機台|序號|號碼/.test(value));
+  const hasTarget = values.some((value) => /指定|target|occurred|日期|log/.test(value));
+  const hasCompleted = values.some((value) => /取\s*log|completed|complete|完成/.test(value));
+  return hasSerial && hasTarget && hasCompleted;
+}
+
+function parseGalaxyValues(values, timeZone) {
+  const matrix = Array.isArray(values) ? values : [];
+  const width = matrix.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0);
+  const groupCount = Math.max(1, Math.ceil(width / 3));
+  const headerRow = galaxyHeaderRow(matrix[0]) ? 1 : 0;
+  const tasks = [];
+  const issues = [];
+  const occurrenceByKey = new Map();
+  for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+    for (let rowOffset = headerRow; rowOffset < matrix.length; rowOffset += 1) {
+      const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
+      const base = groupIndex * 3;
+      const rawSerial = arrayValue(row, base + 1);
+      const rawTarget = arrayValue(row, base + 2);
+      const rawCompleted = arrayValue(row, base + 3);
+      if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) continue;
+      const serialLast4 = galaxySerial(rawSerial);
+      const targetDate = galaxyDate(rawTarget, timeZone);
+      const completedText = text(rawCompleted);
+      const completedDate = galaxyDate(rawCompleted, timeZone);
+      if (!serialLast4) {
+        issues.push({ row: rowOffset + 1, groupIndex, type: "missing-serial", message: "找不到機身號碼（最後 4 位）", value: text(rawSerial) });
+        continue;
+      }
+      if (!targetDate) {
+        issues.push({ row: rowOffset + 1, groupIndex, type: "invalid-date", message: "指定 Log 日期格式無法辨識", value: text(rawTarget) });
+        continue;
+      }
+      if (completedText && !completedDate && !/^(?:n\/?a|-)$/i.test(completedText)) {
+        issues.push({ row: rowOffset + 1, groupIndex, type: "completion-value", message: "取 Log 日期格式無法辨識", value: completedText });
+      }
+      const rowIndex = rowOffset + 1;
+      const key = `${groupIndex}|${serialLast4}|${targetDate}`;
+      const occurrenceIndex = occurrenceByKey.get(key) || 0;
+      occurrenceByKey.set(key, occurrenceIndex + 1);
+      tasks.push({
+        id: galaxyTaskId(serialLast4, targetDate, groupIndex, rowIndex, occurrenceIndex),
+        fullSerial: serialLast4,
+        serialLast4,
+        targetDate,
+        completedDate,
+        status: completedDate ? "done" : (completedText ? "needs_review" : "pending"),
+        note: completedText && !completedDate ? completedText : "",
+        groupIndex,
+        rowIndex,
+        duplicateIndex: occurrenceIndex,
+        sourceFormat: "columns",
+      });
+    }
+  }
+  return { tasks, issues, groupCount, headerRow };
 }
 
 function rowsFrom(result) {
@@ -573,6 +689,155 @@ export function createRepository(env = {}, dependencies = {}) {
     };
   }
 
+  function galaxySpreadsheetId() {
+    const spreadsheetId = text(config.galaxyLogSheetId);
+    if (!spreadsheetId) throw Object.assign(new Error("Galaxy Log spreadsheet is not configured"), { status: 503 });
+    return spreadsheetId;
+  }
+
+  async function ensureGalaxySheet(options = {}) {
+    const spreadsheetId = galaxySpreadsheetId();
+    let metadata = await spreadsheetMetadata(spreadsheetId, { refresh: options.refresh === true });
+    let sheet = findSheet(metadata, GALAXY_LOG_SHEET, false) || metadata[0] || null;
+    if (!sheet && options.create !== false) {
+      sheet = await addSheet(spreadsheetId, GALAXY_LOG_SHEET);
+      metadata = await spreadsheetMetadata(spreadsheetId, { refresh: true });
+      sheet = findSheet(metadata, GALAXY_LOG_SHEET, false) || sheet;
+    }
+    if (!sheet) throw Object.assign(new Error("Galaxy Log worksheet not found"), { status: 502 });
+    return { spreadsheetId, sheet };
+  }
+
+  async function readGalaxyTable(options = {}) {
+    const ensured = await ensureGalaxySheet({ refresh: options.refresh === true, create: true });
+    const readColumns = Math.min(MAX_READ_COLUMNS, Math.max(3, Number(ensured.sheet.gridProperties?.columnCount || 0)));
+    const cacheKey = `${ensured.spreadsheetId}:${ensured.sheet.title}`;
+    let values = await cached(memory, db, cacheAdapter, GALAXY_LOG_CACHE_SCOPE, cacheKey,
+      () => readValues(ensured.spreadsheetId, ensured.sheet.title, `A1:${columnNumberToA1(readColumns)}`),
+      { refresh: options.refresh === true, cache: options.cache !== false, ttlMs: GALAXY_LOG_CACHE_TTL_MS, now });
+    if (!values.length || values.every((row) => !nonEmptyRow(row))) {
+      await writeValues(ensured.spreadsheetId, ensured.sheet.title, "A1:C1", [GALAXY_LOG_HEADERS]);
+      values = [GALAXY_LOG_HEADERS.slice()];
+      await invalidateCache(db, memory, cacheAdapter, GALAXY_LOG_CACHE_SCOPE, now);
+    }
+    const parsed = parseGalaxyValues(values, config.timeZone);
+    return { ...ensured, values, ...parsed };
+  }
+
+  function paddedGalaxyRows(values, width) {
+    const rows = (Array.isArray(values) ? values : []).map((row) => Array.from({ length: width }, (_, index) => Array.isArray(row) ? row[index] ?? "" : ""));
+    if (!rows.length) rows.push(Array(width).fill(""));
+    return rows;
+  }
+
+  function setGalaxyCell(values, rowNumber, columnNumber, value) {
+    while (values.length < rowNumber) values.push([]);
+    while (values[rowNumber - 1].length < columnNumber) values[rowNumber - 1].push("");
+    values[rowNumber - 1][columnNumber - 1] = value;
+  }
+
+  function firstAvailableGalaxyPosition(values, groupIndex, headerRow) {
+    const width = Math.max(3, values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
+    const groupCount = Math.max(1, Math.ceil(width / 3));
+    const requestedGroup = Number(groupIndex);
+    const selectedGroup = Number.isFinite(requestedGroup) && requestedGroup >= 0 ? Math.floor(requestedGroup) : groupCount - 1;
+    const base = selectedGroup * 3;
+    for (let rowNumber = Math.max(2, headerRow + 1); rowNumber <= Math.max(values.length + 1, 2); rowNumber += 1) {
+      const row = values[rowNumber - 1] || [];
+      if (!text(row[base]) && !text(row[base + 1]) && !text(row[base + 2])) return { rowNumber, groupIndex: selectedGroup };
+    }
+    return { rowNumber: Math.max(values.length + 1, headerRow + 1), groupIndex: selectedGroup };
+  }
+
+  async function getGalaxyLogOverview(params = {}) {
+    const table = await readGalaxyTable({ refresh: text(params.refresh) === "1", cache: text(params.refresh) !== "1" });
+    return {
+      success: true,
+      tasks: table.tasks,
+      issues: table.issues,
+      sheetName: table.sheet.title,
+      serverUpdatedAt: new Date(nowMs(now)).toISOString(),
+    };
+  }
+
+  async function syncGalaxyLog(payload = {}) {
+    if (!Array.isArray(payload.mutations)) throw Object.assign(new Error("Galaxy Log mutations must be an array"), { status: 400 });
+    if (payload.mutations.length > 1000) throw Object.assign(new Error("Too many Galaxy Log mutations"), { status: 400 });
+    const table = await readGalaxyTable({ refresh: true, cache: false });
+    let width = Math.max(3, table.values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
+    const values = paddedGalaxyRows(table.values, width);
+    const currentTasks = parseGalaxyValues(values, config.timeZone).tasks;
+    const byId = new Map(currentTasks.map((task) => [task.id, task]));
+    const results = [];
+    let changed = false;
+    for (const mutation of payload.mutations) {
+      const taskId = text(mutation?.taskId);
+      const patch = mutation?.patch && typeof mutation.patch === "object" ? mutation.patch : {};
+      if (!taskId) { results.push({ mutationId: text(mutation?.mutationId), status: "failed", message: "Missing task ID" }); continue; }
+      let task = byId.get(taskId);
+      let canonicalTaskId = taskId;
+      if (!task) {
+        const incomingSerial = galaxySerial(patch.serialLast4 || patch.fullSerial || mutation?.serialLast4);
+        const incomingTarget = galaxyDate(patch.targetDate || mutation?.targetDate, config.timeZone);
+        const incomingGroup = mutation?.groupIndex ?? patch.groupIndex;
+        const incomingDuplicateRaw = mutation?.duplicateIndex ?? patch.duplicateIndex;
+        const incomingDuplicate = incomingDuplicateRaw == null || incomingDuplicateRaw === "" ? null : Number(incomingDuplicateRaw);
+        task = currentTasks.find((candidate) => candidate.serialLast4 === incomingSerial
+          && candidate.targetDate === incomingTarget
+          && (incomingGroup == null || Number(candidate.groupIndex) === Number(incomingGroup))
+          && (incomingDuplicate == null || Number(candidate.duplicateIndex) === incomingDuplicate)) || null;
+        if (task) canonicalTaskId = task.id;
+      }
+      if (!task) {
+        const serialLast4 = galaxySerial(patch.serialLast4 || patch.fullSerial || mutation?.serialLast4);
+        const targetDate = galaxyDate(patch.targetDate || mutation?.targetDate, config.timeZone);
+        if (!serialLast4 || !targetDate) { results.push({ mutationId: text(mutation?.mutationId), taskId, status: "failed", message: "Galaxy task was not found" }); continue; }
+        const position = firstAvailableGalaxyPosition(values, mutation?.groupIndex ?? patch.groupIndex, table.headerRow);
+        const occurrenceIndex = 0;
+        const id = galaxyTaskId(serialLast4, targetDate, position.groupIndex, position.rowNumber, occurrenceIndex);
+        setGalaxyCell(values, position.rowNumber, position.groupIndex * 3 + 1, serialLast4);
+        setGalaxyCell(values, position.rowNumber, position.groupIndex * 3 + 2, targetDate);
+        task = { id, serialLast4, targetDate, completedDate: "", groupIndex: position.groupIndex, rowIndex: position.rowNumber };
+        byId.set(id, task);
+        canonicalTaskId = id;
+        changed = true;
+      }
+      const currentCompleted = galaxyDate(task.completedDate, config.timeZone);
+      const baseCompleted = galaxyDate(mutation.baseCompletedDate, config.timeZone);
+      const desiredCompleted = patch.completedDate == null ? currentCompleted : galaxyDate(patch.completedDate, config.timeZone);
+      if (currentCompleted && desiredCompleted && currentCompleted === desiredCompleted) {
+        results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "applied", completedDate: currentCompleted });
+        continue;
+      }
+      if ((baseCompleted && currentCompleted !== baseCompleted) || (!baseCompleted && currentCompleted && desiredCompleted !== currentCompleted)) {
+        results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "conflict", completedDate: currentCompleted, message: "Cloud completed date changed" });
+        continue;
+      }
+      const targetColumn = task.groupIndex * 3 + 3;
+      setGalaxyCell(values, task.rowIndex, targetColumn, desiredCompleted);
+      task.completedDate = desiredCompleted;
+      changed = true;
+      results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "applied", completedDate: desiredCompleted });
+    }
+    if (changed) {
+      width = Math.max(width, values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
+      const endRow = Math.max(values.length, 1);
+      await writeValues(table.spreadsheetId, table.sheet.title, `A1:${columnNumberToA1(width)}${endRow}`, values);
+      await invalidateCache(db, memory, cacheAdapter, GALAXY_LOG_CACHE_SCOPE, now);
+    }
+    const latest = changed
+      ? parseGalaxyValues(values, config.timeZone)
+      : await readGalaxyTable({ refresh: true, cache: false });
+    return {
+      success: true,
+      results,
+      tasks: latest.tasks,
+      issues: latest.issues,
+      serverUpdatedAt: new Date(nowMs(now)).toISOString(),
+      sheetName: table.sheet.title,
+    };
+  }
+
   async function replaceCvcsSheet(title, rows, width) {
     const spreadsheetId = text(config.cvcsSheetId);
     if (!spreadsheetId) throw Object.assign(new Error("CVCS spreadsheet is not configured"), { status: 503 });
@@ -998,6 +1263,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (action === "scheduleMachineCounts") return monthlySubset(params, ["SCL", "GEG"]);
     if (action === "scheduleOverview") return scheduleOverview(params);
     if (action === "monthlySettings") return { success: true, settings: await readMonthlySettings({ refresh: text(params.refresh) === "1" }) };
+    if (action === "galaxyLogOverview") return getGalaxyLogOverview(params);
     return { error: "unknown action" };
   }
 
@@ -1363,6 +1629,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!Array.isArray(payload) && payload.action === "updateMonthlySettings") return updateMonthlySettings(payload);
     if (!Array.isArray(payload) && payload.action === "updateScheduleRemark") return updateScheduleRemark(payload);
     if (!Array.isArray(payload) && payload.action === "updateSchedulePeople") return updateSchedulePeople(payload);
+    if (!Array.isArray(payload) && payload.action === "syncGalaxyLog") return syncGalaxyLog(payload);
     if (!Array.isArray(payload) && payload.action === "bulkUpdateRecords") return bulkUpdateRecords(payload);
     if (!Array.isArray(payload) && payload.action === "submitRecords") {
       const repaired = await updateBrokenRepairDays(payload.brokenPartsRepairs || []);
@@ -1424,6 +1691,8 @@ export function createRepository(env = {}, dependencies = {}) {
     scheduleOverview,
     updateScheduleRemark,
     updateSchedulePeople,
+    getGalaxyLogOverview,
+    syncGalaxyLog,
     findSubmissionIds,
     invalidateCompany,
     readMainTable,

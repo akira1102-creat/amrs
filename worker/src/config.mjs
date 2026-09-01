@@ -5,6 +5,7 @@ export const BROKEN_PARTS_SHEET = "Broken Parts List";
 export const TEMPLATE_SHEET = "Template";
 export const AA_TAG_SHEET = "AA TAG";
 export const MONTHLY_SHEET = "Monthly";
+export const GALAXY_LOG_SHEET = "Galaxy Log";
 export const SUBMISSION_HEADER = "AMRS Submission ID";
 export const BROKEN_PARTS_HEADERS = [
   "CASINO",
@@ -70,6 +71,7 @@ export function loadRuntimeConfig(env) {
     partsSheetId: parsed.partsSheetId,
     scheduleSheetId: parsed.scheduleSheetId,
     cvcsSheetId: String(env.CVCS_SHEET_ID || parsed.cvcsSheetId || "").trim(),
+    galaxyLogSheetId: String(env.GALAXY_LOG_SHEET_ID || parsed.galaxyLogSheetId || "").trim(),
     timeZone: parsed.timeZone || "Asia/Hong_Kong",
   };
 }

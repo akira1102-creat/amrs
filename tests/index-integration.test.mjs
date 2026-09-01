@@ -70,14 +70,23 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901a/);
-  assert.match(html, /galaxy-log\.js\?v=20260901a/);
-  assert.match(html, /galaxy-log\.css\?v=20260901a/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901a/);
-  assert.match(worker, /galaxy-log\.js\?v=20260901a/);
-  assert.match(worker, /galaxy-log\.css\?v=20260901a/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901b/);
+  assert.match(html, /galaxy-log\.js\?v=20260901b/);
+  assert.match(html, /galaxy-log\.css\?v=20260901b/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901b/);
+  assert.match(worker, /galaxy-log\.js\?v=20260901b/);
+  assert.match(worker, /galaxy-log\.css\?v=20260901b/);
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
+  const galaxy = fs.readFileSync(new URL("../galaxy-log.js", import.meta.url), "utf8");
+  assert.match(galaxy, /id="galaxySyncBtn"/);
+  assert.match(galaxy, /syncGalaxyLog/);
+});
+
+test("Galaxy Log receives the authenticated dual transport for cloud sync", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const ensure = html.match(/function ensureGalaxyLogApp\(\)\{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.match(ensure, /transport\s*:\s*_dualTransport/);
 });
 
 test("GitHub Pages stages the independent Galaxy Log assets", () => {

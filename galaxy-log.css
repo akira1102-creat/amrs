@@ -6,6 +6,7 @@
 .galaxy-btn{min-height:36px;padding:0 12px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font:inherit;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
 .galaxy-btn:hover,.galaxy-btn:focus-visible{border-color:#58a6ff;color:#79c0ff;outline:none}
 .galaxy-btn.primary{border-color:#1f6feb;background:#1f6feb;color:#fff}
+.galaxy-btn.cloud{border-color:#1f6feb;background:#0d2a4d;color:#79c0ff}
 .galaxy-btn.complete{border-color:#238636;background:#238636;color:#fff}
 .galaxy-btn.small{min-height:32px;padding:0 10px;font-size:11px}
 .galaxy-btn:disabled{opacity:.55;cursor:not-allowed}
@@ -17,6 +18,7 @@
 .galaxy-offline-badge,.galaxy-status-strip #galaxyLogOfflineBadge{padding:3px 8px;border-radius:999px;font-size:10px;font-weight:900}
 .galaxy-status-strip #galaxyLogOfflineBadge.local{border:1px solid #30363d;color:#8b949e}
 .galaxy-status-strip #galaxyLogOfflineBadge.offline{border:1px solid #9e6a03;background:#3d2d00;color:#f2cc60}
+.galaxy-status-strip #galaxyLogOfflineBadge.pending{border:1px solid #1f6feb;background:#0d2a4d;color:#79c0ff}
 .galaxy-filter-bar{display:grid;grid-template-columns:minmax(0,1fr) 130px max-content;align-items:center;gap:8px;margin-bottom:14px}
 .galaxy-filter-bar input,.galaxy-filter-bar select{width:100%;min-width:0;height:40px;padding:0 11px;border:1px solid #30363d;border-radius:9px;background:#0d1117;color:#e6edf3;font:inherit;font-size:13px}
 .galaxy-filter-bar input:focus,.galaxy-filter-bar select:focus{outline:none;border-color:#388bfd}
@@ -24,6 +26,8 @@
 .galaxy-issues summary{padding:10px 12px;font-weight:900;cursor:pointer}
 .galaxy-issues>div{padding:0 12px 10px;color:#f2cc60}
 .galaxy-issues>div>div+div{margin-top:4px}
+.galaxy-issues.conflicts{border-color:#f85149;background:#3b1515;color:#ffb4ab}
+.galaxy-issues.conflicts summary,.galaxy-issues.conflicts>div{color:#ffb4ab}
 .galaxy-task-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .galaxy-task-card{display:grid;grid-template-columns:minmax(0,1fr) max-content;grid-template-rows:auto auto;gap:10px 12px;min-width:0;padding:13px;border:1px solid #30363d;border-radius:12px;background:#161b22}
 .galaxy-task-card.pending{border-left:3px solid #d29922}

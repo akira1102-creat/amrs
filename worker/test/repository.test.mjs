@@ -179,6 +179,7 @@ const config = {
   partsSheetId: "parts",
   scheduleSheetId: "schedule",
   cvcsSheetId: "cvcs",
+  galaxyLogSheetId: "galaxy-log",
   timeZone: "Asia/Hong_Kong",
 };
 
@@ -195,6 +196,11 @@ const companyData = {
   wynn: [{ title: "Worksheet", values: [commonHeaders, ["Wynn", "2026/08/04", "2608", "SAE", "5", "PM", "Preventive Maintenance", "", "", ""]] }],
   parts: [{ title: "Parts List", values: [["AE-1", "部品", "PART"], ["TAE-1", "部品2", "PART2"]] }],
   schedule: [{ title: "2026-AUG", values: [["Day", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S"], [4, "VML", "", "", "", "", "", "", "", "", "", "", "LON", "", "", "", "", "", ""]] }],
+  "galaxy-log": [{ title: "Galaxy Log", values: [
+    ["SN末4位", "指定 Log 日期", "取 Log 日期", "SN末4位", "指定 Log 日期", "取 Log 日期"],
+    ["1190", "2026/08/01", "", "1192", "2026/08/02", "2026/08/03"],
+    ["1191", "2026/08/04", "", "", "", ""],
+  ] }],
   cvcs: [
     { title: "CVCS Records", values: [["Property", "Date", "Location", "Sub Location", "Quarter", "Model", "S/N", "Antenna Size", "Antenna Status", "Version", "Reason", "Action Taken & Notes", "Parts Change"], ["Venetian", "2026/08/04", "Cage", "North", "Q1", "SOT", "1234", "Large", "Active", "1.0", "PM", "Inspection", "Cable"]] },
     { title: "Sub Location", values: [["Option"], ["North"], ["South"]] },
@@ -737,4 +743,78 @@ test("bulk Broken Parts update rejects stale snapshots before writing any row", 
   );
   assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][7], "Waiting");
   assert.equal(harness.sheets.get("scl:Broken Parts List").values[2][7], "Waiting");
+});
+
+test("reads Galaxy Log repeated column groups into stable tasks", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+
+  const result = await repository.getAction({ action: "galaxyLogOverview" });
+
+  assert.equal(result.success, true);
+  assert.equal(result.tasks.length, 3);
+  assert.deepEqual(result.tasks.map((task) => [task.serialLast4, task.targetDate, task.completedDate, task.groupIndex]), [
+    ["1190", "2026-08-01", "", 0],
+    ["1191", "2026-08-04", "", 0],
+    ["1192", "2026-08-02", "2026-08-03", 1],
+  ]);
+});
+
+test("normalizes common locale-formatted Galaxy dates", async () => {
+  const data = structuredClone(companyData);
+  data["galaxy-log"] = [{ title: "Galaxy Log", values: [
+    ["SN末4位", "指定 Log 日期", "取 Log 日期"],
+    ["1190", "9/1/2026", "9/2/2026"],
+  ] }];
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+
+  const result = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
+
+  assert.deepEqual(result.tasks.map((task) => [task.targetDate, task.completedDate, task.status]), [["2026-09-01", "2026-09-02", "done"]]);
+});
+
+test("syncs Galaxy Log completion idempotently and reports a cloud conflict", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+  const overview = await repository.getAction({ action: "galaxyLogOverview" });
+  const target = overview.tasks[0];
+  const mutation = { mutationId: "mutation-1", taskId: target.id, patch: { completedDate: "2026-08-05", status: "done" }, baseCompletedDate: "" };
+
+  const first = await repository.postAction({ action: "syncGalaxyLog", mutations: [mutation] });
+  assert.equal(first.results[0].status, "applied");
+  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[1][2], "2026-08-05");
+
+  const second = await repository.postAction({ action: "syncGalaxyLog", mutations: [mutation] });
+  assert.equal(second.results[0].status, "applied");
+  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[1][2], "2026-08-05");
+
+  harness.sheets.get("galaxy-log:Galaxy Log").values[1][2] = "2026-08-06";
+  const conflict = await repository.postAction({ action: "syncGalaxyLog", mutations: [mutation] });
+  assert.equal(conflict.results[0].status, "conflict");
+  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[1][2], "2026-08-06");
+});
+
+test("appends a new Galaxy task into its requested repeated-column group", async () => {
+  const data = structuredClone(companyData);
+  data["galaxy-log"] = [{ title: "Galaxy Log", columnCount: 3, values: [
+    ["SN末4位", "指定 Log 日期", "取 Log 日期"],
+    ["1190", "2026/08/01", ""],
+  ] }];
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+
+  const result = await repository.postAction({
+    action: "syncGalaxyLog",
+    mutations: [{
+      mutationId: "mutation-new-group",
+      taskId: "local-only-task",
+      patch: { serialLast4: "2290", targetDate: "2026-08-02", groupIndex: 1, rowIndex: 2, completedDate: "2026-08-04", status: "done" },
+      baseCompletedDate: "",
+    }],
+  });
+
+  assert.equal(result.results[0].status, "applied");
+  const saved = harness.sheets.get("galaxy-log:Galaxy Log").values[1];
+  assert.deepEqual(saved.slice(3, 6), ["2290", "2026-08-02", "2026-08-04"]);
 });

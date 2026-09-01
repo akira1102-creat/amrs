@@ -166,6 +166,8 @@ test("maps every API action to its server-enforced permission group", () => {
   assert.equal(permissionForAction("updateSchedulePeople"), "schedule");
   assert.equal(permissionForAction("submitRecords"), "ae");
   assert.equal(permissionForAction("submissionWarnings"), "ae");
+  assert.equal(permissionForAction("galaxyLogOverview"), "ae");
+  assert.equal(permissionForAction("syncGalaxyLog"), "ae");
   assert.equal(permissionForAction("cvcsRecords"), "cvcs");
   assert.equal(permissionForAction("submitCvcsRecords"), "cvcs");
   assert.equal(permissionForAction("createAccessToken"), "admin");
@@ -323,6 +325,26 @@ test("uses a company-specific D1 lock for a single-company mutation", async () =
   }), env, { repository });
   assert.equal(response.status, 200);
   assert.ok(env.DB.calls.some((call) => call.sql.includes("INSERT INTO write_locks") && call.bindings[0] === "amrs-sheets-write:scl"));
+});
+
+test("routes Galaxy Log overview and sync through the AE session and dedicated lock", async () => {
+  const { env, token } = await createAuthenticatedContext();
+  const calls = [];
+  const repository = {
+    getAction: async (params) => { calls.push(["get", params.action]); return { success: true, tasks: [] }; },
+    postAction: async (payload) => { calls.push(["post", payload.action]); return { success: true, results: [] }; },
+  };
+  const overviewResponse = await handleRequest(request("/api?action=galaxyLogOverview", token), env, { repository });
+  assert.equal(overviewResponse.status, 200);
+  assert.equal((await overviewResponse.json()).success, true);
+  const syncResponse = await handleRequest(request("/api", token, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "syncGalaxyLog", requestId: "galaxy-sync-lock", mutations: [] }),
+  }), env, { repository });
+  assert.equal(syncResponse.status, 200);
+  assert.deepEqual(calls, [["get", "galaxyLogOverview"], ["post", "syncGalaxyLog"]]);
+  assert.ok(env.DB.calls.some((call) => call.sql.includes("INSERT INTO write_locks") && call.bindings[0] === "amrs-sheets-write:galaxy-log"));
 });
 
 test("uses the global D1 lock for a multi-company submission batch", async () => {

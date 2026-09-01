@@ -284,6 +284,7 @@ function mutationCompanies(payload) {
   if (Array.isArray(records)) records.forEach((record) => add(record?.company));
   if (!Array.isArray(payload)) {
     if (/cvcs/i.test(text(payload.action))) return ["cvcs"];
+    if (text(payload.action) === "syncGalaxyLog") return ["galaxy-log"];
     add(payload.company);
     add(payload.record?.company);
     if (Array.isArray(payload.brokenPartsRepairs)) payload.brokenPartsRepairs.forEach((item) => add(item?.company || item?.record?.company));
