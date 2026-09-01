@@ -14,6 +14,21 @@ public sealed class GalaxyTask
     public string Status { get; set; } = "pending";
 }
 
+public static class GalaxyTaskFilter
+{
+    public static IReadOnlyList<GalaxyTask> Filter(IEnumerable<GalaxyTask>? tasks, string? query, string? status)
+    {
+        var normalizedQuery = (query ?? "").Trim();
+        var normalizedStatus = status ?? "pending";
+        return (tasks ?? Enumerable.Empty<GalaxyTask>())
+            .Where(task => (normalizedStatus == "all" || task.Status == normalizedStatus)
+                && (normalizedQuery.Length == 0
+                    || task.FullSerial.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase)
+                    || task.SerialLast4.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+    }
+}
+
 public sealed class ImportedSnapshot
 {
     public List<GalaxyTask> Tasks { get; init; } = new();

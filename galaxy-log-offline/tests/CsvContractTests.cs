@@ -23,6 +23,8 @@ static class CsvContractTests
         var newer = CsvContract.Parse(output, 300);
         var decision = CsvContract.ReplaceIfNewer(local, newer);
         Assert(decision.Replaced && decision.Snapshot.Tasks.Count == 3, "newer snapshot replaces all rows");
+        var filtered = GalaxyTaskFilter.Filter(imported.Tasks, "1193", "all");
+        Assert(filtered.Count == 2 && filtered.All(task => task.SerialLast4 == "1193"), "search filter matches both Galaxy rows");
         Console.WriteLine("CsvContractSmoke=PASS");
         return 0;
     }
