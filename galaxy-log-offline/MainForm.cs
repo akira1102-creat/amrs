@@ -174,10 +174,14 @@ public partial class MainForm : Form
         var full = new Label { AutoSize = true, Font = new Font("Segoe UI", 8F), ForeColor = Color.FromArgb(139, 148, 158), Location = new Point(14, 43) };
         var target = new Label { AutoSize = true, Font = new Font("Segoe UI", 10F), ForeColor = Color.FromArgb(230, 237, 243), Location = new Point(14, 67) };
         var state = new Label { AutoSize = true, Font = new Font("Segoe UI", 9F, FontStyle.Bold), Location = new Point(14, 94) };
-        var action = new Button { Width = 105, Height = 28, Location = new Point(130, 118), FlatStyle = FlatStyle.Flat, ForeColor = Color.White };
+        var action = new Button { Width = 105, Height = 28, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
         action.FlatAppearance.BorderSize = 0; action.Click += (_, _) => ToggleTask(task);
-        var noLog = new Button { Width = 105, Height = 28, Location = new Point(244, 118), FlatStyle = FlatStyle.Flat, ForeColor = Color.White, Text = "沒有當天 Log" };
+        var noLog = new Button { Width = 105, Height = 28, FlatStyle = FlatStyle.Flat, ForeColor = Color.White, Text = "沒有當天 Log", Anchor = AnchorStyles.Bottom | AnchorStyles.Right };
         noLog.FlatAppearance.BorderSize = 0; noLog.Click += (_, _) => MarkNoLog(task);
+        noLog.Left = Math.Max(card.Padding.Left, card.ClientSize.Width - card.Padding.Right - noLog.Width);
+        noLog.Top = Math.Max(card.Padding.Top, card.ClientSize.Height - card.Padding.Bottom - noLog.Height);
+        action.Left = Math.Max(card.Padding.Left, noLog.Left - 8 - action.Width);
+        action.Top = noLog.Top;
         cardPartsById[task.Id] = new CardParts { Serial = serial, Full = full, Target = target, State = state, Action = action, NoLog = noLog };
         card.Controls.AddRange(new Control[] { serial, full, target, state, action, noLog });
         UpdateCard(task);
@@ -193,11 +197,6 @@ public partial class MainForm : Form
             foreach (var card in cardsById.Values)
             {
                 if (card.Width != width) card.Width = width;
-                if (card.Tag is string id && cardPartsById.TryGetValue(id, out var parts))
-                {
-                    parts.NoLog.Left = Math.Max(card.Padding.Left, card.ClientSize.Width - card.Padding.Right - parts.NoLog.Width);
-                    parts.Action.Left = Math.Max(card.Padding.Left, parts.NoLog.Left - 8 - parts.Action.Width);
-                }
             }
         }
         finally { taskList.ResumeLayout(true); }
