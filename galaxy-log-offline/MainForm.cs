@@ -15,6 +15,7 @@ public partial class MainForm : Form
     private List<GalaxyTask> tasks = new();
     private long modifiedAtUtcTicks;
     private readonly System.Windows.Forms.Timer searchDebounceTimer;
+    private readonly System.Windows.Forms.Timer layoutDebounceTimer;
     private readonly Dictionary<string, Panel> cardsById = new(StringComparer.Ordinal);
     private readonly Dictionary<string, CardParts> cardPartsById = new(StringComparer.Ordinal);
     private Label? emptyStateLabel;
@@ -36,12 +37,14 @@ public partial class MainForm : Form
         LoadState();
         searchDebounceTimer = new System.Windows.Forms.Timer { Interval = 120 };
         searchDebounceTimer.Tick += (_, _) => { searchDebounceTimer.Stop(); RenderTasks(); };
+        layoutDebounceTimer = new System.Windows.Forms.Timer { Interval = 60 };
+        layoutDebounceTimer.Tick += (_, _) => { layoutDebounceTimer.Stop(); ResizeCards(); };
         importButton.Click += (_, _) => ImportCsv();
         exportButton.Click += (_, _) => ExportCsv();
         searchBox.TextChanged += (_, _) => { searchDebounceTimer.Stop(); searchDebounceTimer.Start(); };
         statusFilter.SelectedIndexChanged += (_, _) => RenderTasks();
-        taskList.Resize += (_, _) => ResizeCards();
-        FormClosed += (_, _) => searchDebounceTimer.Dispose();
+        taskList.Resize += (_, _) => { layoutDebounceTimer.Stop(); layoutDebounceTimer.Start(); };
+        FormClosed += (_, _) => { searchDebounceTimer.Dispose(); layoutDebounceTimer.Dispose(); };
         RenderTasks();
     }
 
@@ -98,6 +101,8 @@ public partial class MainForm : Form
         var ids = tasks.Select(task => task.Id).ToHashSet(StringComparer.Ordinal);
         if (ids.Count == cardsById.Count && ids.SetEquals(cardsById.Keys)) return;
 
+        var wasVisible = taskList.Visible;
+        taskList.Visible = false;
         taskList.SuspendLayout();
         try
         {
@@ -114,7 +119,12 @@ public partial class MainForm : Form
             }
             ResizeCards();
         }
-        finally { taskList.ResumeLayout(false); }
+        finally
+        {
+            taskList.ResumeLayout(false);
+            taskList.Visible = wasVisible;
+            taskList.PerformLayout();
+        }
     }
 
     private int UpdateCardVisibility()
@@ -178,15 +188,20 @@ public partial class MainForm : Form
     private void ResizeCards()
     {
         var width = GalaxyLayout.CardWidth(taskList.ClientSize.Width, taskList.Padding.Horizontal, SystemInformation.VerticalScrollBarWidth);
-        foreach (var card in cardsById.Values)
+        taskList.SuspendLayout();
+        try
         {
-            card.Width = width;
-            if (card.Tag is string id && cardPartsById.TryGetValue(id, out var parts))
+            foreach (var card in cardsById.Values)
             {
-                parts.NoLog.Left = Math.Max(card.Padding.Left, card.ClientSize.Width - card.Padding.Right - parts.NoLog.Width);
-                parts.Action.Left = Math.Max(card.Padding.Left, parts.NoLog.Left - 8 - parts.Action.Width);
+                if (card.Width != width) card.Width = width;
+                if (card.Tag is string id && cardPartsById.TryGetValue(id, out var parts))
+                {
+                    parts.NoLog.Left = Math.Max(card.Padding.Left, card.ClientSize.Width - card.Padding.Right - parts.NoLog.Width);
+                    parts.Action.Left = Math.Max(card.Padding.Left, parts.NoLog.Left - 8 - parts.Action.Width);
+                }
             }
         }
+        finally { taskList.ResumeLayout(true); }
     }
 
     private void UpdateCard(GalaxyTask task)

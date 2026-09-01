@@ -13,13 +13,13 @@ public partial class MainForm
     private ComboBox statusFilter = null!;
     private Label summaryLabel = null!;
     private Label statusLabel = null!;
-    private FlowLayoutPanel taskList = null!;
+    private BufferedFlowLayoutPanel taskList = null!;
 
     private void InitializeComponent()
     {
         components = new System.ComponentModel.Container();
         titleLabel = new Label(); subtitleLabel = new Label(); importButton = new Button(); exportButton = new Button();
-        searchBox = new TextBox(); statusFilter = new ComboBox(); summaryLabel = new Label(); statusLabel = new Label(); taskList = new FlowLayoutPanel();
+        searchBox = new TextBox(); statusFilter = new ComboBox(); summaryLabel = new Label(); statusLabel = new Label(); taskList = new BufferedFlowLayoutPanel();
         SuspendLayout();
         titleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left; titleLabel.AutoSize = true; titleLabel.Font = new Font("Segoe UI", 21F, FontStyle.Bold); titleLabel.ForeColor = Color.FromArgb(230, 237, 243); titleLabel.Location = new Point(28, 24); titleLabel.Text = "Galaxy 取 Log Offline";
         subtitleLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left; subtitleLabel.AutoSize = true; subtitleLabel.Font = new Font("Segoe UI", 10F); subtitleLabel.ForeColor = Color.FromArgb(139, 148, 158); subtitleLabel.Location = new Point(31, 64); subtitleLabel.Text = "完全離線使用 · 匯入 CSV 後現場記錄";
