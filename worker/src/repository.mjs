@@ -64,6 +64,7 @@ const MAX_READ_COLUMNS = 200;
 const GALAXY_LOG_CACHE_SCOPE = "galaxy-log";
 const GALAXY_LOG_CACHE_TTL_MS = 15_000;
 const GALAXY_LOG_HEADERS = ["SN末4位", "指定 Log 日期", "取 Log 日期"];
+const GALAXY_NO_LOG_MARKER = "沒有當天 Log";
 const GALAXY_OFFICE_WRITE_MESSAGE = "Galaxy Log 來源仍是 Excel，請先另存為原生 Google 試算表後再同步";
 
 function own(object, key) {
@@ -139,6 +140,16 @@ function galaxySerial(value) {
   if (!raw || /^=?#?N\/?A$/i.test(raw) || raw.startsWith("=")) return "";
   const match = raw.match(/(\d{4})$/);
   return match ? match[1] : "";
+}
+
+function galaxyFullSerial(value) {
+  const raw = text(value).replace(/^'+/, "").replace(/\s+/g, "").toUpperCase();
+  if (!raw || /^=?#?N\/?A$/i.test(raw) || raw.startsWith("=")) return "";
+  return /\d/.test(raw) ? raw : "";
+}
+
+function isGalaxyNoLog(value) {
+  return /^(?:沒有當天\s*log|no\s*log)$/i.test(text(value));
 }
 
 function galaxyTaskId(serialLast4, targetDate, groupIndex, rowIndex, occurrenceIndex = 0) {
@@ -245,6 +256,7 @@ function parseGalaxyValues(values, timeZone) {
   const occurrenceByKey = new Map();
   for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
     let currentSerial = "";
+    let currentFullSerial = "";
     for (let rowOffset = headerRow; rowOffset < matrix.length; rowOffset += 1) {
       const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
       const base = groupBases[groupIndex];
@@ -253,13 +265,18 @@ function parseGalaxyValues(values, timeZone) {
       const rawCompleted = arrayValue(row, base + 3);
       if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) {
         currentSerial = "";
+        currentFullSerial = "";
         continue;
       }
-      if (text(rawSerial)) currentSerial = galaxySerial(rawSerial);
+      if (text(rawSerial)) {
+        currentFullSerial = galaxyFullSerial(rawSerial);
+        currentSerial = galaxySerial(currentFullSerial);
+      }
       const serialLast4 = currentSerial;
       const targetDate = galaxyDate(rawTarget, timeZone);
       const completedText = text(rawCompleted);
       const completedDate = galaxyDate(rawCompleted, timeZone);
+      const noLog = isGalaxyNoLog(completedText);
       if (!serialLast4) {
         issues.push({ row: rowOffset + 1, groupIndex, type: "missing-serial", message: "找不到機身號碼（最後 4 位）", value: text(rawSerial) });
         continue;
@@ -268,7 +285,7 @@ function parseGalaxyValues(values, timeZone) {
         issues.push({ row: rowOffset + 1, groupIndex, type: "invalid-date", message: "指定 Log 日期格式無法辨識", value: text(rawTarget) });
         continue;
       }
-      if (completedText && !completedDate && !/^(?:n\/?a|-)$/i.test(completedText)) {
+      if (completedText && !completedDate && !noLog && !/^(?:n\/?a|-)$/i.test(completedText)) {
         issues.push({ row: rowOffset + 1, groupIndex, type: "completion-value", message: "取 Log 日期格式無法辨識", value: completedText });
       }
       const rowIndex = rowOffset + 1;
@@ -277,12 +294,12 @@ function parseGalaxyValues(values, timeZone) {
       occurrenceByKey.set(key, occurrenceIndex + 1);
       tasks.push({
         id: galaxyTaskId(serialLast4, targetDate, groupIndex, rowIndex, occurrenceIndex),
-        fullSerial: serialLast4,
+        fullSerial: currentFullSerial || serialLast4,
         serialLast4,
         targetDate,
         completedDate,
-        status: completedDate ? "done" : (completedText ? "needs_review" : "pending"),
-        note: completedText && !completedDate ? completedText : "",
+        status: completedDate ? "done" : noLog ? "no_log" : (completedText ? "needs_review" : "pending"),
+        note: completedText && !completedDate && !noLog ? completedText : "",
         groupIndex,
         columnBase: base,
         rowIndex,
@@ -910,35 +927,39 @@ export function createRepository(env = {}, dependencies = {}) {
         if (task) canonicalTaskId = task.id;
       }
       if (!task) {
+        const incomingFullSerial = galaxyFullSerial(patch.fullSerial || mutation?.fullSerial || patch.serialLast4 || mutation?.serialLast4);
         const serialLast4 = galaxySerial(patch.serialLast4 || patch.fullSerial || mutation?.serialLast4);
         const targetDate = galaxyDate(patch.targetDate || mutation?.targetDate, config.timeZone);
         if (!serialLast4 || !targetDate) { results.push({ mutationId: text(mutation?.mutationId), taskId, status: "failed", message: "Galaxy task was not found" }); continue; }
         const position = firstAvailableGalaxyPosition(values, mutation?.groupIndex ?? patch.groupIndex, table.headerRow, groupBases);
         const occurrenceIndex = 0;
         const id = galaxyTaskId(serialLast4, targetDate, position.groupIndex, position.rowNumber, occurrenceIndex);
-        setGalaxyCell(values, position.rowNumber, position.columnBase + 1, serialLast4);
+        setGalaxyCell(values, position.rowNumber, position.columnBase + 1, incomingFullSerial || serialLast4);
         setGalaxyCell(values, position.rowNumber, position.columnBase + 2, targetDate);
-        task = { id, serialLast4, targetDate, completedDate: "", groupIndex: position.groupIndex, columnBase: position.columnBase, rowIndex: position.rowNumber };
+        task = { id, fullSerial: incomingFullSerial || serialLast4, serialLast4, targetDate, completedDate: "", status: "pending", groupIndex: position.groupIndex, columnBase: position.columnBase, rowIndex: position.rowNumber };
         byId.set(id, task);
         canonicalTaskId = id;
         changed = true;
       }
       const currentCompleted = galaxyDate(task.completedDate, config.timeZone);
       const baseCompleted = galaxyDate(mutation.baseCompletedDate, config.timeZone);
-      const desiredCompleted = patch.completedDate == null ? currentCompleted : galaxyDate(patch.completedDate, config.timeZone);
-      if (currentCompleted && desiredCompleted && currentCompleted === desiredCompleted) {
+      const desiredNoLog = text(patch.status).toLowerCase() === "no_log";
+      const desiredDate = patch.completedDate == null ? currentCompleted : galaxyDate(patch.completedDate, config.timeZone);
+      const desiredCompleted = desiredNoLog ? GALAXY_NO_LOG_MARKER : desiredDate;
+      if ((desiredNoLog && task.status === "no_log") || (!desiredNoLog && currentCompleted && desiredDate === currentCompleted)) {
         results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "applied", completedDate: currentCompleted });
         continue;
       }
-      if ((baseCompleted && currentCompleted !== baseCompleted) || (!baseCompleted && currentCompleted && desiredCompleted !== currentCompleted)) {
+      if ((baseCompleted && currentCompleted !== baseCompleted) || (!baseCompleted && currentCompleted && desiredDate !== currentCompleted)) {
         results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "conflict", completedDate: currentCompleted, message: "Cloud completed date changed" });
         continue;
       }
       const targetColumn = (Number.isFinite(Number(task.columnBase)) ? Number(task.columnBase) : galaxyColumnBaseForGroup(groupBases, task.groupIndex)) + 3;
       setGalaxyCell(values, task.rowIndex, targetColumn, desiredCompleted);
-      task.completedDate = desiredCompleted;
+      task.completedDate = desiredNoLog ? "" : desiredDate;
+      task.status = desiredNoLog ? "no_log" : desiredDate ? "done" : "pending";
       changed = true;
-      results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "applied", completedDate: desiredCompleted });
+      results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "applied", completedDate: task.completedDate, taskStatus: task.status });
     }
     if (changed) {
       width = Math.max(width, values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));

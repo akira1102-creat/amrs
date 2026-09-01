@@ -783,6 +783,7 @@ test("carries merged serial numbers down within Galaxy Log columns", async () =>
     ["1193", "2026-06-02"],
     ["1193", "2026-05-30"],
   ]);
+  assert.equal(result.tasks[2].fullSerial, "A02-001193");
 });
 
 test("detects blank spacer columns between repeated Galaxy Log groups", async () => {
@@ -823,6 +824,25 @@ test("writes Galaxy completion into the completion column after a spacer", async
   assert.equal(result.results[0].status, "applied");
   assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[0][2], "");
   assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[0][6], "2026-09-01");
+});
+
+test("writes a no-log marker and returns the no_log task status", async () => {
+  const data = structuredClone(companyData);
+  data["galaxy-log"] = [{ title: "Galaxy Log", values: [
+    ["SN末4位", "指定 Log 日期", "取 Log 日期"],
+    ["1190", "2026/08/01", ""],
+  ] }];
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+  const overview = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
+  const result = await repository.postAction({
+    action: "syncGalaxyLog",
+    mutations: [{ taskId: overview.tasks[0].id, patch: { status: "no_log", completedDate: "" }, baseCompletedDate: "" }],
+  });
+
+  assert.equal(result.results[0].status, "applied");
+  assert.equal(result.tasks[0].status, "no_log");
+  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[1][2], "沒有當天 Log");
 });
 
 test("reads a public CSV export when the configured Galaxy workbook is still an Office file", async () => {

@@ -15,7 +15,9 @@ const {
   parseGalaxyRows,
   pendingMutations,
   readStoredState,
+  tasksToCsv,
   tasksToColumnGroups,
+  tasksToRows,
   writeStoredState,
 } = galaxyModule;
 
@@ -43,13 +45,37 @@ class FakeElement {
 }
 
 function fakeGalaxyDocument() {
-  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyExportXlsxBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
+  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyLogList"];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
     getElementById(id) { return elements.get(id) || null; },
     elements,
   };
 }
+
+test("exports CSV with the complete SN first and last four digits second", () => {
+  const tasks = [{ fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending", note: "" }];
+  assert.deepEqual(tasksToRows(tasks)[1].slice(0, 2), ["A02-001190", "1190"]);
+  assert.match(tasksToCsv(tasks), /A02-001190,1190,2026-05-17/);
+});
+
+test("shows and queues a no-log result beside the completed action", async () => {
+  const documentRef = fakeGalaxyDocument();
+  const transport = {
+    get: async () => ({ success: true, tasks: [{ id: "no-log-1", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending" }], issues: [] }),
+    post: async () => ({ success: true, results: [], tasks: [], issues: [] }),
+  };
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /data-galaxy-action="complete"/);
+  assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /data-galaxy-action="no-log"/);
+  documentRef.elements.get("galaxyLogList").listeners.get("click")({
+    target: { closest: () => ({ dataset: { galaxyAction: "no-log", galaxyId: "no-log-1" } }) },
+  });
+  assert.equal(app.getState().tasks[0].status, "no_log");
+  assert.equal(app.getState().outbox[0].patch.status, "no_log");
+});
 
 test("parses the print layout while carrying merged serial numbers down", () => {
   const result = parseGalaxyRows({
@@ -205,6 +231,7 @@ test("carries merged serial numbers down within repeated Galaxy Log columns", ()
     ["1193", "2026-06-02"],
     ["1193", "2026-05-30"],
   ]);
+  assert.equal(result.tasks[2].fullSerial, "A02-001193");
 });
 
 test("detects blank spacer columns between repeated Galaxy Log groups", () => {

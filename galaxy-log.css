@@ -8,6 +8,7 @@
 .galaxy-btn.primary{border-color:#1f6feb;background:#1f6feb;color:#fff}
 .galaxy-btn.cloud{border-color:#1f6feb;background:#0d2a4d;color:#79c0ff}
 .galaxy-btn.complete{border-color:#238636;background:#238636;color:#fff}
+.galaxy-btn.no-log{border-color:#9e6a03;background:#3d2d00;color:#f2cc60}
 .galaxy-btn.small{min-height:32px;padding:0 10px;font-size:11px}
 .galaxy-btn:disabled{opacity:.55;cursor:not-allowed}
 .galaxy-status-strip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;margin-bottom:12px;padding:9px 11px;border:1px solid #21262d;border-radius:10px;background:#161b22;color:#8b949e;font-size:12px;line-height:1.45}
@@ -33,6 +34,7 @@
 .galaxy-task-card.pending{border-left:3px solid #d29922}
 .galaxy-task-card.done{border-left:3px solid #238636}
 .galaxy-task-card.needs_review{border-left:3px solid #9e6a03}
+.galaxy-task-card.no_log{border-left:3px solid #9e6a03}
 .galaxy-task-main{min-width:0}
 .galaxy-task-serial{display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:#58a6ff;font-size:17px;font-weight:900;letter-spacing:.02em;overflow-wrap:anywhere}
 .galaxy-task-serial span{padding:3px 6px;border:1px solid #30363d;border-radius:999px;color:#8b949e;font-size:10px;font-weight:800;letter-spacing:0}
@@ -45,6 +47,7 @@
 .galaxy-state-badge.pending{border:1px solid #9e6a03;background:#3d2d00;color:#f2cc60}
 .galaxy-state-badge.done{border:1px solid #238636;background:#0b3d20;color:#7ee787}
 .galaxy-state-badge.needs_review{border:1px solid #9e6a03;background:#3d2d00;color:#f2cc60}
+.galaxy-state-badge.no_log{border:1px solid #9e6a03;background:#3d2d00;color:#f2cc60}
 .galaxy-complete-date{color:#8b949e;font-size:10px;white-space:nowrap}
 .galaxy-task-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:7px;padding-top:1px}
 .galaxy-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:170px;padding:25px;border:1px dashed #30363d;border-radius:12px;color:#8b949e;font-size:13px;text-align:center}

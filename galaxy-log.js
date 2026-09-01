@@ -11,8 +11,10 @@
   const STATUS_LABELS = {
     pending: "未取",
     done: "已取",
+    no_log: "沒有當天 Log",
     needs_review: "需跟進",
   };
+  const NO_LOG_MARKER = "沒有當天 Log";
 
   function text(value) {
     return String(value == null ? "" : value).trim();
@@ -170,6 +172,7 @@
 
     for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
       let currentSerial = "";
+      let currentFullSerial = "";
       for (let rowOffset = startRow; rowOffset < matrix.length; rowOffset += 1) {
         const row = Array.isArray(matrix[rowOffset]) ? matrix[rowOffset] : [];
         const base = groupBases[groupIndex];
@@ -178,14 +181,19 @@
         const rawCompleted = row[base + 2];
         if (!text(rawSerial) && !text(rawTarget) && !text(rawCompleted)) {
           currentSerial = "";
+          currentFullSerial = "";
           continue;
         }
 
-        if (text(rawSerial)) currentSerial = serialLast4(rawSerial) || normalizeSerial(rawSerial);
+        if (text(rawSerial)) {
+          currentFullSerial = normalizeSerial(rawSerial);
+          currentSerial = serialLast4(currentFullSerial) || currentFullSerial;
+        }
         const serial = currentSerial;
         const targetDate = normalizeDate(rawTarget);
         const completedText = text(rawCompleted);
         const completedDate = normalizeDate(rawCompleted);
+        const noLog = /^(?:沒有當天\s*log|no\s*log)$/i.test(completedText);
         if (!serial) {
           issues.push({ row: rowOffset + 1, groupIndex, type: "missing-serial", message: "找不到機身號碼（最後 4 位）", value: text(rawSerial) });
           continue;
@@ -194,7 +202,7 @@
           issues.push({ row: rowOffset + 1, groupIndex, type: "invalid-date", message: "指定 Log 日期格式無法辨識", value: text(rawTarget) });
           continue;
         }
-        if (completedText && !completedDate && !/^(?:n\/?a|-)$/i.test(completedText)) {
+        if (completedText && !completedDate && !noLog && !/^(?:n\/?a|-)$/i.test(completedText)) {
           issues.push({ row: rowOffset + 1, groupIndex, type: "completion-value", message: "取 Log 日期格式無法辨識", value: completedText });
         }
         const key = `${serial}|${targetDate}`;
@@ -203,12 +211,12 @@
         const rowIndex = rowOffset + 1;
         tasks.push({
           id: buildColumnTaskId(serial, targetDate, groupIndex, rowIndex, occurrenceIndex),
-          fullSerial: serial,
+          fullSerial: currentFullSerial || serial,
           serialLast4: serial,
           targetDate,
           completedDate,
-          status: completedDate ? "done" : (completedText ? "needs_review" : "pending"),
-          note: completedText && !completedDate ? completedText : "",
+          status: completedDate ? "done" : noLog ? "no_log" : (completedText ? "needs_review" : "pending"),
+          note: completedText && !completedDate && !noLog ? completedText : "",
           sourceSheet: text(sheetName),
           sourceRow: rowIndex,
           groupIndex,
@@ -238,7 +246,7 @@
       const base = groupIndex * 3;
       rows[rowIndex - 1][base] = text(task.serialLast4 || serialLast4(task.fullSerial));
       rows[rowIndex - 1][base + 1] = text(task.targetDate);
-      rows[rowIndex - 1][base + 2] = text(task.completedDate);
+      rows[rowIndex - 1][base + 2] = task.status === "no_log" ? NO_LOG_MARKER : text(task.completedDate);
     }
     return rows;
   }
@@ -302,7 +310,8 @@
         if (!text(rawTarget) && !text(rawSerial) && !text(rawCompleted)) continue;
         const rawCompletionText = text(rawCompleted);
         const rawCompletionDate = normalizeDate(rawCompleted);
-        const invalidCompletion = rawCompletionText && !rawCompletionDate && !/^(?:n\/?a|-)$/i.test(rawCompletionText);
+        const noLogCompletion = /^(?:沒有當天\s*log|no\s*log)$/i.test(rawCompletionText);
+        const invalidCompletion = rawCompletionText && !rawCompletionDate && !noLogCompletion && !/^(?:n\/?a|-)$/i.test(rawCompletionText);
         if (!text(rawSerial) && invalidCompletion) currentSerial = "";
         if (!currentSerial) {
           issues.push({ row: index + 1, type: "missing-serial", message: "找不到 SN", value: text(rawSerial) || "" });
@@ -317,9 +326,10 @@
         const completionText = rawCompletionText;
         const statusText = text(rawStatus).toLowerCase();
         const explicitDone = /done|已取|complete|完成/.test(statusText);
+        const explicitNoLog = /no[_ -]?log|沒有當天\s*log/.test(statusText) || /^(?:沒有當天\s*log|no\s*log)$/i.test(completionText);
         const explicitNeedsReview = /needs?[\s_-]*review|需\s*跟進|跟進|review/.test(statusText);
         const explicitPending = /pending|未取/.test(statusText);
-        const status = completedDate || explicitDone ? "done" : explicitNeedsReview || invalidCompletion ? "needs_review" : explicitPending ? "pending" : "pending";
+        const status = completedDate || explicitDone ? "done" : explicitNoLog ? "no_log" : explicitNeedsReview || invalidCompletion ? "needs_review" : explicitPending ? "pending" : "pending";
         if (invalidCompletion) {
           issues.push({ row: index + 1, type: "completion-value", message: "完成欄不是日期，已保留作需跟進", value: completionText });
         }
@@ -626,6 +636,10 @@
     return downloadBlob(new Blob([output], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `Galaxy-Log-${isoFromDate(new Date()) || "export"}.xlsx`, documentRef);
   }
 
+  function exportTasksCsv(tasks, documentRef = root?.document) {
+    return downloadBlob(new Blob([tasksToCsv(tasks)], { type: "text/csv;charset=utf-8" }), `Galaxy-Log-${isoFromDate(new Date()) || "export"}.csv`, documentRef);
+  }
+
   async function parseWorkbookFile(file, xlsx = root?.XLSX) {
     if (!file) throw new Error("請選擇 Excel 或 CSV 檔案");
     if (/\.csv$/i.test(file.name || "")) {
@@ -708,13 +722,13 @@
           <div class="galaxy-page-actions">
             <button class="galaxy-btn cloud" id="galaxySyncBtn" type="button">同步雲端</button>
             <button class="galaxy-btn primary" id="galaxyImportBtn" type="button">匯入雲端</button>
-            <button class="galaxy-btn" id="galaxyExportXlsxBtn" type="button">匯出 Excel</button>
+            <button class="galaxy-btn" id="galaxyExportCsvBtn" type="button">匯出 CSV</button>
           </div>
         </div>
         <div class="galaxy-status-strip"><span id="galaxyLogSummary"></span><span id="galaxyLogOfflineBadge"></span><span id="galaxyLogStatus" role="status" aria-live="polite"></span></div>
         <div class="galaxy-filter-bar">
           <input id="galaxyLogSearch" type="search" inputmode="search" placeholder="搜尋完整 SN 或末四位" autocomplete="off">
-          <select id="galaxyLogStatusFilter" aria-label="篩選狀態"><option value="pending">未取</option><option value="needs_review">需跟進</option><option value="done">已取</option><option value="all">全部</option></select>
+          <select id="galaxyLogStatusFilter" aria-label="篩選狀態"><option value="pending">未取</option><option value="needs_review">需跟進</option><option value="done">已取</option><option value="no_log">沒有當天 Log</option><option value="all">全部</option></select>
           <button class="galaxy-btn" id="galaxyLogClearBtn" type="button">清除本機清單</button>
         </div>
         <div id="galaxyLogIssues"></div>
@@ -856,8 +870,8 @@
     function bind() {
       documentRef.getElementById("galaxySyncBtn")?.addEventListener("click", () => { void syncCloud(); });
       documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => { void loadCloud(); });
-      documentRef.getElementById("galaxyExportXlsxBtn")?.addEventListener("click", () => {
-        try { exportTasksXlsx(state.tasks); notify("✓ 已匯出 Excel"); } catch (error) { notify(error.message || "Excel 匯出失敗", "err"); }
+      documentRef.getElementById("galaxyExportCsvBtn")?.addEventListener("click", () => {
+        try { exportTasksCsv(state.tasks, documentRef); notify("✓ 已匯出 CSV"); } catch (error) { notify(error.message || "CSV 匯出失敗", "err"); }
       });
       documentRef.getElementById("galaxyLogSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; render(); });
       documentRef.getElementById("galaxyLogStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; render(); });
@@ -877,6 +891,9 @@
           const current = state.tasks.find((task) => task.id === id);
           const completedDate = isoFromDate(new Date());
           if (current && queueTaskMutation(id, { status: "done", completedDate }, current.completedDate)) notify("✓ 已記錄取 Log 日期（待同步）");
+        } else if (action === "no-log") {
+          const current = state.tasks.find((task) => task.id === id);
+          if (current && queueTaskMutation(id, { status: "no_log", completedDate: "" }, current.completedDate)) notify("已記錄沒有當天 Log（待同步）");
         } else if (action === "reopen") {
           const current = state.tasks.find((task) => task.id === id);
           if (current && queueTaskMutation(id, { status: "pending", completedDate: "" }, current.completedDate)) notify("已改回未取（待同步）");
@@ -949,7 +966,7 @@
       const importedAt = formatLocalDateTime(state.importedAt);
       const cloudSyncAt = formatLocalDateTime(state.lastCloudSyncAt);
       const pendingCount = pendingMutations(state).length;
-      if (summary) summary.textContent = `全部 ${state.tasks.length} · 未取 ${counts.pending || 0} · 已取 ${counts.done || 0} · 需跟進 ${counts.needs_review || 0}${importedAt ? ` · 最後匯入 ${importedAt}` : ""}${cloudSyncAt ? ` · 最後同步 ${cloudSyncAt}` : ""}${pendingCount ? ` · 待同步 ${pendingCount}` : ""}`;
+      if (summary) summary.textContent = `全部 ${state.tasks.length} · 未取 ${counts.pending || 0} · 已取 ${counts.done || 0} · 沒有當天 Log ${counts.no_log || 0} · 需跟進 ${counts.needs_review || 0}${importedAt ? ` · 最後匯入 ${importedAt}` : ""}${cloudSyncAt ? ` · 最後同步 ${cloudSyncAt}` : ""}${pendingCount ? ` · 待同步 ${pendingCount}` : ""}`;
       const offline = documentRef.getElementById("galaxyLogOfflineBadge");
       if (offline) {
         const offlineMode = !isOnline();
@@ -988,7 +1005,7 @@
           ${task.note ? `<div class="galaxy-task-note">${escapeHtml(task.note)}</div>` : ""}
         </div>
         <div class="galaxy-task-state"><span class="galaxy-state-badge ${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>${task.completedDate ? `<span class="galaxy-complete-date">取 Log：${escapeHtml(task.completedDate.replace(/-/g, "/"))}</span>` : ""}</div>
-        <div class="galaxy-task-actions">${task.status === "done" ? `<button class="galaxy-btn small" data-galaxy-action="reopen" data-galaxy-id="${escapeHtml(task.id)}" type="button">改回未取</button>` : `<button class="galaxy-btn complete" data-galaxy-action="complete" data-galaxy-id="${escapeHtml(task.id)}" type="button">✓ 已取 Log</button>`}</div>
+        <div class="galaxy-task-actions">${task.status === "done" || task.status === "no_log" ? `<button class="galaxy-btn small" data-galaxy-action="reopen" data-galaxy-id="${escapeHtml(task.id)}" type="button">改回未取</button>` : `<button class="galaxy-btn complete" data-galaxy-action="complete" data-galaxy-id="${escapeHtml(task.id)}" type="button">✓ 已取 Log</button><button class="galaxy-btn no-log" data-galaxy-action="no-log" data-galaxy-id="${escapeHtml(task.id)}" type="button">沒有當天 Log</button>`}</div>
       </article>`).join("");
     }
 
@@ -1019,11 +1036,13 @@
   return {
     STORAGE_KEY,
     STATUS_LABELS,
+    NO_LOG_MARKER,
     buildTaskId,
     completeTask,
     createMutationOutbox,
     createApplication,
     exportTasksXlsx,
+    exportTasksCsv,
     filterTasks,
     formatLocalDateTime,
     mergeCloudTasks,
