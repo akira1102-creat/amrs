@@ -473,7 +473,7 @@ test("merges pre-cloud local ids into the matching repeated-column task", () => 
   assert.deepEqual(merged.idRemaps, [{ from: "old-print-id", to: "new-column-id" }]);
 });
 
-test("uploads Excel or CSV import mutations through cloud sync when online", async () => {
+test("opens the pending changes panel instead of uploading imported files immediately", async () => {
   const documentRef = fakeGalaxyDocument();
   const calls = [];
   const transport = {
@@ -498,10 +498,9 @@ test("uploads Excel or CSV import mutations through cloud sync when online", asy
     text: async () => "SN末4位,指定 Log 日期,取 Log 日期\r\n1190,2026/09/01,\r\n",
   });
 
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].action, "syncGalaxyLog");
-  assert.equal(calls[0].mutations.length, 1);
-  assert.equal(app.getState().outbox.length, 0);
+  assert.equal(calls.length, 0);
+  assert.equal(app.getState().outbox.length, 1);
+  assert.match(documentRef.elements.get("galaxyPendingPanel").innerHTML, /已按好，待同步/);
 
   const previousXlsx = globalThis.XLSX;
   globalThis.XLSX = {
@@ -520,10 +519,9 @@ test("uploads Excel or CSV import mutations through cloud sync when online", asy
     else globalThis.XLSX = previousXlsx;
   }
 
-  assert.equal(calls.length, 2);
-  assert.equal(calls[1].action, "syncGalaxyLog");
-  assert.equal(calls[1].mutations.length, 1);
-  assert.equal(app.getState().outbox.length, 0);
+  assert.equal(calls.length, 0);
+  assert.equal(app.getState().outbox.length, 2);
+  assert.match(documentRef.elements.get("galaxyPendingPanel").innerHTML, /已按好，待同步/);
 });
 
 test("loads the Google Sheet from the cloud import button", async () => {

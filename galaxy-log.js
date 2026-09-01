@@ -906,12 +906,6 @@
       return !!transport && typeof transport.get === "function" && typeof transport.post === "function";
     }
 
-    async function waitForCloudIdle(timeoutMs = 30_000) {
-      const deadline = Date.now() + timeoutMs;
-      while (cloudBusy && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
-      return !cloudBusy;
-    }
-
     async function loadCloud({ silent = false } = {}) {
       if (cloudBusy || !isOnline() || !transport || typeof transport.get !== "function") return false;
       cloudBusy = true;
@@ -1155,15 +1149,10 @@
         const ignored = parsed.ignoredSheets?.length ? `，跳過 ${parsed.ignoredSheets.length} 張其他工作表` : "";
         filter.status = "pending";
         const pendingCount = pendingMutations(nextState).length;
-        if (pendingCount && isOnline() && transportAvailable()) {
-          notify("檔案已讀取，正在同步至雲端…");
-          if (await waitForCloudIdle()) await syncCloud();
-          else notify("雲端仍在讀取，資料已保存本機，稍後按「同步至雲端」", "warn");
-        } else if (pendingCount) {
-          notify(`✓ 已保存本機：新增 ${merged.added} 筆、更新 ${merged.updated} 筆；返公司有網絡時按「同步至雲端」${ignored}`, "warn");
-        } else {
-          notify(`✓ 清單沒有新變更${ignored}`);
-        }
+        pendingPanelOpen = pendingCount > 0;
+        if (!pendingPanelOpen) pendingSelectedIds.clear();
+        if (pendingCount) notify(`✓ 已保存本機：新增 ${merged.added} 筆、更新 ${merged.updated} 筆；請在下方檢查待同步變更，確認後再按「同步至雲端」${ignored}`, "warn");
+        else notify(`✓ 清單沒有新變更${ignored}`);
       } catch (error) {
         notify(error.message || "匯入失敗", "err");
       } finally {
