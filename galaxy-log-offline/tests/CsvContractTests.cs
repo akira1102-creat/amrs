@@ -25,6 +25,8 @@ static class CsvContractTests
         Assert(decision.Replaced && decision.Snapshot.Tasks.Count == 3, "newer snapshot replaces all rows");
         var filtered = GalaxyTaskFilter.Filter(imported.Tasks, "1193", "all");
         Assert(filtered.Count == 2 && filtered.All(task => task.SerialLast4 == "1193"), "search filter matches both Galaxy rows");
+        Assert(GalaxyLayout.CardWidth(389, 0, 17) == 372, "default card width");
+        Assert(GalaxyLayout.CardWidth(800, 0, 17) == 783, "wide window card width");
         Console.WriteLine("CsvContractSmoke=PASS");
         return 0;
     }

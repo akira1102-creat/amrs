@@ -40,6 +40,7 @@ public partial class MainForm : Form
         exportButton.Click += (_, _) => ExportCsv();
         searchBox.TextChanged += (_, _) => { searchDebounceTimer.Stop(); searchDebounceTimer.Start(); };
         statusFilter.SelectedIndexChanged += (_, _) => RenderTasks();
+        taskList.Resize += (_, _) => ResizeCards();
         FormClosed += (_, _) => searchDebounceTimer.Dispose();
         RenderTasks();
     }
@@ -111,6 +112,7 @@ public partial class MainForm : Form
                 cardsById[task.Id] = card;
                 taskList.Controls.Add(card);
             }
+            ResizeCards();
         }
         finally { taskList.ResumeLayout(false); }
     }
@@ -153,7 +155,7 @@ public partial class MainForm : Form
 
     private Panel CreateCard(GalaxyTask task)
     {
-        var card = new Panel { Width = 365, Height = 154, BackColor = Color.FromArgb(22, 27, 34), Margin = new Padding(0, 0, 0, 10), Padding = new Padding(14) };
+        var card = new Panel { Tag = task.Id, Width = GalaxyLayout.CardWidth(taskList.ClientSize.Width, taskList.Padding.Horizontal, SystemInformation.VerticalScrollBarWidth), Height = 154, BackColor = Color.FromArgb(22, 27, 34), Margin = new Padding(0, 0, 0, 10), Padding = new Padding(14) };
         card.Paint += (_, e) =>
         {
             using var pen = new Pen(task.Status == "done" ? Color.FromArgb(63, 185, 80) : task.Status == "no_log" ? Color.FromArgb(210, 153, 34) : Color.FromArgb(56, 139, 253));
@@ -171,6 +173,20 @@ public partial class MainForm : Form
         card.Controls.AddRange(new Control[] { serial, full, target, state, action, noLog });
         UpdateCard(task);
         return card;
+    }
+
+    private void ResizeCards()
+    {
+        var width = GalaxyLayout.CardWidth(taskList.ClientSize.Width, taskList.Padding.Horizontal, SystemInformation.VerticalScrollBarWidth);
+        foreach (var card in cardsById.Values)
+        {
+            card.Width = width;
+            if (card.Tag is string id && cardPartsById.TryGetValue(id, out var parts))
+            {
+                parts.Action.Left = Math.Max(130, card.ClientSize.Width - 235);
+                parts.NoLog.Left = Math.Max(244, card.ClientSize.Width - 121);
+            }
+        }
     }
 
     private void UpdateCard(GalaxyTask task)
