@@ -954,9 +954,6 @@
 
     async function downloadCloudData() {
       if (cloudBusy || !isOnline() || !transport || typeof transport.get !== "function") return false;
-      if ((state.tasks.length || pendingMutations(state).length)
-        && typeof root.confirm === "function"
-        && !root.confirm("下載雲端資料會清除本機清單及待同步變更，確定繼續嗎？")) return false;
       clearLocalSnapshot();
       render();
       return loadCloud();

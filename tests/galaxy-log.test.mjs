@@ -115,6 +115,27 @@ test("clears local tasks and pending changes before downloading the cloud snapsh
   assert.deepEqual(app.getState().tasks.map((item) => item.status), ["pending"]);
 });
 
+test("downloads cloud data in AMRS without asking for confirmation", async () => {
+  const task = { id: "local-1", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending" };
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks: [task], cloudTasks: [task] });
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage, transport: { get: async () => ({ success: true, tasks: [{ ...task, fullSerial: "A02-001193", serialLast4: "1193" }], issues: [] }), post: async () => ({ success: true, results: [], tasks: [], issues: [] }) } });
+  const previousConfirm = globalThis.confirm;
+  let confirmCalled = false;
+  globalThis.confirm = () => { confirmCalled = true; return false; };
+  try {
+    app.mount();
+    documentRef.elements.get("galaxyImportBtn").listeners.get("click")();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    if (previousConfirm === undefined) delete globalThis.confirm;
+    else globalThis.confirm = previousConfirm;
+  }
+  assert.equal(confirmCalled, false);
+  assert.deepEqual(app.getState().tasks.map((item) => item.serialLast4), ["1193"]);
+});
+
 test("opens the CSV file picker from the visible AMRS import button", () => {
   const documentRef = fakeGalaxyDocument();
   const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport: null });
