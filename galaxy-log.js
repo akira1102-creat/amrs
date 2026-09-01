@@ -588,14 +588,13 @@
 
   function tasksToRows(tasks) {
     return [
-      ["SN", "SN末4位", "指定 Log 日期", "取 Log 日期", "狀態", "備註"],
+      ["SN", "SN末4位", "指定 Log 日期", "取 Log 日期", "狀態"],
       ...(Array.isArray(tasks) ? tasks : []).map((task) => [
         task.fullSerial,
         task.serialLast4 || serialLast4(task.fullSerial),
         task.targetDate,
         task.completedDate,
         STATUS_LABELS[task.status] || task.status,
-        task.note,
       ]),
     ];
   }

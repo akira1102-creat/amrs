@@ -56,7 +56,10 @@ function fakeGalaxyDocument() {
 test("exports CSV with the complete SN first and last four digits second", () => {
   const tasks = [{ fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending", note: "" }];
   assert.deepEqual(tasksToRows(tasks)[1].slice(0, 2), ["A02-001190", "1190"]);
+  assert.deepEqual(tasksToRows(tasks)[0], ["SN", "SN末4位", "指定 Log 日期", "取 Log 日期", "狀態"]);
+  assert.equal(tasksToRows(tasks)[1].length, 5);
   assert.match(tasksToCsv(tasks), /A02-001190,1190,2026-05-17/);
+  assert.doesNotMatch(tasksToCsv(tasks), /備註/);
 });
 
 test("shows and queues a no-log result beside the completed action", async () => {
