@@ -64,7 +64,7 @@ const MAX_READ_COLUMNS = 200;
 const GALAXY_LOG_CACHE_SCOPE = "galaxy-log";
 const GALAXY_LOG_CACHE_TTL_MS = 15_000;
 const GALAXY_LOG_HEADERS = ["SN末4位", "指定 Log 日期", "取 Log 日期"];
-const GALAXY_NO_LOG_MARKER = "沒有當天 Log";
+const GALAXY_NO_LOG_MARKER = "已檢查無log";
 const GALAXY_OFFICE_WRITE_MESSAGE = "Galaxy Log 來源仍是 Excel，請先另存為原生 Google 試算表後再同步";
 
 function own(object, key) {
@@ -149,7 +149,17 @@ function galaxyFullSerial(value) {
 }
 
 function isGalaxyNoLog(value) {
-  return /^(?:沒有當天\s*log|no\s*log)$/i.test(text(value));
+  return /(?:沒有當天\s*log|已檢查\s*無\s*log|no\s*log)/i.test(text(value));
+}
+
+function galaxyNoLogDate(value, timeZone) {
+  const raw = text(value);
+  if (!isGalaxyNoLog(raw)) return "";
+  const dateText = raw
+    .replace(/(?:沒有當天\s*log|已檢查\s*無\s*log|no\s*log)/ig, "")
+    .replace(/[（）()[\]]/g, " ")
+    .trim();
+  return galaxyDate(dateText, timeZone);
 }
 
 function galaxyTaskId(serialLast4, targetDate, groupIndex, rowIndex, occurrenceIndex = 0) {
@@ -275,8 +285,8 @@ function parseGalaxyValues(values, timeZone) {
       const serialLast4 = currentSerial;
       const targetDate = galaxyDate(rawTarget, timeZone);
       const completedText = text(rawCompleted);
-      const completedDate = galaxyDate(rawCompleted, timeZone);
       const noLog = isGalaxyNoLog(completedText);
+      const completedDate = noLog ? galaxyNoLogDate(completedText, timeZone) : galaxyDate(rawCompleted, timeZone);
       if (!serialLast4) {
         issues.push({ row: rowOffset + 1, groupIndex, type: "missing-serial", message: "找不到機身號碼（最後 4 位）", value: text(rawSerial) });
         continue;
@@ -298,7 +308,7 @@ function parseGalaxyValues(values, timeZone) {
         serialLast4,
         targetDate,
         completedDate,
-        status: completedDate ? "done" : noLog ? "no_log" : (completedText ? "needs_review" : "pending"),
+        status: noLog ? "no_log" : completedDate ? "done" : (completedText ? "needs_review" : "pending"),
         note: completedText && !completedDate && !noLog ? completedText : "",
         groupIndex,
         columnBase: base,
@@ -945,7 +955,8 @@ export function createRepository(env = {}, dependencies = {}) {
       const baseCompleted = galaxyDate(mutation.baseCompletedDate, config.timeZone);
       const desiredNoLog = text(patch.status).toLowerCase() === "no_log";
       const desiredDate = patch.completedDate == null ? currentCompleted : galaxyDate(patch.completedDate, config.timeZone);
-      const desiredCompleted = desiredNoLog ? GALAXY_NO_LOG_MARKER : desiredDate;
+      const noLogCheckedDate = desiredDate || formatSheetDate(new Date(nowMs(now)), config.timeZone);
+      const desiredCompleted = desiredNoLog ? `${noLogCheckedDate || ""} ${GALAXY_NO_LOG_MARKER}`.trim() : desiredDate;
       if ((desiredNoLog && task.status === "no_log") || (!desiredNoLog && currentCompleted && desiredDate === currentCompleted)) {
         results.push({ mutationId: text(mutation?.mutationId), taskId, ...(canonicalTaskId !== taskId ? { canonicalTaskId } : {}), status: "applied", completedDate: currentCompleted });
         continue;

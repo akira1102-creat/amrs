@@ -837,12 +837,13 @@ test("writes a no-log marker and returns the no_log task status", async () => {
   const overview = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
   const result = await repository.postAction({
     action: "syncGalaxyLog",
-    mutations: [{ taskId: overview.tasks[0].id, patch: { status: "no_log", completedDate: "" }, baseCompletedDate: "" }],
+    mutations: [{ taskId: overview.tasks[0].id, patch: { status: "no_log", completedDate: "2026-08-04" }, baseCompletedDate: "" }],
   });
 
   assert.equal(result.results[0].status, "applied");
   assert.equal(result.tasks[0].status, "no_log");
-  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[1][2], "沒有當天 Log");
+  assert.equal(result.tasks[0].completedDate, "2026-08-04");
+  assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[1][2], "2026-08-04 已檢查無log");
 });
 
 test("reads a public CSV export when the configured Galaxy workbook is still an Office file", async () => {

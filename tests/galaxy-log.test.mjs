@@ -75,7 +75,9 @@ test("shows and queues a no-log result beside the completed action", async () =>
     target: { closest: () => ({ dataset: { galaxyAction: "no-log", galaxyId: "no-log-1" } }) },
   });
   assert.equal(app.getState().tasks[0].status, "no_log");
+  assert.match(app.getState().tasks[0].completedDate, /^\d{4}-\d{2}-\d{2}$/);
   assert.equal(app.getState().outbox[0].patch.status, "no_log");
+  assert.match(app.getState().outbox[0].patch.completedDate, /^\d{4}-\d{2}-\d{2}$/);
 });
 
 test("parses the print layout while carrying merged serial numbers down", () => {

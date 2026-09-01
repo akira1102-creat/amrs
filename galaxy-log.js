@@ -14,7 +14,7 @@
     no_log: "沒有當天 Log",
     needs_review: "需跟進",
   };
-  const NO_LOG_MARKER = "沒有當天 Log";
+  const NO_LOG_MARKER = "已檢查無log";
 
   function text(value) {
     return String(value == null ? "" : value).trim();
@@ -92,6 +92,20 @@
       return validIsoDate(match[3] || fallbackYear, month, match[1]);
     }
     return "";
+  }
+
+  function noLogDate(value) {
+    const raw = text(value);
+    if (!/(?:沒有當天\s*log|已檢查\s*無\s*log|no\s*log)/i.test(raw)) return "";
+    const dateText = raw
+      .replace(/(?:沒有當天\s*log|已檢查\s*無\s*log|no\s*log)/ig, "")
+      .replace(/[（）()[\]]/g, " ")
+      .trim();
+    return normalizeDate(dateText);
+  }
+
+  function isNoLogValue(value) {
+    return /(?:沒有當天\s*log|已檢查\s*無\s*log|no\s*log)/i.test(text(value));
   }
 
   function normalizeSerial(value) {
@@ -192,8 +206,8 @@
         const serial = currentSerial;
         const targetDate = normalizeDate(rawTarget);
         const completedText = text(rawCompleted);
-        const completedDate = normalizeDate(rawCompleted);
-        const noLog = /^(?:沒有當天\s*log|no\s*log)$/i.test(completedText);
+        const noLog = isNoLogValue(completedText);
+        const completedDate = noLog ? noLogDate(completedText) : normalizeDate(rawCompleted);
         if (!serial) {
           issues.push({ row: rowOffset + 1, groupIndex, type: "missing-serial", message: "找不到機身號碼（最後 4 位）", value: text(rawSerial) });
           continue;
@@ -215,7 +229,7 @@
           serialLast4: serial,
           targetDate,
           completedDate,
-          status: completedDate ? "done" : noLog ? "no_log" : (completedText ? "needs_review" : "pending"),
+          status: noLog ? "no_log" : completedDate ? "done" : (completedText ? "needs_review" : "pending"),
           note: completedText && !completedDate && !noLog ? completedText : "",
           sourceSheet: text(sheetName),
           sourceRow: rowIndex,
@@ -246,7 +260,7 @@
       const base = groupIndex * 3;
       rows[rowIndex - 1][base] = text(task.serialLast4 || serialLast4(task.fullSerial));
       rows[rowIndex - 1][base + 1] = text(task.targetDate);
-      rows[rowIndex - 1][base + 2] = task.status === "no_log" ? NO_LOG_MARKER : text(task.completedDate);
+      rows[rowIndex - 1][base + 2] = task.status === "no_log" ? `${text(task.completedDate)} ${NO_LOG_MARKER}`.trim() : text(task.completedDate);
     }
     return rows;
   }
@@ -309,8 +323,8 @@
         const rawNote = header.noteCol >= 0 ? row[header.noteCol] : "";
         if (!text(rawTarget) && !text(rawSerial) && !text(rawCompleted)) continue;
         const rawCompletionText = text(rawCompleted);
-        const rawCompletionDate = normalizeDate(rawCompleted);
-        const noLogCompletion = /^(?:沒有當天\s*log|no\s*log)$/i.test(rawCompletionText);
+        const noLogCompletion = isNoLogValue(rawCompletionText);
+        const rawCompletionDate = noLogCompletion ? noLogDate(rawCompletionText) : normalizeDate(rawCompleted);
         const invalidCompletion = rawCompletionText && !rawCompletionDate && !noLogCompletion && !/^(?:n\/?a|-)$/i.test(rawCompletionText);
         if (!text(rawSerial) && invalidCompletion) currentSerial = "";
         if (!currentSerial) {
@@ -326,10 +340,10 @@
         const completionText = rawCompletionText;
         const statusText = text(rawStatus).toLowerCase();
         const explicitDone = /done|已取|complete|完成/.test(statusText);
-        const explicitNoLog = /no[_ -]?log|沒有當天\s*log/.test(statusText) || /^(?:沒有當天\s*log|no\s*log)$/i.test(completionText);
+        const explicitNoLog = /no[_ -]?log|沒有當天\s*log/.test(statusText) || isNoLogValue(completionText);
         const explicitNeedsReview = /needs?[\s_-]*review|需\s*跟進|跟進|review/.test(statusText);
         const explicitPending = /pending|未取/.test(statusText);
-        const status = completedDate || explicitDone ? "done" : explicitNoLog ? "no_log" : explicitNeedsReview || invalidCompletion ? "needs_review" : explicitPending ? "pending" : "pending";
+        const status = explicitNoLog ? "no_log" : completedDate || explicitDone ? "done" : explicitNeedsReview || invalidCompletion ? "needs_review" : explicitPending ? "pending" : "pending";
         if (invalidCompletion) {
           issues.push({ row: index + 1, type: "completion-value", message: "完成欄不是日期，已保留作需跟進", value: completionText });
         }
@@ -893,7 +907,8 @@
           if (current && queueTaskMutation(id, { status: "done", completedDate }, current.completedDate)) notify("✓ 已記錄取 Log 日期（待同步）");
         } else if (action === "no-log") {
           const current = state.tasks.find((task) => task.id === id);
-          if (current && queueTaskMutation(id, { status: "no_log", completedDate: "" }, current.completedDate)) notify("已記錄沒有當天 Log（待同步）");
+          const checkedDate = isoFromDate(new Date());
+          if (current && queueTaskMutation(id, { status: "no_log", completedDate: checkedDate }, current.completedDate)) notify("已記錄沒有當天 Log（待同步）");
         } else if (action === "reopen") {
           const current = state.tasks.find((task) => task.id === id);
           if (current && queueTaskMutation(id, { status: "pending", completedDate: "" }, current.completedDate)) notify("已改回未取（待同步）");
@@ -1004,7 +1019,7 @@
           <div class="galaxy-task-target">指定 Log 日期 <strong>${escapeHtml(task.targetDate.replace(/-/g, "/"))}</strong></div>
           ${task.note ? `<div class="galaxy-task-note">${escapeHtml(task.note)}</div>` : ""}
         </div>
-        <div class="galaxy-task-state"><span class="galaxy-state-badge ${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>${task.completedDate ? `<span class="galaxy-complete-date">取 Log：${escapeHtml(task.completedDate.replace(/-/g, "/"))}</span>` : ""}</div>
+        <div class="galaxy-task-state"><span class="galaxy-state-badge ${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>${task.completedDate ? `<span class="galaxy-complete-date">${task.status === "no_log" ? "檢查日期" : "取 Log"}：${escapeHtml(task.completedDate.replace(/-/g, "/"))}</span>` : ""}</div>
         <div class="galaxy-task-actions">${task.status === "done" || task.status === "no_log" ? `<button class="galaxy-btn small" data-galaxy-action="reopen" data-galaxy-id="${escapeHtml(task.id)}" type="button">改回未取</button>` : `<button class="galaxy-btn complete" data-galaxy-action="complete" data-galaxy-id="${escapeHtml(task.id)}" type="button">✓ 已取 Log</button><button class="galaxy-btn no-log" data-galaxy-action="no-log" data-galaxy-id="${escapeHtml(task.id)}" type="button">沒有當天 Log</button>`}</div>
       </article>`).join("");
     }
