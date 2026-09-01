@@ -47,7 +47,7 @@ class FakeElement {
 }
 
 function fakeGalaxyDocument() {
-  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogClearBtn", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyPendingPanel", "galaxyLogList"];
+  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyPendingPanel", "galaxyLogList"];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
     getElementById(id) { return elements.get(id) || null; },
@@ -84,6 +84,35 @@ test("uses the new cloud wording in the Galaxy shell", () => {
   app.mount();
   assert.equal(documentRef.elements.get("galaxySyncBtn").textContent, "同步至雲端");
   assert.equal(documentRef.elements.get("galaxyImportBtn").textContent, "下載雲端資料");
+});
+
+test("does not download cloud data automatically when the page mounts", async () => {
+  const documentRef = fakeGalaxyDocument();
+  const getCalls = [];
+  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport: { get: async (query) => { getCalls.push(query); return { success: true, tasks: [], issues: [] }; }, post: async () => ({ success: true, results: [], tasks: [], issues: [] }) } });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(getCalls, []);
+});
+
+test("clears local tasks and pending changes before downloading the cloud snapshot", async () => {
+  const task = { id: "local-1", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "2026-09-01", status: "done" };
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks: [task], cloudTasks: [task], outbox: [{ mutationId: "m-1", taskId: task.id, patch: { status: "done", completedDate: task.completedDate } }] });
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage, transport: { get: async () => ({ success: true, tasks: [{ ...task, completedDate: "", status: "pending" }], issues: [] }), post: async () => ({ success: true, results: [], tasks: [], issues: [] }) } });
+  const previousConfirm = globalThis.confirm;
+  globalThis.confirm = () => true;
+  try {
+    app.mount();
+    documentRef.elements.get("galaxyImportBtn").listeners.get("click")();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  } finally {
+    if (previousConfirm === undefined) delete globalThis.confirm;
+    else globalThis.confirm = previousConfirm;
+  }
+  assert.equal(app.getState().outbox.length, 0);
+  assert.deepEqual(app.getState().tasks.map((item) => item.status), ["pending"]);
 });
 
 test("opens the CSV file picker from the visible AMRS import button", () => {
@@ -139,6 +168,7 @@ test("shows and queues a no-log result beside the completed action", async () =>
   };
   const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
   app.mount();
+  documentRef.elements.get("galaxyImportBtn").listeners.get("click")();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /galaxy-task-serial">1190 <span>完整 SN A02-001190<\/span>/);
   assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /data-galaxy-action="complete"/);
@@ -422,6 +452,7 @@ test("uploads Excel or CSV import mutations through cloud sync when online", asy
   };
   const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
   app.mount();
+  documentRef.elements.get("galaxyImportBtn").listeners.get("click")();
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   await app.importFile({
@@ -545,6 +576,7 @@ test("distinguishes Google Sheet write permission from an AMRS Token permission 
   };
   const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport });
   app.mount();
+  documentRef.elements.get("galaxyImportBtn").listeners.get("click")();
   await new Promise((resolve) => setTimeout(resolve, 0));
   documentRef.elements.get("galaxyLogList").listeners.get("click")({
     target: { closest: () => ({ dataset: { galaxyAction: "complete", galaxyId: "sheet-permission-1" } }) },

@@ -75,12 +75,12 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901o/);
-  assert.match(html, /galaxy-log\.js\?v=20260901o/);
-  assert.match(html, /galaxy-log\.css\?v=20260901o/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901o/);
-  assert.match(worker, /galaxy-log\.js\?v=20260901o/);
-  assert.match(worker, /galaxy-log\.css\?v=20260901o/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901p/);
+  assert.match(html, /galaxy-log\.js\?v=20260901p/);
+  assert.match(html, /galaxy-log\.css\?v=20260901p/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901p/);
+  assert.match(worker, /galaxy-log\.js\?v=20260901p/);
+  assert.match(worker, /galaxy-log\.css\?v=20260901p/);
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
   const galaxy = fs.readFileSync(new URL("../galaxy-log.js", import.meta.url), "utf8");
@@ -90,6 +90,7 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(galaxy, /id="galaxyCsvImportBtn"[^>]*>匯入 CSV</);
   assert.match(galaxy, /id="galaxyCsvFileInput"[^>]*type="file"/);
   assert.match(galaxy, /id="galaxyExportCsvBtn"[^>]*>匯出 CSV</);
+  assert.doesNotMatch(galaxy, /id="galaxyLogClearBtn"/);
   assert.doesNotMatch(galaxy, /id="galaxyExportXlsxBtn"/);
   assert.doesNotMatch(galaxy, /galaxyFileInput/);
   assert.match(galaxy, /syncGalaxyLog/);

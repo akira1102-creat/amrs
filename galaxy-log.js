@@ -750,6 +750,27 @@
       return state;
     }
 
+    function clearLocalSnapshot() {
+      state = writeStoredState(storage, {
+        tasks: [],
+        cloudTasks: [],
+        outbox: [],
+        conflicts: [],
+        issues: [],
+        cloudReadOnly: false,
+        importedAt: "",
+        importedFileModifiedAt: 0,
+        snapshotSource: "",
+        sourceName: "",
+        sourceSheet: "",
+        lastCloudSyncAt: "",
+        lastCloudError: "",
+      });
+      pendingPanelOpen = false;
+      pendingSelectedIds.clear();
+      return state;
+    }
+
     function queueTaskMutation(taskId, patch, baseCompletedDate = "") {
       const current = state.tasks.find((task) => task.id === taskId);
       if (!current) return false;
@@ -857,7 +878,6 @@
         <div class="galaxy-filter-bar">
           <input id="galaxyLogSearch" type="search" inputmode="search" placeholder="搜尋完整 SN 或末四位" autocomplete="off">
           <select id="galaxyLogStatusFilter" aria-label="篩選狀態"><option value="pending">未取</option><option value="needs_review">需跟進</option><option value="done">已取</option><option value="no_log">沒有當天 Log</option><option value="all">全部</option></select>
-          <button class="galaxy-btn" id="galaxyLogClearBtn" type="button">清除本機清單</button>
         </div>
         <div id="galaxyLogIssues"></div>
         <div id="galaxyLogList" class="galaxy-task-list"></div>
@@ -931,6 +951,16 @@
       }
     }
 
+    async function downloadCloudData() {
+      if (cloudBusy || !isOnline() || !transport || typeof transport.get !== "function") return false;
+      if ((state.tasks.length || pendingMutations(state).length)
+        && typeof root.confirm === "function"
+        && !root.confirm("下載雲端資料會清除本機清單及待同步變更，確定繼續嗎？")) return false;
+      clearLocalSnapshot();
+      render();
+      return loadCloud();
+    }
+
     function remapTaskId(tasks, fromId, toId) {
       return (Array.isArray(tasks) ? tasks : []).map((task) => task.id === fromId ? { ...task, id: toId } : { ...task });
     }
@@ -997,7 +1027,7 @@
 
     function bind() {
       documentRef.getElementById("galaxySyncBtn")?.addEventListener("click", () => { void syncCloud(); });
-      documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => { void loadCloud(); });
+      documentRef.getElementById("galaxyImportBtn")?.addEventListener("click", () => { void downloadCloudData(); });
       const csvFileInput = documentRef.getElementById("galaxyCsvFileInput");
       documentRef.getElementById("galaxyCsvImportBtn")?.addEventListener("click", () => { csvFileInput?.click(); });
       csvFileInput?.addEventListener("change", (event) => {
@@ -1060,15 +1090,6 @@
       });
       documentRef.getElementById("galaxyLogSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; render(); });
       documentRef.getElementById("galaxyLogStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; render(); });
-      documentRef.getElementById("galaxyLogClearBtn")?.addEventListener("click", () => {
-        if (!state.tasks.length) { notify("目前沒有本機清單", "warn"); return; }
-        if (!root.confirm?.("確定要清除這部 Surface 的 Galaxy 清單及完成記錄嗎？")) return;
-        state = writeStoredState(storage, { tasks: [], cloudTasks: [], outbox: [], conflicts: [], issues: [], cloudReadOnly: false, importedAt: "", importedFileModifiedAt: 0, snapshotSource: "", sourceName: "", sourceSheet: "", lastCloudSyncAt: "", lastCloudError: "" });
-        pendingPanelOpen = false;
-        pendingSelectedIds.clear();
-        notify("已清除本機 Galaxy 清單");
-        render();
-      });
       documentRef.getElementById("galaxyLogList")?.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-galaxy-action]");
         if (!button) return;
@@ -1088,7 +1109,7 @@
         }
         render();
       });
-      root.addEventListener?.("online", () => { render(); void loadCloud({ silent: true }); });
+      root.addEventListener?.("online", render);
       root.addEventListener?.("offline", render);
     }
 
@@ -1217,7 +1238,6 @@
         bind();
         mounted = true;
       }
-      if (isOnline() && transportAvailable()) void loadCloud({ silent: true });
       render();
       return true;
     }
