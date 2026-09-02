@@ -24,6 +24,8 @@ import {
   getSubmissionWarningsFromRows,
   getMonthlyScheduleFromRows,
   getMonthlyStatsSubsetFromData,
+  GEG_MONTHLY_TARGET_CELLS,
+  GEG_MONTHLY_TARGETS,
   monthlyCompanyStatsCacheKey,
   monthlyStatsBaseFromData,
   monthlyStatsBaseCacheKey,
@@ -1118,6 +1120,29 @@ export function createRepository(env = {}, dependencies = {}) {
     };
   }
 
+  async function readGegMonthlySettings(options = {}) {
+    const table = await readSpecialTable(config.sheets.GEG, MONTHLY_SHEET, "A1:C8", {
+      ...options,
+      scope: "monthly-settings:GEG",
+      ttlMs: DEFAULT_CACHE_TTL_MS,
+    });
+    const values = table.values;
+    const cell = (row, column) => values[row - 1]?.[column - 1] ?? "";
+    const number = (value, fallback) => {
+      const raw = text(value);
+      if (!raw) return fallback;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+    };
+    return {
+      poNumber: text(cell(2, 2)),
+      targets: {
+        Galaxy: number(cell(4, 3), GEG_MONTHLY_TARGETS.Galaxy),
+        StarWorld: number(cell(8, 3), GEG_MONTHLY_TARGETS.StarWorld),
+      },
+    };
+  }
+
   async function readScheduleTable(monthCode, options = {}) {
     const sheetName = scheduleSheetName(monthCode);
     const metadata = await spreadsheetMetadata(config.scheduleSheetId, { refresh: options.cache === false });
@@ -1223,13 +1248,17 @@ export function createRepository(env = {}, dependencies = {}) {
       const scheduleData = schedule
         ? getMonthlyScheduleFromRows(schedule.rows, monthCode, new Date(nowMs(now)), schedule.sheetName, { timeZone: config.timeZone })
         : { sheetName: scheduleSheetName(monthCode), venues: {} };
-      const settings = await readMonthlySettings({ refresh });
+      const [settings, gegSettings] = await Promise.all([
+        readMonthlySettings({ refresh }),
+        readGegMonthlySettings({ refresh }),
+      ]);
       return monthlyStatsBaseFromData({
         monthCode,
         now: new Date(nowMs(now)),
         timeZone: config.timeZone,
         schedule: { sheetName: scheduleData.sheetName, venues: scheduleData.venues },
         sclSettings: settings,
+        gegTargets: gegSettings.targets,
       });
     }, { refresh, ttlMs: MONTHLY_STATS_CACHE_TTL_MS, now });
   }
@@ -1415,7 +1444,13 @@ export function createRepository(env = {}, dependencies = {}) {
     if (action === "monthlyStatsCompany") return monthlyCompany(params);
     if (action === "scheduleMachineCounts") return monthlySubset(params, ["SCL", "GEG"]);
     if (action === "scheduleOverview") return scheduleOverview(params);
-    if (action === "monthlySettings") return { success: true, settings: await readMonthlySettings({ refresh: text(params.refresh) === "1" }) };
+    if (action === "monthlySettings") {
+      const company = normalizeCompany(params.company || "SCL");
+      const settings = company === "GEG"
+        ? await readGegMonthlySettings({ refresh: text(params.refresh) === "1" })
+        : await readMonthlySettings({ refresh: text(params.refresh) === "1" });
+      return { success: true, company, settings };
+    }
     if (action === "galaxyLogOverview") return getGalaxyLogOverview(params);
     return { error: "unknown action" };
   }
@@ -1631,25 +1666,38 @@ export function createRepository(env = {}, dependencies = {}) {
   }
 
   async function updateMonthlySettings(payload) {
+    const company = normalizeCompany(payload.company || "SCL");
     const settings = payload.settings || {};
+    const targetCells = company === "GEG"
+      ? GEG_MONTHLY_TARGET_CELLS
+      : { Venetian: "C4", Londoner: "C8", Parisian: "C12", Sands: "C16", Plaza: "C20" };
     const poNumber = text(settings.poNumber);
-    if (!poNumber) throw new Error("Monthly PO number is required");
-    const targetCells = { Venetian: "C4", Londoner: "C8", Parisian: "C12", Sands: "C16", Plaza: "C20" };
-    const data = [{ range: `${quoteSheetName(MONTHLY_SHEET)}!B2`, values: [[poNumber]] }];
+    if (company !== "GEG" && !poNumber) throw new Error("Monthly PO number is required");
+    const spreadsheetId = config.sheets[company];
+    const data = company === "GEG" ? [] : [{ range: `${quoteSheetName(MONTHLY_SHEET)}!B2`, values: [[poNumber]] }];
     for (const [venue, cell] of Object.entries(targetCells)) {
       const raw = text(settings.targets?.[venue]);
       if (!/^\d+$/.test(raw)) throw new Error(`${venue} target must be a non-negative integer`);
       data.push({ range: `${quoteSheetName(MONTHLY_SHEET)}!${cell}`, values: [[Number(raw)]] });
     }
-    await sheets.valuesBatchUpdate({ spreadsheetId: config.sheets.SCL, data, valueInputOption: "USER_ENTERED" });
+    const sheet = await ensureSheet(spreadsheetId, MONTHLY_SHEET, { create: true, refresh: true });
+    if (!sheet) throw new Error(`${company} Monthly worksheet not found`);
+    await sheets.valuesBatchUpdate({ spreadsheetId, data, valueInputOption: "USER_ENTERED" });
     await Promise.all([
       invalidateCache(db, memory, cacheAdapter, "monthly-settings", now),
+      invalidateCache(db, memory, cacheAdapter, "monthly-settings:GEG", now),
       invalidateCache(db, memory, cacheAdapter, "monthly-base", now),
-      invalidateCache(db, memory, cacheAdapter, "monthly-company:SCL", now),
+      invalidateCache(db, memory, cacheAdapter, `monthly-company:${company}`, now),
       invalidateCache(db, memory, cacheAdapter, "monthly-all", now),
       invalidateCache(db, memory, cacheAdapter, "monthly-machine-counts", now),
     ]);
-    return { success: true, settings: await readMonthlySettings({ refresh: true }) };
+    return {
+      success: true,
+      company,
+      settings: company === "GEG"
+        ? await readGegMonthlySettings({ refresh: true })
+        : await readMonthlySettings({ refresh: true }),
+    };
   }
 
   async function ensureBrokenPartsSchema() {

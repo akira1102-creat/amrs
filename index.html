@@ -7,11 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260901u">
+  <link rel="manifest" href="manifest.json?v=20260902a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260901u">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260901u">
+  <link rel="stylesheet" href="./cvcs.css?v=20260902a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260902a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -744,6 +744,8 @@
     .scl-monthly-toggle[aria-expanded="true"] .scl-monthly-chevron{transform:rotate(180deg)}
     #sclMonthlySettingsContent{display:none;margin-top:14px}
     #sclMonthlySettingsContent.show{display:block}
+    #gegMonthlySettingsContent{display:none;margin-top:14px}
+    #gegMonthlySettingsContent.show{display:block}
     .scl-monthly-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
     .scl-monthly-po{grid-column:1/-1}
     .scl-monthly-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px}
@@ -1190,6 +1192,18 @@
       <div><label>Plaza 總數</label><input id="sclMonthlyPlaza" type="number" min="0" step="1"></div>
     </div>
     <div class="scl-monthly-actions"><span></span><button class="scl-monthly-save" id="sclMonthlySaveBtn" onclick="saveSclMonthlySettings()" type="button">儲存設定</button></div>
+  </div>
+</div>
+
+<div class="card geg-only" id="gegMonthlySettingsCard">
+  <button class="scl-monthly-toggle" id="gegMonthlyToggle" onclick="toggleGegMonthlySettings()" type="button" aria-expanded="false"><span>GEG 本月設定</span><span class="scl-monthly-chevron">▼</span></button>
+  <div id="gegMonthlySettingsContent">
+    <div class="scl-monthly-head"><span class="scl-monthly-status" id="gegMonthlyStatus">尚未載入</span><button class="mini-edit-btn" onclick="loadGegMonthlySettings(true)" type="button">重新載入</button></div>
+    <div class="scl-monthly-grid">
+      <div><label>Galaxy 總數</label><input id="gegMonthlyGalaxy" type="number" min="0" step="1"></div>
+      <div><label>StarWorld 總數</label><input id="gegMonthlyStarWorld" type="number" min="0" step="1"></div>
+    </div>
+    <div class="scl-monthly-actions"><span></span><button class="scl-monthly-save" id="gegMonthlySaveBtn" onclick="saveGegMonthlySettings()" type="button">儲存設定</button></div>
   </div>
 </div>
 
@@ -1653,18 +1667,18 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260901u"></script>
-<script src="./access-control.js?v=20260901u"></script>
-<script src="./cvcs.js?v=20260901u"></script>
-<script src="./token-admin.js?v=20260901u"></script>
-<script src="./xlsx.mini.min.js?v=20260901u"></script>
-<script src="./galaxy-log.js?v=20260901u"></script>
+<script src="./cloud-api.js?v=20260902a"></script>
+<script src="./access-control.js?v=20260902a"></script>
+<script src="./cvcs.js?v=20260902a"></script>
+<script src="./token-admin.js?v=20260902a"></script>
+<script src="./xlsx.mini.min.js?v=20260902a"></script>
+<script src="./galaxy-log.js?v=20260902a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.01-20';
-const _APP_VERSION='v1.094';
+const _APP_BUMP='2026.09.02-01';
+const _APP_VERSION='v1.095';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -1998,7 +2012,7 @@ async function saveSetup(){
   if(_dualTransport)_dualTransport.clearSession();
   document.getElementById('setupScreen').classList.remove('show');
   setupReturnState=null;setupVerifiedId='';
-  _sclMonthlySettingsLoaded=false;
+  _sclMonthlySettingsLoaded=false;_gegMonthlySettingsLoaded=false;
   syncCompanySpecificFields();syncCasinoOptions();renderCompanyMenu();
   if(await refreshAccessSession()){
     unlockApp();
@@ -2538,9 +2552,10 @@ function openScheduleInputFromButton(button){
   window.scrollTo({top:0,behavior:'smooth'});showToast(`已開啟 ${venue} · ${scheduleDateLabel(date)}`);
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
+const GEG_MONTHLY_INPUTS={Galaxy:'gegMonthlyGalaxy',StarWorld:'gegMonthlyStarWorld'};
 const MONTHLY_STATS_CACHE_PREFIX='_amrs_monthly_stats_v4_',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1',MONTHLY_STATS_CACHE_FRESH_MS=10*60*1000;
-const SCL_MONTHLY_SETTINGS_CACHE_KEY='_amrs_scl_monthly_settings_v1',SCL_MONTHLY_SETTINGS_CACHE_FRESH_MS=5*60*1000;
-let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_monthlyStatsRequest=null,_monthlyStatsMonth='';
+const SCL_MONTHLY_SETTINGS_CACHE_KEY='_amrs_scl_monthly_settings_v1',GEG_MONTHLY_SETTINGS_CACHE_KEY='_amrs_geg_monthly_settings_v1',SCL_MONTHLY_SETTINGS_CACHE_FRESH_MS=5*60*1000;
+let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_gegMonthlySettingsLoaded=false,_gegMonthlySettingsRequest=null,_monthlyStatsRequest=null,_monthlyStatsMonth='';
 function monthlyStatsMonthCode(date=new Date()){
   return String(date.getFullYear()).slice(-2)+String(date.getMonth()+1).padStart(2,'0');
 }
@@ -2638,6 +2653,65 @@ async function saveSclMonthlySettings(){
     const savedSettings=data.settings||{poNumber,targets};applySclMonthlySettings(savedSettings);saveCachedSclMonthlySettings(savedSettings);_sclMonthlySettingsLoaded=true;syncPoQuickFillButton(false);
     clearMonthlyStatsCache();
     status.textContent='已更新 Monthly 工作表';status.style.color='#3fb950';showToast('✓ SCL 本月設定已更新');
+    if(activePage==='monthlyStats')loadMonthlyStats(true);
+  }catch(e){status.textContent=e.message||'儲存失敗';status.style.color='#ff7b72';showToast(e.message||'儲存失敗','err');}
+  finally{btn.disabled=false;btn.textContent='儲存設定';}
+}
+function toggleGegMonthlySettings(){
+  const content=document.getElementById('gegMonthlySettingsContent'),toggle=document.getElementById('gegMonthlyToggle');
+  const open=!content.classList.contains('show');content.classList.toggle('show',open);toggle.setAttribute('aria-expanded',String(open));
+  if(open)loadGegMonthlySettings();
+}
+function applyGegMonthlySettings(settings){
+  Object.entries(GEG_MONTHLY_INPUTS).forEach(([venue,id])=>{document.getElementById(id).value=String(settings?.targets?.[venue]??0);});
+}
+function getCachedGegMonthlySettings(){
+  try{
+    const cached=JSON.parse(localStorage.getItem(GEG_MONTHLY_SETTINGS_CACHE_KEY)||'null');
+    return cached?.settings?cached:null;
+  }catch(e){return null;}
+}
+function saveCachedGegMonthlySettings(settings){
+  try{localStorage.setItem(GEG_MONTHLY_SETTINGS_CACHE_KEY,JSON.stringify({savedAt:Date.now(),settings}));}catch(e){}
+}
+async function loadGegMonthlySettings(force=false,quiet=false){
+  if(activeCompany!=='GEG'||(_gegMonthlySettingsLoaded&&!force))return;
+  const url=getScriptUrl();if(!url)return;
+  const cached=getCachedGegMonthlySettings(),cacheFresh=!force&&cached?.savedAt&&Date.now()-cached.savedAt<SCL_MONTHLY_SETTINGS_CACHE_FRESH_MS;
+  const status=document.getElementById('gegMonthlyStatus');
+  if(cached){applyGegMonthlySettings(cached.settings);_gegMonthlySettingsLoaded=true;status.textContent='已載入本月設定';status.style.color='#3fb950';}
+  if(cacheFresh)return;
+  if(_gegMonthlySettingsRequest&&!force)return;
+  _gegMonthlySettingsRequest?.abort();
+  const controller=new AbortController();_gegMonthlySettingsRequest=controller;
+  status.textContent=cached?'更新中...':'載入中...';status.style.color='#8b949e';
+  const loadingToken=quiet||cached?null:showLoadingProgress('GEG 本月設定載入中，請稍等...');
+  try{
+    const suffix=force?'&refresh=1':'';
+    const data=await fetchJsonWithTimeout(`${url}?action=monthlySettings&company=GEG${suffix}`,{signal:controller.signal},30000);
+    if(!data.success||!data.settings)throw new Error(data.message||'載入失敗');
+    applyGegMonthlySettings(data.settings);saveCachedGegMonthlySettings(data.settings);_gegMonthlySettingsLoaded=true;
+    status.textContent='已從 GEG Monthly 工作表載入';status.style.color='#3fb950';
+  }catch(e){
+    if(e.name==='AbortError')return;
+    status.textContent=cached?'已使用暫存本月設定':'載入失敗';status.style.color=cached?'#3fb950':'#ff7b72';
+  }finally{if(loadingToken)hideLoadingProgress(loadingToken);if(_gegMonthlySettingsRequest===controller)_gegMonthlySettingsRequest=null;}
+}
+async function saveGegMonthlySettings(){
+  const targets={};
+  for(const [venue,id] of Object.entries(GEG_MONTHLY_INPUTS)){
+    const raw=document.getElementById(id).value.trim();
+    if(!/^\d+$/.test(raw)){showToast(`${venue} 總數必須為非負整數`,'err');return;}
+    targets[venue]=Number(raw);
+  }
+  const btn=document.getElementById('gegMonthlySaveBtn'),status=document.getElementById('gegMonthlyStatus');
+  btn.disabled=true;btn.textContent='儲存中...';status.textContent='正在更新 GEG Monthly 工作表...';status.style.color='#8b949e';
+  try{
+    const data=await postGasJson({action:'updateMonthlySettings',company:'GEG',settings:{targets}});
+    if(!data.success)throw new Error(data.message||'儲存失敗');
+    const savedSettings=data.settings||{targets};applyGegMonthlySettings(savedSettings);saveCachedGegMonthlySettings(savedSettings);_gegMonthlySettingsLoaded=true;
+    clearMonthlyStatsCache();
+    status.textContent='已更新 GEG Monthly 工作表';status.style.color='#3fb950';showToast('✓ GEG 本月設定已更新');
     if(activePage==='monthlyStats')loadMonthlyStats(true);
   }catch(e){status.textContent=e.message||'儲存失敗';status.style.color='#ff7b72';showToast(e.message||'儲存失敗','err');}
   finally{btn.disabled=false;btn.textContent='儲存設定';}

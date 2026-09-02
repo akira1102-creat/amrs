@@ -288,7 +288,7 @@ function mutationCompanies(payload) {
     add(payload.company);
     add(payload.record?.company);
     if (Array.isArray(payload.brokenPartsRepairs)) payload.brokenPartsRepairs.forEach((item) => add(item?.company || item?.record?.company));
-    if (payload.action === "updateMonthlySettings") add("SCL");
+    if (payload.action === "updateMonthlySettings") add(payload.company || "SCL");
     if (payload.action === "ensureBrokenPartsSchema") return null;
   }
   return [...new Set(values)].sort();

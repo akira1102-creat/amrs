@@ -27,6 +27,11 @@ export const SCL_MONTHLY_TARGET_CELLS = {
   Plaza: "C20",
 };
 
+export const GEG_MONTHLY_TARGET_CELLS = {
+  Galaxy: "C4",
+  StarWorld: "C8",
+};
+
 export const GEG_MONTHLY_TARGETS = { Galaxy: 421, StarWorld: 129 };
 
 export const SCHEDULE_VENUE_ALIASES = {

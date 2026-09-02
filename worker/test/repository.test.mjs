@@ -251,6 +251,22 @@ test("implements all GET action contracts against synthetic Sheets", async () =>
   assert.equal((await repository.getAction({ action: "aaTags", company: "MGM" })).tags[0].aaTag, "TAE0051");
 });
 
+test("reads and updates GEG monthly targets in the GEG workbook", async () => {
+  const initial = {
+    ...companyData,
+    geg: [...companyData.geg, { title: "Monthly", values: Array.from({ length: 8 }, () => ["", "", ""]).map((row, index) => index === 3 ? ["", "", "421"] : index === 7 ? ["", "", "129"] : row) }],
+  };
+  const harness = createSheetsHarness(initial);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+  const loaded = await repository.getAction({ action: "monthlySettings", company: "GEG" });
+  assert.deepEqual(loaded.settings.targets, { Galaxy: 421, StarWorld: 129 });
+  const saved = await repository.postAction({ action: "updateMonthlySettings", company: "GEG", settings: { targets: { Galaxy: 400, StarWorld: 120 } } });
+  assert.deepEqual(saved.settings.targets, { Galaxy: 400, StarWorld: 120 });
+  const sheet = harness.sheets.get("geg:Monthly");
+  assert.equal(sheet.values[3][2], 400);
+  assert.equal(sheet.values[7][2], 120);
+});
+
 test("returns current submission warnings with row identity", async () => {
   const harness = createSheetsHarness(companyData);
   const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });

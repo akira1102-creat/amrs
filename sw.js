@@ -1,5 +1,5 @@
-const CACHE = 'amrs-v1094';
-const ASSETS = ['./', './index.html', './cloud-api.js?v=20260901u', './access-control.js?v=20260901u', './cvcs.js?v=20260901u', './cvcs.css?v=20260901u', './token-admin.js?v=20260901u', './xlsx.mini.min.js?v=20260901u', './galaxy-log.js?v=20260901u', './galaxy-log.css?v=20260901u', './manifest.json?v=20260901u', './sw.js'];
+const CACHE = 'amrs-v1095';
+const ASSETS = ['./', './index.html', './cloud-api.js?v=20260902a', './access-control.js?v=20260902a', './cvcs.js?v=20260902a', './cvcs.css?v=20260902a', './token-admin.js?v=20260902a', './xlsx.mini.min.js?v=20260902a', './galaxy-log.js?v=20260902a', './galaxy-log.css?v=20260902a', './manifest.json?v=20260902a', './sw.js'];
 
 self.addEventListener('message', e => {
   if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();

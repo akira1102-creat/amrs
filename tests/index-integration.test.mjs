@@ -75,12 +75,12 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260901u/);
-  assert.match(html, /galaxy-log\.js\?v=20260901u/);
-  assert.match(html, /galaxy-log\.css\?v=20260901u/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260901u/);
-  assert.match(worker, /galaxy-log\.js\?v=20260901u/);
-  assert.match(worker, /galaxy-log\.css\?v=20260901u/);
+  assert.match(html, /xlsx\.mini\.min\.js\?v=20260902a/);
+  assert.match(html, /galaxy-log\.js\?v=20260902a/);
+  assert.match(html, /galaxy-log\.css\?v=20260902a/);
+  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260902a/);
+  assert.match(worker, /galaxy-log\.js\?v=20260902a/);
+  assert.match(worker, /galaxy-log\.css\?v=20260902a/);
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
   const galaxy = fs.readFileSync(new URL("../galaxy-log.js", import.meta.url), "utf8");
@@ -139,4 +139,15 @@ test("submission flow checks machine states and offers selectable Hold and Waiti
   assert.match(html, /bpHoldReleaseDate/);
   assert.match(html, /bpRepairDay/);
   assert.match(html, /brokenPartsRepairs/);
+});
+
+test("GEG input exposes a collapsible monthly target settings card", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /id="gegMonthlySettingsCard"/);
+  assert.match(html, /id="gegMonthlySettingsContent"/);
+  assert.match(html, /id="gegMonthlyGalaxy"/);
+  assert.match(html, /id="gegMonthlyStarWorld"/);
+  assert.match(html, /function loadGegMonthlySettings\(/);
+  assert.match(html, /function saveGegMonthlySettings\(/);
+  assert.match(html, /action:'updateMonthlySettings',company:'GEG'/);
 });
