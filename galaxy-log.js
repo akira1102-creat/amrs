@@ -463,10 +463,12 @@
     return (Array.isArray(tasks) ? tasks : []).map((task) => task.id === id ? { ...task, status: "pending", completedDate: "", updatedAt: new Date().toISOString() } : { ...task });
   }
 
-  function filterTasks(tasks, { query = "", status = "pending" } = {}) {
+  function filterTasks(tasks, { query = "", status = "pending", actionDate = "" } = {}) {
     const normalizedQuery = text(query).toLowerCase();
+    const normalizedActionDate = normalizeDate(actionDate);
     return (Array.isArray(tasks) ? tasks : [])
       .filter((task) => !status || status === "all" || task.status === status)
+      .filter((task) => !normalizedActionDate || text(task.completedDate) === normalizedActionDate)
       .filter((task) => !normalizedQuery || [task.fullSerial, task.serialLast4, task.targetDate, task.completedDate].some((value) => text(value).toLowerCase().includes(normalizedQuery)))
       .sort((left, right) => {
         const statusWeight = { pending: 0, needs_review: 1, done: 2 };
@@ -843,7 +845,7 @@
     const storage = options.storage || root?.localStorage;
     const transport = options.transport;
     let state = readStoredState(storage);
-    let filter = { query: "", status: "pending" };
+    let filter = { query: "", status: "pending", actionDate: "" };
     let mounted = false;
     let busy = false;
     let cloudBusy = false;
@@ -987,6 +989,7 @@
         <div class="galaxy-filter-bar">
           <input id="galaxyLogSearch" type="search" inputmode="search" placeholder="搜尋完整 SN 或末四位" autocomplete="off">
           <select id="galaxyLogStatusFilter" aria-label="篩選狀態"><option value="pending">未取</option><option value="needs_review">需跟進</option><option value="done">已取</option><option value="no_log">沒有當天 Log</option><option value="all">全部</option></select>
+          <label class="galaxy-filter-date"><span>取 Log／檢查日期</span><input id="galaxyLogDateFilter" type="date" aria-label="篩選取 Log／檢查日期" title="篩選取 Log／檢查日期"></label>
         </div>
         <div id="galaxyLogIssues"></div>
         <div id="galaxyLogList" class="galaxy-task-list"></div>
@@ -1190,6 +1193,11 @@
       });
       documentRef.getElementById("galaxyLogSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; render(); });
       documentRef.getElementById("galaxyLogStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; render(); });
+      documentRef.getElementById("galaxyLogDateFilter")?.addEventListener("change", (event) => {
+        filter.actionDate = event.target.value;
+        if (filter.actionDate && filter.status === "pending") filter.status = "all";
+        render();
+      });
       documentRef.getElementById("galaxyLogList")?.addEventListener("click", (event) => {
         const button = event.target.closest("button[data-galaxy-action]");
         if (!button) return;
@@ -1325,6 +1333,7 @@
       }
       const search = documentRef.getElementById("galaxyLogSearch"); if (search && search.value !== filter.query) search.value = filter.query;
       const statusSelect = documentRef.getElementById("galaxyLogStatusFilter"); if (statusSelect) statusSelect.value = filter.status;
+      const dateFilter = documentRef.getElementById("galaxyLogDateFilter"); if (dateFilter && dateFilter.value !== filter.actionDate) dateFilter.value = filter.actionDate;
       const issueHost = documentRef.getElementById("galaxyLogIssues");
       if (issueHost) {
         const conflictMarkup = state.conflicts.length ? `<details class="galaxy-issues conflicts" open><summary>同步衝突：${state.conflicts.length} 筆需要留意</summary><div>${state.conflicts.slice(0, 40).map((conflict) => `<div>${escapeHtml(conflict.message || `Task ${conflict.taskId || ""} 的雲端資料與本機不同`)}</div>`).join("")}</div></details>` : "";

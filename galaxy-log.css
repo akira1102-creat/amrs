@@ -23,9 +23,11 @@
 .galaxy-status-strip #galaxyLogOfflineBadge.local{border:1px solid #30363d;color:#8b949e}
 .galaxy-status-strip #galaxyLogOfflineBadge.offline{border:1px solid #9e6a03;background:#3d2d00;color:#f2cc60}
 .galaxy-status-strip #galaxyLogOfflineBadge.pending{border:1px solid #1f6feb;background:#0d2a4d;color:#79c0ff}
-.galaxy-filter-bar{display:grid;grid-template-columns:minmax(0,1fr) 130px max-content;align-items:center;gap:8px;margin-bottom:14px}
+.galaxy-filter-bar{display:grid;grid-template-columns:minmax(0,1fr) 130px 190px;align-items:center;gap:8px;margin-bottom:14px}
 .galaxy-filter-bar input,.galaxy-filter-bar select{width:100%;min-width:0;height:40px;padding:0 11px;border:1px solid #30363d;border-radius:9px;background:#0d1117;color:#e6edf3;font:inherit;font-size:13px}
 .galaxy-filter-bar input:focus,.galaxy-filter-bar select:focus{outline:none;border-color:#388bfd}
+.galaxy-filter-date{display:flex;align-items:center;gap:7px;min-width:0;color:#8b949e;font-size:11px;white-space:nowrap}
+.galaxy-filter-date input{flex:1}
 .galaxy-pending-panel-inner{margin:-2px 0 14px;padding:12px;border:1px solid #1f6feb;border-radius:12px;background:#0d1d33;color:#e6edf3}
 .galaxy-pending-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
 .galaxy-pending-head strong{display:block;color:#79c0ff;font-size:14px}
@@ -82,7 +84,7 @@
   .galaxy-page-actions{width:100%;justify-content:stretch}
   .galaxy-page-actions .galaxy-btn{flex:1;min-width:0}
   .galaxy-filter-bar{grid-template-columns:minmax(0,1fr) 112px;gap:8px}
-  .galaxy-filter-bar .galaxy-btn{grid-column:1/-1;width:100%}
+  .galaxy-filter-date{grid-column:1/-1}
   .galaxy-task-list{grid-template-columns:minmax(0,1fr)}
   .galaxy-task-card{padding:12px}
   .galaxy-pending-row{grid-template-columns:minmax(0,1fr) max-content}

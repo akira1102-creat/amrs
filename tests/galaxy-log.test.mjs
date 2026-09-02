@@ -70,7 +70,7 @@ class FakeElement {
 }
 
 function fakeGalaxyDocument() {
-  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyPendingPanel", "galaxyLogList"];
+  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogDateFilter", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyPendingPanel", "galaxyLogList"];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
     getElementById(id) { return elements.get(id) || null; },
@@ -338,6 +338,30 @@ test("filters by last four digits and status while retaining exact full serial i
   ];
   assert.equal(filterTasks(tasks, { query: "1190", status: "pending" }).length, 1);
   assert.equal(filterTasks(tasks, { query: "A02-002190", status: "all" })[0].fullSerial, "A02-002190");
+});
+
+test("filters completed and no-log work by the action date", () => {
+  const tasks = [
+    { id: "done", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "2026-09-01", status: "done" },
+    { id: "no-log", fullSerial: "A02-001193", serialLast4: "1193", targetDate: "2026-06-02", completedDate: "2026-09-01", status: "no_log" },
+    { id: "other-day", fullSerial: "A02-001238", serialLast4: "1238", targetDate: "2026-05-04", completedDate: "2026-09-02", status: "done" },
+  ];
+  assert.deepEqual(filterTasks(tasks, { status: "all", actionDate: "2026-09-01" }).map((task) => task.id), ["done", "no-log"]);
+  assert.deepEqual(filterTasks(tasks, { status: "no_log", actionDate: "2026-09-01" }).map((task) => task.id), ["no-log"]);
+});
+
+test("selecting an action date shows the day's completed work", () => {
+  const task = { id: "done", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "2026-09-01", status: "done" };
+  const documentRef = fakeGalaxyDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks: [task], cloudTasks: [task] });
+  const app = createApplication({ document: documentRef, storage, transport: null });
+  app.mount();
+  const dateFilter = documentRef.elements.get("galaxyLogDateFilter");
+  dateFilter.value = "2026-09-01";
+  dateFilter.listeners.get("change")({ target: dateFilter });
+  assert.equal(documentRef.elements.get("galaxyLogStatusFilter").value, "all");
+  assert.match(documentRef.elements.get("galaxyLogList").innerHTML, /A02-001190/);
 });
 
 test("stored state round-trips through the isolated Galaxy storage key", () => {
