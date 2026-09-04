@@ -266,6 +266,22 @@ test("finds current Holding and Waiting Parts states by model and serial", () =>
   ]);
 });
 
+test("submission warnings follow model and serial across casinos and preserve source rows", () => {
+  const rows = [
+    [...BROKEN_PARTS_HEADERS],
+    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "Waiting", hold: "", release: "" }),
+    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "2026/08/02", hold: "2026/08/01", release: "" }),
+    brokenRow({ model: "TAE", serialNo: "9001", repairDay: "Waiting", hold: "2026/08/01", release: "" }),
+    brokenRow({ model: "SAE", serialNo: "9002", repairDay: "Waiting", hold: "", release: "" }),
+    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "2026/08/02", hold: "2026/08/01", release: "2026/08/03" }),
+  ];
+  const warnings = getSubmissionWarningsFromRows(rows, [{ casino: "Parisian", model: "sae", serialNo: "9001" }]);
+  assert.deepEqual(warnings.map(({ rowNumber, casino, holding, waiting }) => ({ rowNumber, casino, holding, waiting })), [
+    { rowNumber: 2, casino: "Venetian", holding: false, waiting: true },
+    { rowNumber: 3, casino: "Venetian", holding: true, waiting: false },
+  ]);
+});
+
 test("filters dashboard rows and computes full-result statistics", () => {
   const rows = [
     ["Venetian", "2026/08/01", "PO-1", "SAE", "7", "Error", "Repair", "D", "B", "I-A", "record-a"],

@@ -496,9 +496,8 @@ export function getSubmissionWarningsFromRows(rows = [], machines = [], options 
   (Array.isArray(machines) ? machines : []).forEach((machine) => {
     const serialNo = gasString(machine?.serialNo ?? machine?.sn).trim();
     const model = gasString(machine?.model).trim().toUpperCase();
-    const casino = gasString(machine?.casino).trim();
     if (!serialNo || !model) return;
-    wanted.set(`${casino.toUpperCase()}\u0000${model}\u0000${serialNo}`, { casino, model, serialNo });
+    wanted.set(`${model}\u0000${serialNo}`, { model, serialNo });
   });
   if (!wanted.size) return [];
   const startRow = Number.isFinite(Number(options.startRow)) ? Number(options.startRow) : 1;
@@ -506,7 +505,7 @@ export function getSubmissionWarningsFromRows(rows = [], machines = [], options 
   (Array.isArray(rows) ? rows : []).forEach((row, index) => {
     if (isBrokenPartsHeader(row) || !Array.isArray(row) || row.every((value) => value === "" || value == null)) return;
     const record = brokenPartsRecordFromRow(row, startRow + index, options.timeZone || DEFAULT_TIME_ZONE);
-    const key = `${gasString(record.casino).trim().toUpperCase()}\u0000${gasString(record.model).trim().toUpperCase()}\u0000${gasString(record.serialNo).trim()}`;
+    const key = `${gasString(record.model).trim().toUpperCase()}\u0000${gasString(record.serialNo).trim()}`;
     const machine = wanted.get(key);
     if (!machine) return;
     const status = brokenPartStatus(row);

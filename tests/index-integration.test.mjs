@@ -75,12 +75,11 @@ test("Galaxy Log stays in its own page and cached assets", () => {
   assert.match(html, /id="galaxyLogMenuBtn"/);
   assert.match(html, /id="galaxyLogPage"/);
   assert.match(html, /showPage\('galaxyLog'\)/);
-  assert.match(html, /xlsx\.mini\.min\.js\?v=20260902d/);
-  assert.match(html, /galaxy-log\.js\?v=20260902d/);
-  assert.match(html, /galaxy-log\.css\?v=20260902d/);
-  assert.match(worker, /xlsx\.mini\.min\.js\?v=20260902d/);
-  assert.match(worker, /galaxy-log\.js\?v=20260902d/);
-  assert.match(worker, /galaxy-log\.css\?v=20260902d/);
+  for (const asset of ['xlsx.mini.min.js', 'galaxy-log.js', 'galaxy-log.css']) {
+    const url = html.match(new RegExp(`(?:href|src)="\\./(${asset.replaceAll('.', '\\.') }\\?v=[^"]+)"`))?.[1];
+    assert.ok(url, `${asset} must have a versioned URL`);
+    assert.ok(worker.includes(`'./${url}'`), `${asset} must use the same cached URL`);
+  }
   assert.match(html, /function ensureGalaxyLogApp\(\)/);
   assert.match(html, /galaxyLog\s*:\s*'galaxyLogPage'/);
   const galaxy = fs.readFileSync(new URL("../galaxy-log.js", import.meta.url), "utf8");

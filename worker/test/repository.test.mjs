@@ -267,14 +267,15 @@ test("reads and updates GEG monthly targets in the GEG workbook", async () => {
   assert.equal(sheet.values[7][2], 120);
 });
 
-test("returns current submission warnings with row identity", async () => {
+test("returns cross-casino submission warnings with original row identity", async () => {
   const harness = createSheetsHarness(companyData);
   const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
   const result = await repository.getAction({
     action: "submissionWarnings",
-    records: [{ company: "SCL", casino: "Venetian", model: "SAE", serialNo: "1234" }],
+    records: [{ company: "SCL", casino: "Parisian", model: "SAE", serialNo: "1234" }],
   });
   assert.equal(result.success, true);
+  assert.equal(result.warnings[0].casino, "Venetian");
   assert.deepEqual(result.warnings.map(({ company, rowNumber, model, serialNo, holding, waiting }) => ({
     company, rowNumber, model, serialNo, holding, waiting,
   })), [{ company: "SCL", rowNumber: 2, model: "SAE", serialNo: "1234", holding: false, waiting: true }]);
