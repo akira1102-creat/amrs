@@ -155,13 +155,45 @@ test("uses the new cloud wording in the Galaxy shell", () => {
   assert.equal(documentRef.elements.get("galaxyImportBtn").textContent, "下載雲端資料");
 });
 
-test("does not download cloud data automatically when the page mounts", async () => {
+test("downloads cloud data once on the first Galaxy mount of each local day", async () => {
   const documentRef = fakeGalaxyDocument();
   const getCalls = [];
-  const app = createApplication({ document: documentRef, storage: new MemoryStorage(), transport: { get: async (query) => { getCalls.push(query); return { success: true, tasks: [], issues: [] }; }, post: async () => ({ success: true, results: [], tasks: [], issues: [] }) } });
+  const storage = new MemoryStorage();
+  const app = createApplication({ document: documentRef, storage, transport: { get: async (query) => { getCalls.push(query); return { success: true, tasks: [], issues: [] }; }, post: async () => ({ success: true, results: [], tasks: [], issues: [] }) } });
   app.mount();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(getCalls, []);
+  assert.equal(getCalls.length, 1);
+  assert.match(getCalls[0], /galaxyLogOverview/);
+  const secondApp = createApplication({ document: fakeGalaxyDocument(), storage, transport: { get: async () => { throw new Error("must not download twice"); }, post: async () => ({}) } });
+  secondApp.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(storage.getItem("_amrs_galaxy_auto_download_day"), new Date().toISOString().slice(0, 10));
+});
+
+test("retries the daily cloud download after a failed first attempt", async () => {
+  const storage = new MemoryStorage();
+  let attempts = 0;
+  const makeApp = () => createApplication({ document: fakeGalaxyDocument(), storage, transport: { get: async () => { attempts += 1; if (attempts === 1) throw new Error("offline"); return { success: true, tasks: [], issues: [] }; }, post: async () => ({}) } });
+  makeApp().mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(storage.getItem("_amrs_galaxy_auto_download_day"), null);
+  makeApp().mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(attempts, 2);
+  assert.equal(storage.getItem("_amrs_galaxy_auto_download_day"), new Date().toISOString().slice(0, 10));
+});
+
+test("replaces stale local rows on the daily refresh but preserves pending field work", async () => {
+  const stale = { id: "stale", fullSerial: "A02-001100", serialLast4: "1100", targetDate: "2026-05-01", completedDate: "", status: "pending" };
+  const pending = { id: "pending", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "2026-09-06", status: "done" };
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks: [stale, pending], cloudTasks: [stale, pending], outbox: [{ mutationId: "m-1", taskId: pending.id, patch: { status: "done", completedDate: pending.completedDate } }] });
+  const documentRef = fakeGalaxyDocument();
+  const app = createApplication({ document: documentRef, storage, transport: { get: async () => ({ success: true, tasks: [{ id: "cloud", fullSerial: "A02-001193", serialLast4: "1193", targetDate: "2026-06-02", completedDate: "", status: "pending" }] }), post: async () => ({}) } });
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(app.getState().tasks.map((task) => task.serialLast4), ["1193", "1190"]);
+  assert.equal(app.getState().outbox.length, 1);
 });
 
 test("clears local tasks and pending changes before downloading the cloud snapshot", async () => {

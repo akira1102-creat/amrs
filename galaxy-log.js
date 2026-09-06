@@ -871,6 +871,40 @@
     let pendingSelectedIds = new Set();
     let searchTimer, visibleLimit = 60, lastFilterKey = '', undoAction = null;
     const cardCache = new Map();
+    const dailyAutoDownloadKey = "_amrs_galaxy_auto_download_day";
+    let dailyAutoDownloadInFlight = false;
+    let dailyAutoDownloadScheduled = false;
+
+    function localDayKey(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function markDailyAutoDownload(day = localDayKey()) {
+      try { storage?.setItem?.(dailyAutoDownloadKey, day); } catch { /* local storage may be unavailable */ }
+    }
+
+    async function autoDownloadCloudForToday() {
+      if (dailyAutoDownloadInFlight || !isOnline() || !transport || typeof transport.get !== "function") return false;
+      const today = localDayKey();
+      try { if (storage?.getItem?.(dailyAutoDownloadKey) === today) return false; } catch { return false; }
+      dailyAutoDownloadInFlight = true;
+      try {
+        const loaded = await loadCloud({ silent: true, replaceLocal: true });
+        if (!loaded) { notify("今日雲端清單未能下載，已保留本機資料", "warn"); return false; }
+        markDailyAutoDownload(today);
+        notify(`✓ 已自動更新今日雲端清單（${state.tasks.length} 筆）`);
+        return true;
+      } finally { dailyAutoDownloadInFlight = false; }
+    }
+
+    function scheduleDailyAutoDownload() {
+      if (dailyAutoDownloadScheduled) return;
+      dailyAutoDownloadScheduled = true;
+      Promise.resolve().then(() => { dailyAutoDownloadScheduled = false; return autoDownloadCloudForToday(); });
+    }
 
     function isOnline() {
       return root?.navigator?.onLine !== false;
@@ -1046,7 +1080,7 @@
       return !!transport && typeof transport.get === "function" && typeof transport.post === "function";
     }
 
-    async function loadCloud({ silent = false } = {}) {
+    async function loadCloud({ silent = false, replaceLocal = false } = {}) {
       if (cloudBusy || !isOnline() || !transport || typeof transport.get !== "function") return false;
       cloudBusy = true;
       render();
@@ -1054,9 +1088,13 @@
         const response = await transport.get("action=galaxyLogOverview&refresh=1", { timeoutMs: 20_000 });
         if (response?.success === false) throw new Error(response.message || "雲端清單讀取失敗");
         const cloudTasks = Array.isArray(response?.tasks) ? response.tasks : [];
-        const merged = mergeCloudTasks(state.tasks, cloudTasks, state.outbox);
+        const currentOutbox = pendingMutations(state);
+        const pendingTaskIds = new Set(currentOutbox.map((mutation) => mutation.taskId));
+        const localTasks = replaceLocal ? state.tasks.filter((task) => pendingTaskIds.has(task.id)) : state.tasks;
+        const localOutbox = replaceLocal ? currentOutbox : state.outbox;
+        const merged = mergeCloudTasks(localTasks, cloudTasks, localOutbox);
         const remaps = new Map(merged.idRemaps.map(({ from, to }) => [from, to]));
-        const outbox = state.outbox.map((mutation) => remaps.has(mutation.taskId) ? { ...mutation, taskId: remaps.get(mutation.taskId) } : { ...mutation });
+        const outbox = localOutbox.map((mutation) => remaps.has(mutation.taskId) ? { ...mutation, taskId: remaps.get(mutation.taskId) } : { ...mutation });
         persist({
           ...state,
           tasks: merged.tasks,
@@ -1090,7 +1128,9 @@
       if (cloudBusy || !isOnline() || !transport || typeof transport.get !== "function") return false;
       clearLocalSnapshot();
       render();
-      return loadCloud();
+      const loaded = await loadCloud();
+      if (loaded) markDailyAutoDownload();
+      return loaded;
     }
 
     function remapTaskId(tasks, fromId, toId) {
@@ -1258,7 +1298,7 @@
         if (before && state.tasks.find(task => task.id === id) !== before) undoAction = { task: before, outbox: beforeOutbox };
         render();
       });
-      root.addEventListener?.("online", render);
+      root.addEventListener?.("online", () => { render(); scheduleDailyAutoDownload(); });
       root.addEventListener?.("offline", render);
     }
 
@@ -1426,6 +1466,7 @@
         mounted = true;
       }
       render();
+      scheduleDailyAutoDownload();
       return true;
     }
 
