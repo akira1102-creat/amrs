@@ -55,6 +55,7 @@
 .galaxy-issues.conflicts summary,.galaxy-issues.conflicts>div{color:#ffb4ab}
 .galaxy-task-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .galaxy-task-card{display:grid;grid-template-columns:minmax(0,1fr) max-content;grid-template-rows:auto auto;gap:10px 12px;min-width:0;padding:13px;border:1px solid #30363d;border-radius:12px;background:#161b22}
+.galaxy-task-card{content-visibility:auto;contain-intrinsic-size:auto 160px}
 .galaxy-task-card.pending{border-left:3px solid #d29922}
 .galaxy-task-card.done{border-left:3px solid #238636}
 .galaxy-task-card.needs_review{border-left:3px solid #9e6a03}

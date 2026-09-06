@@ -700,6 +700,7 @@
     })) : [];
     return {
       version: STATE_VERSION,
+      storageRevision: text(state.storageRevision),
       tasks,
       cloudTasks,
       outbox,
@@ -719,7 +720,14 @@
   function readStoredState(storage = root?.localStorage) {
     try {
       const raw = storage?.getItem?.(STORAGE_KEY);
-      return normalizeState(raw ? JSON.parse(raw) : null);
+      const state = normalizeState(raw ? JSON.parse(raw) : null);
+      let journal;
+      try { journal = JSON.parse(storage?.getItem?.(STORAGE_KEY + ':changes') || 'null'); } catch { return state; }
+      if (journal && journal.revision === state.storageRevision) {
+        const changed = new Map((journal.tasks || []).map(task => [task.id, task]));
+        return normalizeState({ ...state, tasks: state.tasks.map(task => changed.get(task.id) || task), outbox: journal.outbox });
+      }
+      return state;
     } catch {
       return normalizeState(null);
     }
@@ -727,8 +735,18 @@
 
   function writeStoredState(storage, state) {
     const normalized = normalizeState(state);
+    normalized.storageRevision = `${Date.now()}-${Math.random()}`;
     storage?.setItem?.(STORAGE_KEY, JSON.stringify(normalized));
     return normalized;
+  }
+
+  // Persist just changed rows during field work. Full imports/syncs create a new revision.
+  function writeTaskChanges(storage, state, changedTasks) {
+    const previous = JSON.parse(storage?.getItem?.(STORAGE_KEY + ':changes') || 'null');
+    const rows = new Map((previous?.revision === state.storageRevision ? previous.tasks : []).map(task => [task.id, task]));
+    changedTasks.forEach(task => rows.set(task.id, task));
+    storage?.setItem?.(STORAGE_KEY + ':changes', JSON.stringify({ revision: state.storageRevision, tasks: [...rows.values()], outbox: state.outbox }));
+    return state;
   }
 
   function csvCell(value) {
@@ -851,6 +869,8 @@
     let cloudBusy = false;
     let pendingPanelOpen = false;
     let pendingSelectedIds = new Set();
+    let searchTimer, visibleLimit = 60, lastFilterKey = '', undoAction = null;
+    const cardCache = new Map();
 
     function isOnline() {
       return root?.navigator?.onLine !== false;
@@ -858,6 +878,7 @@
 
     function persist(next) {
       state = writeStoredState(storage, next);
+      undoAction = null;
       return state;
     }
 
@@ -885,7 +906,7 @@
     function queueTaskMutation(taskId, patch, baseCompletedDate = "") {
       const current = state.tasks.find((task) => task.id === taskId);
       if (!current) return false;
-      const nextTasks = state.tasks.map((task) => task.id === taskId ? { ...task, ...patch, updatedAt: new Date().toISOString() } : { ...task });
+      const nextTasks = state.tasks.map((task) => task.id === taskId ? { ...task, ...patch, updatedAt: new Date().toISOString() } : task);
       const next = createMutationOutbox({ ...state, tasks: nextTasks }, {
         taskId,
         patch: {
@@ -899,7 +920,11 @@
         },
         baseCompletedDate: baseCompletedDate || current.completedDate,
       });
-      persist(next);
+      try {
+        if (!state.storageRevision) persist(state);
+        next.storageRevision = state.storageRevision;
+        state = writeTaskChanges(storage, next, [nextTasks.find(task => task.id === taskId)]);
+      } catch (error) { notify('未能保存，請檢查本機儲存空間後再試', 'err'); return false; }
       return true;
     }
 
@@ -910,9 +935,10 @@
     }
 
     function pendingEntries() {
+      const byId = new Map(state.tasks.map(task => [task.id, task]));
       return pendingMutations(state).map((mutation) => ({
         mutation,
-        task: state.tasks.find((candidate) => candidate.id === mutation.taskId) || null,
+        task: byId.get(mutation.taskId) || null,
       })).filter((entry) => entry.task);
     }
 
@@ -954,6 +980,7 @@
     function renderPendingPanel() {
       const panel = documentRef.getElementById("galaxyPendingPanel");
       if (!panel) return;
+      if (!pendingPanelOpen) { panel.hidden = true; if (panel.innerHTML) panel.innerHTML = ''; return; }
       const entries = pendingEntries();
       pendingSelectedIds = new Set([...pendingSelectedIds].filter((id) => entries.some((entry) => entry.task.id === id)));
       panel.hidden = !pendingPanelOpen || !entries.length;
@@ -992,7 +1019,9 @@
           <label class="galaxy-filter-date"><span>取 Log／檢查日期</span><input id="galaxyLogDateFilter" type="date" aria-label="篩選取 Log／檢查日期" title="篩選取 Log／檢查日期"></label>
         </div>
         <div id="galaxyLogIssues"></div>
+        <button class="galaxy-btn" id="galaxyUndoBtn" type="button" hidden>撤銷上次操作</button>
         <div id="galaxyLogList" class="galaxy-task-list"></div>
+        <button class="galaxy-btn" id="galaxyMoreBtn" type="button" hidden>顯示更多</button>
       </div>`;
     }
 
@@ -1191,7 +1220,15 @@
       documentRef.getElementById("galaxyExportCsvBtn")?.addEventListener("click", () => {
         try { exportTasksCsv(state.tasks, documentRef); notify("✓ 已匯出 CSV"); } catch (error) { notify(error.message || "CSV 匯出失敗", "err"); }
       });
-      documentRef.getElementById("galaxyLogSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; render(); });
+      documentRef.getElementById("galaxyLogSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(render, 120); });
+      documentRef.getElementById('galaxyMoreBtn')?.addEventListener('click', () => { visibleLimit += 60; render(); });
+      documentRef.getElementById('galaxyUndoBtn')?.addEventListener('click', () => {
+        if (!undoAction || cloudBusy) return;
+        const { task, outbox } = undoAction;
+        const next = { ...state, tasks: state.tasks.map(row => row.id === task.id ? task : row), outbox: [...state.outbox.filter(row => row.taskId !== task.id), ...outbox] };
+        try { state = writeTaskChanges(storage, next, [task]); undoAction = null; render(); notify('已撤銷上次操作'); }
+        catch { notify('撤銷未能保存，請重試', 'err'); }
+      });
       documentRef.getElementById("galaxyLogStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; render(); });
       documentRef.getElementById("galaxyLogDateFilter")?.addEventListener("change", (event) => {
         filter.actionDate = event.target.value;
@@ -1199,10 +1236,13 @@
         render();
       });
       documentRef.getElementById("galaxyLogList")?.addEventListener("click", (event) => {
+        if (cloudBusy || busy) return;
         const button = event.target.closest("button[data-galaxy-action]");
         if (!button) return;
         const id = button.dataset.galaxyId;
         const action = button.dataset.galaxyAction;
+        const before = state.tasks.find(task => task.id === id);
+        const beforeOutbox = state.outbox.filter(row => row.taskId === id);
         if (action === "complete") {
           const current = state.tasks.find((task) => task.id === id);
           const completedDate = isoFromDate(new Date());
@@ -1215,6 +1255,7 @@
           const current = state.tasks.find((task) => task.id === id);
           if (current && queueTaskMutation(id, { status: "pending", completedDate: "" }, current.completedDate)) notify("已改回未取（待同步）");
         }
+        if (before && state.tasks.find(task => task.id === id) !== before) undoAction = { task: before, outbox: beforeOutbox };
         render();
       });
       root.addEventListener?.("online", render);
@@ -1304,6 +1345,12 @@
       const page = documentRef?.getElementById?.("galaxyLogPage");
       if (!page || !mounted) return;
       const tasks = filterTasks(state.tasks, filter);
+      const filterKey = JSON.stringify(filter);
+      if (filterKey !== lastFilterKey) { visibleLimit = 60; lastFilterKey = filterKey; }
+      const undo = documentRef.getElementById('galaxyUndoBtn');
+      if (undo) { undo.hidden = !undoAction; undo.disabled = cloudBusy; }
+      const more = documentRef.getElementById('galaxyMoreBtn');
+      if (more) { more.hidden = tasks.length <= visibleLimit; more.textContent = `顯示更多（已顯示 ${Math.min(visibleLimit, tasks.length)} / ${tasks.length}）`; }
       const counts = state.tasks.reduce((result, task) => { result[task.status] = (result[task.status] || 0) + 1; return result; }, {});
       const summary = documentRef.getElementById("galaxyLogSummary");
       const importedAt = formatLocalDateTime(state.importedAt);
@@ -1346,7 +1393,7 @@
         list.innerHTML = state.tasks.length ? `<div class="galaxy-empty">沒有符合目前篩選的任務。</div>` : `<div class="galaxy-empty"><strong>尚未有 Galaxy 清單</strong><span>按「下載雲端資料」讀取 Google Sheet；之後帶 Surface 到現場即可離線使用。</span></div>`;
         return;
       }
-      list.innerHTML = tasks.map((task) => `<article class="galaxy-task-card ${escapeHtml(task.status)}">
+      const markup = tasks.slice(0, visibleLimit).map((task) => `<article data-task-id="${escapeHtml(task.id)}" class="galaxy-task-card ${escapeHtml(task.status)}">
         <div class="galaxy-task-main">
           <div class="galaxy-task-serial">${escapeHtml(task.serialLast4 || serialLast4(task.fullSerial))} <span>完整 SN ${escapeHtml(task.fullSerial)}</span>${task.duplicateIndex ? '<em>疑似重覆</em>' : ""}</div>
           <div class="galaxy-task-target">指定 Log 日期 <strong>${escapeHtml(task.targetDate.replace(/-/g, "/"))}</strong></div>
@@ -1355,6 +1402,19 @@
         <div class="galaxy-task-state"><span class="galaxy-state-badge ${escapeHtml(task.status)}">${escapeHtml(STATUS_LABELS[task.status] || task.status)}</span>${task.completedDate ? `<span class="galaxy-complete-date">${task.status === "no_log" ? "檢查日期" : "取 Log"}：${escapeHtml(task.completedDate.replace(/-/g, "/"))}</span>` : ""}</div>
         <div class="galaxy-task-actions">${task.status === "done" || task.status === "no_log" ? `<button class="galaxy-btn small" data-galaxy-action="reopen" data-galaxy-id="${escapeHtml(task.id)}" type="button">改回未取</button>` : `<button class="galaxy-btn complete" data-galaxy-action="complete" data-galaxy-id="${escapeHtml(task.id)}" type="button">✓ 已取 Log</button><button class="galaxy-btn no-log" data-galaxy-action="no-log" data-galaxy-id="${escapeHtml(task.id)}" type="button">沒有當天 Log</button>`}</div>
       </article>`).join("");
+      if (!documentRef.createElement || !list.replaceChildren) { list.innerHTML = markup; return; }
+      const template = documentRef.createElement('template');
+      template.innerHTML = markup;
+      const nodes = [...template.content.children].map(node => {
+        const id = node.dataset.taskId, previous = cardCache.get(id);
+        if (previous?.outerHTML === node.outerHTML) return previous;
+        cardCache.set(id, node); return node;
+      });
+      const wanted = new Set(nodes);
+      [...list.children].forEach(node => { if (!wanted.has(node)) node.remove(); });
+      nodes.forEach((node, index) => { if (list.children[index] !== node) list.insertBefore(node, list.children[index] || null); });
+      const ids = new Set(nodes.map(node => node.dataset.taskId));
+      for (const id of cardCache.keys()) if (!ids.has(id)) cardCache.delete(id);
     }
 
     function mount() {
@@ -1375,6 +1435,7 @@
       importFile,
       loadCloud,
       syncCloud,
+      isBusy: () => busy || cloudBusy,
       getState: () => normalizeState(state),
       setFilter: (next) => { filter = { ...filter, ...(next || {}) }; render(); },
     };

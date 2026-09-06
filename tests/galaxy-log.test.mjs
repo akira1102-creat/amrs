@@ -70,13 +70,55 @@ class FakeElement {
 }
 
 function fakeGalaxyDocument() {
-  const ids = ["galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogDateFilter", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyPendingPanel", "galaxyLogList"];
+  const ids = ["galaxyUndoBtn", "galaxyMoreBtn", "galaxyLogPage", "galaxySyncBtn", "galaxyImportBtn", "galaxyCsvImportBtn", "galaxyCsvFileInput", "galaxyExportCsvBtn", "galaxyLogSearch", "galaxyLogStatusFilter", "galaxyLogDateFilter", "galaxyLogSummary", "galaxyLogOfflineBadge", "galaxyLogStatus", "galaxyLogIssues", "galaxyPendingPanel", "galaxyLogList"];
   const elements = new Map(ids.map((id) => [id, new FakeElement(id)]));
   return {
     getElementById(id) { return elements.get(id) || null; },
     elements,
   };
 }
+
+test('field actions persist only a journal, survive reopening, export latest values and undo', () => {
+  const storage = new MemoryStorage();
+  const task = { id:'test-one', fullSerial:'TEST-9001', targetDate:'2026-09-01', status:'pending', completedDate:'' };
+  writeStoredState(storage, { tasks:[task], cloudTasks:[task], outbox:[] });
+  const snapshot = storage.getItem(galaxyModule.STORAGE_KEY);
+  const document = fakeGalaxyDocument();
+  const app = createApplication({ document, storage }); app.mount();
+  document.getElementById('galaxyLogList').listeners.get('click')({ target:{ closest:()=>({dataset:{galaxyId:'test-one',galaxyAction:'no-log'}}) } });
+  assert.equal(storage.getItem(galaxyModule.STORAGE_KEY), snapshot);
+  assert.equal(readStoredState(storage).tasks[0].status, 'no_log');
+  assert.match(tasksToCsv(app.getState().tasks), /no_log|已檢查無log|沒有當天/);
+  assert.equal(app.getState().tasks[0].completedDate, readStoredState(storage).tasks[0].completedDate);
+  document.getElementById('galaxyUndoBtn').listeners.get('click')();
+  assert.equal(readStoredState(storage).tasks[0].status, 'pending');
+  assert.equal(readStoredState(storage).outbox.length, 0);
+  writeStoredState(storage, { tasks:[{...task,status:'done',completedDate:'2026-09-03'}] });
+  assert.equal(readStoredState(storage).tasks[0].status, 'done', 'old journal must not override a replacement snapshot');
+});
+
+test('large Galaxy lists show 60 initially and allow more without dropping export rows', () => {
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { tasks:Array.from({length:150},(_,i)=>({id:`test-${i}`,fullSerial:`TEST-${9000+i}`,targetDate:'2026-09-01',status:'pending'})) });
+  const document = fakeGalaxyDocument();
+  const app = createApplication({document,storage});app.mount();
+  assert.equal((document.getElementById('galaxyLogList').innerHTML.match(/<article /g)||[]).length,60);
+  document.getElementById('galaxyMoreBtn').listeners.get('click')();
+  assert.equal((document.getElementById('galaxyLogList').innerHTML.match(/<article /g)||[]).length,120);
+  assert.equal(tasksToRows(app.getState().tasks).length,151);
+  app.setFilter({query:'9001'});
+  assert.equal((document.getElementById('galaxyLogList').innerHTML.match(/<article /g)||[]).length,1);
+});
+
+test('failed incremental save leaves the current task unchanged', () => {
+  const storage = new MemoryStorage();
+  writeStoredState(storage,{tasks:[{id:'test-one',fullSerial:'TEST-9001',targetDate:'2026-09-01',status:'pending'}]});
+  const document=fakeGalaxyDocument(),app=createApplication({document,storage});app.mount();
+  storage.setItem=()=>{throw new Error('full');};
+  document.getElementById('galaxyLogList').listeners.get('click')({target:{closest:()=>({dataset:{galaxyId:'test-one',galaxyAction:'complete'}})}});
+  assert.equal(app.getState().tasks[0].status,'pending');
+  assert.match(document.getElementById('galaxyLogStatus').textContent,/未能保存/);
+});
 
 test("exports CSV with the complete SN first and last four digits second", () => {
   const tasks = [{ fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending", note: "" }];

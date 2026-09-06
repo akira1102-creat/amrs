@@ -7,11 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260904a">
+  <link rel="manifest" href="manifest.json?v=20260906a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260904a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260904a">
+  <link rel="stylesheet" href="./cvcs.css?v=20260906a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260906a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1561,6 +1561,7 @@
         <button class="monthly-refresh" id="monthlyStatsRefreshBtn" onclick="loadMonthlyStats(true)" type="button">重新整理</button>
       </div>
     </div>
+    <p id="monthlyStatsStatus" role="status" style="color:#8b949e;font-size:12px"></p>
     <div class="monthly-company-grid" id="monthlyStatsGrid"><div class="dash-mobile-empty">正在載入資料...</div></div>
   </div>
 </div><!-- /monthlyStatsPage -->
@@ -1667,18 +1668,18 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260904a"></script>
-<script src="./access-control.js?v=20260904a"></script>
-<script src="./cvcs.js?v=20260904a"></script>
-<script src="./token-admin.js?v=20260904a"></script>
-<script src="./xlsx.mini.min.js?v=20260904a"></script>
-<script src="./galaxy-log.js?v=20260904a"></script>
+<script src="./cloud-api.js?v=20260906a"></script>
+<script src="./access-control.js?v=20260906a"></script>
+<script src="./cvcs.js?v=20260906a"></script>
+<script src="./token-admin.js?v=20260906a"></script>
+<script src="./xlsx.mini.min.js?v=20260906a"></script>
+<script src="./galaxy-log.js?v=20260906a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.04-01';
-const _APP_VERSION='v1.099';
+const _APP_BUMP='2026.09.06-01';
+const _APP_VERSION='v1.100';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2124,6 +2125,7 @@ function ensureGalaxyLogApp(){
 }
 async function refreshAccessSession(){
   if(!_dualTransport)return false;
+  const token=showLoadingProgress(navigator.onLine?'正在驗證連線及使用權限…':'目前離線，正在檢查連線…');
   try{
     await _dualTransport.ensureSession({forceRefresh:true});
     _accessPermissions=_dualTransport.getState().permissions||[];
@@ -2134,9 +2136,9 @@ async function refreshAccessSession(){
     _accessPermissions=[];applyAccessPermissions();
     document.body.classList.add('auth-locked');
     openGasSettings();
-    const result=document.getElementById('setupTestResult');result.className='setupTestResult err';result.textContent='Token 已失效或暫時無法驗證，請聯絡管理員。';result.style.display='block';
+    const result=document.getElementById('setupTestResult');result.className='setupTestResult err';result.textContent='暫時未能驗證，請確認連線後重試；持續失敗先檢查 Token。';result.style.display='block';
     return false;
-  }
+  }finally{hideLoadingProgress(token);}
 }
 function applyAccessPermissions(){
   const ae=hasAccess('ae'),cvcs=hasAccess('cvcs'),schedule=hasAccess('schedule'),admin=hasAccess('admin');
@@ -2174,6 +2176,8 @@ function showPage(page){
   if(page!=='schedule')_scheduleMachineCountsRequest?.controller.abort();
   if(page!=='monthlyStats')_monthlyStatsRequest?.abort();
   if(page!=='input'&&document.getElementById('snPad').classList.contains('show'))hideSnPad();
+  _pageScroll.set(activePage,window.scrollY);
+  if(activePage==='input')saveInputDraft();
   activePage=page;
   document.body.classList.toggle('dashboard-view',page!=='input');
   const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',galaxyLog:'galaxyLogPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage'};
@@ -2190,7 +2194,7 @@ function showPage(page){
   renderCompanyMenu();
   renderCvcsPropertyMenu();
   closeMenu();
-  if(page==='dashboard')initDashboardFilters();
+  // Keep the user's existing query, page and results when returning.
   if(page==='schedule')loadScheduleOverview(scheduleShouldForceDailyRefresh());
   if(page==='monthlyStats')loadMonthlyStats();
   if(page==='partsList')loadPartsListPage();
@@ -2204,6 +2208,7 @@ function showPage(page){
     if(page==='cvcsBroken')_cvcsApp.loadBroken(1);
   }
   if(page==='tokenAdmin'){ensureFeatureApps();_tokenAdminApp.mount();}
+  requestAnimationFrame(()=>window.scrollTo(0,_pageScroll.get(page)||0));
 }
 const SCHEDULE_CACHE_PREFIX='_amrs_schedule_overview_v4_',SCHEDULE_LATEST_CACHE_KEY='_amrs_schedule_overview_latest_v3',SCHEDULE_DAILY_REFRESH_KEY='_amrs_schedule_refresh_0830_v1';
 const SCHEDULE_INITIAL_DAYS=8,SCHEDULE_EXTENDED_DAYS=35;
@@ -2779,27 +2784,35 @@ async function loadMonthlyStats(force=false,requestedMonth=''){
   if(!isMonthlyStatsMonthCode(monthCode))return;
   _monthlyStatsMonth=monthCode;syncMonthlyStatsMonthUi();
   const grid=document.getElementById('monthlyStatsGrid'),btn=document.getElementById('monthlyStatsRefreshBtn'),cacheEntry=getCachedMonthlyStatsEntry(monthCode),cached=cacheEntry?.data||null;
+  const status=document.getElementById('monthlyStatsStatus');
+  const lastUpdate=cacheEntry?.savedAt?new Date(cacheEntry.savedAt).toLocaleString('zh-HK'):'';
+  status.textContent=lastUpdate?`上次更新：${lastUpdate}`:'正在載入…';
   if(cached)renderMonthlyStatsData(cached);else grid.innerHTML='<div class="dash-mobile-empty">正在載入六間公司資料...</div>';
   if(!force&&cacheEntry?.savedAt&&Date.now()-cacheEntry.savedAt<MONTHLY_STATS_CACHE_FRESH_MS){btn.disabled=false;btn.textContent='重新整理';return;}
   _monthlyStatsRequest?.abort();const controller=new AbortController();_monthlyStatsRequest=controller;
-  btn.disabled=true;btn.textContent=cached&&!force?'更新中...':'載入中...';
+  btn.disabled=true;btn.textContent=cached?'更新中...':'載入中...';
+  status.textContent=cached?`背景更新中 · 上次更新：${lastUpdate}`:'正在載入…';
   const loadingToken=cached&&!force?null:showLoadingProgress(cached?'每月統計更新中，請稍等...':'每月統計載入中，請稍等...');
   try{
     const suffix=force?'&refresh=1':'';
     const data=await fetchJsonWithTimeout(`${url}?action=monthlyStats&month=${monthCode}${suffix}`,{signal:controller.signal},45000);
     if(!data.success||!Array.isArray(data.companies))throw new Error(data.message||'載入失敗');
     localStorage.setItem(monthlyStatsCacheStorageKey(monthCode),JSON.stringify({savedAt:Date.now(),data}));renderMonthlyStatsData(data);
+    status.textContent=`更新於 ${new Date().toLocaleString('zh-HK')}`;
   }catch(e){
     if(e.name==='AbortError')return;
     if(!cached)grid.innerHTML=`<div class="dash-mobile-empty">${esc(e.message||'無法載入每月統計')}</div>`;
+    status.textContent=cached?`更新失敗，顯示上次資料（${lastUpdate}）。請按重新整理重試。`:'載入失敗，請按重新整理重試。';
   }finally{if(loadingToken)hideLoadingProgress(loadingToken);if(_monthlyStatsRequest===controller){_monthlyStatsRequest=null;btn.disabled=false;btn.textContent='重新整理';}}
 }
 function selectCompany(company){
+  saveInputDraft();
   const prev={company:activeCompany,page:activePage};
   switchQueueCompany(company);
   document.getElementById('activeCompanyLabel').textContent=company;
   syncCompanySpecificFields();
   syncCasinoOptions();
+  restoreInputDraft();
   loadTemplateMappings();
   showPage('input');renderCompanyMenu();
   if(!hasCredentialForCompany(company))openGasSettings({returnState:prev});else loadTodayRecords();
@@ -4506,16 +4519,21 @@ async function collectRecentDuplicateWarnings(){
     groups.get(key).serialNos.add(String(item.sn||'').trim());
   });
   const warnings=[];
+  const checks=[];
   for(const group of groups.values()){
     const serialNos=[...group.serialNos].filter(Boolean);
     for(let offset=0;offset<serialNos.length;offset+=50){
-      const duplicates=await fetchDuplicateFaults(serialNos.slice(offset,offset+50),group.reason,group.company,group.date,group.model);
+      const chunk=serialNos.slice(offset,offset+50);
+      checks.push(async()=>{
+      const duplicates=await fetchDuplicateFaults(chunk,group.reason,group.company,group.date,group.model);
       Object.entries(duplicates).forEach(([serialNo,value])=>{
         const count=duplicateCount(value);
         if(count>0)warnings.push(`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆相同非 PM 記錄（${group.reason}）`);
       });
+      });
     }
   }
+  for(let offset=0;offset<checks.length;offset+=3)await Promise.all(checks.slice(offset,offset+3).map(check=>check()));
   return [...new Set(warnings)];
 }
 
@@ -4788,10 +4806,15 @@ function deleteQueueSelection(){
   const idxs=[...selectedQueueIdxs].filter(i=>queue[i]).sort((a,b)=>b-a);
   if(!idxs.length){showToast('請先選擇記錄','err');return;}
   if(!confirm(`確定刪除已選擇的 ${idxs.length} 筆待提交記錄？`))return;
+  const removed=idxs.map(index=>({index,item:queue[index]})),company=activeCompany;
   if(editingIdx>=0&&selectedQueueIdxs.has(editingIdx)){editingIdx=-1;editTemp=null;}
   idxs.forEach(i=>queue.splice(i,1));
   selectedQueueIdxs.clear();
-  saveQueue();renderQueue();showToast(`✓ 已刪除 ${idxs.length} 筆待提交記錄`);
+  saveQueue();renderQueue();showUndoNotice(`已刪除 ${idxs.length} 筆待提交記錄`,()=>{
+    if(company!==activeCompany||isSubmitting)return false;
+    removed.sort((a,b)=>a.index-b.index).forEach(({index,item})=>{if(!queue.some(row=>row.submissionId===item.submissionId))queue.splice(Math.min(index,queue.length),0,item);});
+    saveQueue();renderQueue();return true;
+  });
 }
 function bulkSetModel(model){
   const idxs=[...selectedQueueIdxs].filter(i=>queue[i]);
@@ -4801,10 +4824,16 @@ function bulkSetModel(model){
   saveQueue();renderQueue();showToast(`✓ 已將 ${idxs.length} 筆記錄改為 ${model}`);
 }
 function removeFromQueue(i){
+  const removed=queue[i],company=activeCompany;if(!removed)return;
   if(editingIdx===i){editingIdx=-1;editTemp=null;}
   queue.splice(i,1);
   selectedQueueIdxs=new Set([...selectedQueueIdxs].filter(idx=>idx!==i).map(idx=>idx>i?idx-1:idx));
   saveQueue();renderQueue();
+  showUndoNotice('已移除待提交記錄',()=>{
+    if(company!==activeCompany||isSubmitting)return false;
+    if(!queue.some(item=>item.submissionId===removed.submissionId))queue.splice(Math.min(i,queue.length),0,removed);
+    saveQueue();renderQueue();return true;
+  });
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
 function updateSnPadQueue(){
@@ -5024,8 +5053,9 @@ async function loadDashboard(page=1){
   const summary=document.getElementById('dashSummary');
   currentDashboardCompany=venueFilter.company;
   document.body.classList.toggle('dashboard-geg',currentDashboardCompany==='GEG');
-  rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入中...</td></tr>`;
-  document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
+  const hadResults=dashboardRecords.length>0;
+  if(!hadResults){rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入中...</td></tr>`;
+  document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';}
   updateDashboardPager();
   summary.textContent='正在載入記錄...';
   if(page===1){dashboardSelectedRecords.clear();updateDashboardSelectionTools();}
@@ -5047,7 +5077,7 @@ async function loadDashboard(page=1){
     pageSize:String(dashboardPageSize)
   });
   dashboardLastQuery=Object.fromEntries(qs.entries());
-  const loadingToken=showLoadingProgress('維修記錄載入中，請稍等...');
+  const loadingToken=hadResults?null:showLoadingProgress('維修記錄載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:dashboardRequest.signal},60000);
     if(!data.success){throw new Error(data.message||'載入失敗');}
@@ -5061,14 +5091,16 @@ async function loadDashboard(page=1){
     summary.textContent=searchText
       ?`🔍 ${fuzzy?searchText:`Serial No. ${searchText}`} 共找到 ${dashboardTotalMatches} 筆記錄`
       :`共找到 ${dashboardTotalMatches} 筆記錄`;
+    summary.textContent+=` · 更新於 ${new Date().toLocaleTimeString('zh-HK',{hour:'2-digit',minute:'2-digit'})}`;
   }catch(e){
     if(e.name==='AbortError')return;
-    rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入記錄失敗。</td></tr>`;
-    document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入記錄失敗。</div>';
+    if(!hadResults){rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入記錄失敗。</td></tr>`;
+    document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入記錄失敗。</div>';}
     updateDashboardPager();
-    summary.textContent='載入失敗';
+    summary.textContent=hadResults?'更新失敗，顯示上次查詢結果。':'載入失敗';
+    const retry=document.createElement('button');retry.type='button';retry.textContent='重試';retry.onclick=()=>loadDashboard(page);summary.appendChild(retry);
     showToast('資料查詢載入失敗','err');
-  }finally{hideLoadingProgress(loadingToken);}
+  }finally{if(loadingToken)hideLoadingProgress(loadingToken);}
 }
 async function loadDashboardPartsHistory(stats,history,signal){
   try{
@@ -5720,27 +5752,24 @@ async function submitAll(){
   if(_submitCheckBusy)return;
   _submitCheckBusy=true;
   syncSubmitButtonState();
-  const duplicateCheckToken=showLoadingProgress('正在檢查最近 30 日重複記錄，請稍等...');
-  try{
-    warnings.push(...await collectRecentDuplicateWarnings());
-  }catch(error){
-    showToast(error.message||'無法完成重複檢查，暫未開啟提交確認','err');
-    return;
-  }finally{
-    hideLoadingProgress(duplicateCheckToken);
-    _submitCheckBusy=false;
-    syncSubmitButtonState();
-  }
-  _submitCheckBusy=true;
-  syncSubmitButtonState();
-  const stateCheckToken=showLoadingProgress('正在檢查 Holding／等待零件狀態，請稍等...');
+  const duplicateCheckToken=showLoadingProgress('提交檢查：重複記錄檢查中 · 等件／Holding 檢查中');
+  let duplicateDone=false,stateDone=false;
+  const updateCheckProgress=()=>{
+    duplicateCheckToken.message=`提交檢查：重複記錄${duplicateDone?'已完成':'檢查中'} · 等件／Holding ${stateDone?'已完成':'檢查中'}`;
+    document.getElementById('loadingProgressText').textContent=duplicateCheckToken.message;
+  };
   let stateWarnings=[];
   try{
-    stateWarnings=await collectSubmissionWarnings();
-  }catch(error){
-    warnings.push(`未能完成 Holding／等待零件檢查：${error.message||'請稍後再試'}`);
+    const [duplicates,states]=await Promise.allSettled([
+      collectRecentDuplicateWarnings().finally(()=>{duplicateDone=true;updateCheckProgress();}),
+      collectSubmissionWarnings().finally(()=>{stateDone=true;updateCheckProgress();})
+    ]);
+    if(duplicates.status==='rejected'){showToast(duplicates.reason?.message||'無法完成重複檢查，請重試','err');return;}
+    warnings.push(...duplicates.value);
+    if(states.status==='fulfilled')stateWarnings=states.value;
+    else warnings.push(`未能完成 Holding／等待零件檢查：${states.reason?.message||'請稍後再試'}`);
   }finally{
-    hideLoadingProgress(stateCheckToken);
+    hideLoadingProgress(duplicateCheckToken);
     _submitCheckBusy=false;
     syncSubmitButtonState();
   }
@@ -5853,7 +5882,75 @@ async function doSubmit(){
     isSubmitting=false;
   }
 }
-function showToast(msg,type){const el=document.getElementById('toast');el.textContent=msg;el.className='toast'+(type?' '+type:'')+' show';setTimeout(()=>el.className='toast'+(type?' '+type:''),2800);}
+let _toastTimer;
+function showToast(msg,type){const el=document.getElementById('toast');clearTimeout(_toastTimer);el.textContent=msg;el.className='toast'+(type?' '+type:'')+' show';_toastTimer=setTimeout(()=>el.className='toast'+(type?' '+type:''),2800);}
+function showUndoNotice(message,undo){
+  showToast(message);clearTimeout(_toastTimer);
+  const button=document.createElement('button');button.type='button';button.textContent='撤銷';button.style.marginLeft='12px';
+  button.onclick=()=>{if(undo()!==false)showToast('已撤銷');else showToast('請返回原公司並停止提交後重試','warn');};
+  document.getElementById('toast').appendChild(button);
+  _toastTimer=setTimeout(()=>document.getElementById('toast').classList.remove('show'),12000);
+}
+
+let _draftTimer,_draftRestoring=false,_draftReady=false;
+const _pageScroll=new Map();
+function saveInputDraft(){
+  if(!_draftReady||_draftRestoring)return true;
+  try{
+    captureEditTemp();
+    const fields={};
+    document.querySelectorAll('#inputPage input[id],#inputPage select[id],#inputPage textarea[id]').forEach(el=>{
+      if(!['file','password','button','submit'].includes(el.type)&&!el.id.startsWith('eq-')&&!/^(sclMonthly|gegMonthly)/.test(el.id))fields[el.id]={value:el.value,checked:el.checked};
+    });
+    const pairs=[...document.querySelectorAll('#batchPairRows .batch-pair-row')].map(row=>({sn:row.querySelector('.batch-pair-sn').value,detail:row.querySelector('.batch-pair-detail').value}));
+    const styles={};['actionDropRow','actionCustomRow','bpFields','bpRemarkFields','bpPartDetails'].forEach(id=>{const el=document.getElementById(id);if(el)styles[id]=el.style.display;});
+    localStorage.setItem('_amrs_input_draft_'+activeCompany,JSON.stringify({fields,pairs,styles,optionalVisible,batchMode:_batchMode,repairMode:_bpRepairDayMode,uodMode:_bpUodUnlockMode,holdActive:_bpHoldActive,poMode:_poRepairMode,poSelected:_poRepairSelected,poRecords:_poRepairRecords,editId:queue[editingIdx]?.submissionId,editTemp,savedAt:Date.now()}));
+    return true;
+  }catch{showToast('草稿未能保存，請檢查本機儲存空間','err');return false;}
+}
+function restoreInputDraft(){
+  if(!_draftReady)return;
+  _draftRestoring=true;
+  try{
+    const draft=JSON.parse(localStorage.getItem('_amrs_input_draft_'+activeCompany)||'null');if(!draft)return;
+    if(Boolean(draft.batchMode)!==_batchMode)toggleBatch();
+    Object.entries(draft.fields||{}).forEach(([id,value])=>{
+      const el=document.getElementById(id);if(!el||!el.closest('#inputPage')||['file','password'].includes(el.type))return;
+      if(el.tagName==='SELECT'&&value.value&&![...el.options].some(option=>option.value===value.value))el.add(new Option(value.value,value.value));
+      el.value=value.value;el.checked=Boolean(value.checked);
+    });
+    optionalVisible=Boolean(draft.optionalVisible);document.getElementById('optionalFields').classList.toggle('vis',optionalVisible);
+    document.getElementById('optToggleBtn').textContent=(optionalVisible?'▲ ':'▼ ')+'Check Request (錯誤描述 / Box ID)';
+    Object.entries(draft.styles||{}).forEach(([id,value])=>{const el=document.getElementById(id);if(el)el.style.display=value;});
+    _bpRepairDayMode=draft.repairMode||'none';
+    _bpUodUnlockMode=draft.uodMode||'none';_bpHoldActive=Boolean(draft.holdActive);
+    [['bpRepairDayBtn',_bpRepairDayMode==='waiting'],['bpUodWaitBtn',_bpUodUnlockMode==='waiting'],['bpHoldBtn',_bpHoldActive]].forEach(([id,active])=>{const el=document.getElementById(id);el.classList.toggle('active',active);el.setAttribute('aria-pressed',String(active));});
+    syncBpUodActivationHint();
+    _poRepairMode=Boolean(draft.poMode);_poRepairSelected=draft.poSelected||null;_poRepairRecords=draft.poRecords||[];
+    document.getElementById('poRepairPanel').classList.toggle('show',_poRepairMode);
+    document.getElementById('actionCustom').readOnly=_poRepairMode;
+    if(_poRepairMode)renderPoRepairRows();
+    if(draft.batchMode&&draft.pairs?.length){document.getElementById('batchPairRows').replaceChildren();draft.pairs.forEach(pair=>addBatchPairRow(false,pair));}
+    editingIdx=draft.editId?queue.findIndex(item=>item.submissionId===draft.editId):-1;
+    editTemp=editingIdx>=0?draft.editTemp:null;if(editingIdx>=0)renderQueue();
+    updateSnPadDisplay();
+  }catch{showToast('未能還原輸入草稿','warn');}finally{_draftRestoring=false;}
+}
+let _updatePending=false;
+function applySafeUpdate(){
+  if(!_updatePending||isSubmitting||_submitCheckBusy||_galaxyLogApp?.isBusy?.()||document.querySelector('#confirmModal.show,#submitWarningModal.show'))return;
+  if(dashboardEditingIdx>=0||document.querySelector('[id$="Modal"].show')){showToast('請先完成或取消目前編輯，再更新','warn');return;}
+  if(!saveInputDraft())return;
+  window.location.reload();
+}
+function offerSafeUpdate(){
+  _updatePending=true;
+  const bar=document.getElementById('appUpdateNotice')||document.createElement('div');
+  bar.id='appUpdateNotice';bar.style.cssText='position:fixed;bottom:12px;left:12px;z-index:99999;background:#161b22;color:#eee;border:1px solid #388bfd;padding:10px;border-radius:10px';
+  bar.textContent='新版已就緒，輸入草稿會保留。';
+  const button=document.createElement('button');button.textContent='儲存草稿並更新';button.onclick=applySafeUpdate;bar.appendChild(button);document.body.appendChild(bar);
+  if(['schedule','monthlyStats'].includes(activePage)&&!isSubmitting&&!_submitCheckBusy&&!document.querySelector('input:focus,textarea:focus,select:focus,[id$="Modal"].show'))applySafeUpdate();
+}
 function addQueueOnFieldEnter(e){
   if(e.key!=='Enter'||e.isComposing)return;
   e.preventDefault();
@@ -5903,7 +6000,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
     if(!hadController||reloadedForUpdate)return;
     reloadedForUpdate=true;
-    window.location.reload();
+    offerSafeUpdate();
   });
   navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(registration=>{
     const activate=worker=>{if(worker)worker.postMessage({type:'SKIP_WAITING'});};
@@ -5939,6 +6036,15 @@ document.addEventListener('visibilitychange',()=>{
 if(queue.length>0){renderQueue();setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
 _renderStats();
 _updateRetryNotice();
+_draftReady=true;
+restoreInputDraft();
+const queueDraftSave=()=>{clearTimeout(_draftTimer);_draftTimer=setTimeout(saveInputDraft,200);};
+document.getElementById('inputPage').addEventListener('input',queueDraftSave);
+document.getElementById('inputPage').addEventListener('change',queueDraftSave);
+document.getElementById('inputPage').addEventListener('click',queueDraftSave);
+document.getElementById('snPad').addEventListener('click',queueDraftSave);
+window.addEventListener('pagehide',saveInputDraft);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveInputDraft();});
 </script>
 </body>
 </html>
