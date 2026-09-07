@@ -150,3 +150,27 @@ test("GEG input exposes a collapsible monthly target settings card", () => {
   assert.match(html, /function saveGegMonthlySettings\(/);
   assert.match(html, /action:'updateMonthlySettings',company:'GEG'/);
 });
+
+test("input pages automatically download list data only when it is missing", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const loader = html.match(/function autoLoadMissingInputLists\(\)\{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.match(loader, /activePage!=='input'\|\|!navigator\.onLine\|\|!getScriptUrl\(\)/);
+  assert.match(loader, /activeCompany==='SCL'&&!_sclMonthlySettingsLoaded/);
+  assert.match(loader, /loadSclMonthlySettings\(false,true\)/);
+  assert.match(loader, /activeCompany==='GEG'&&!_gegMonthlySettingsLoaded/);
+  assert.match(loader, /loadGegMonthlySettings\(false,true\)/);
+  assert.match(loader, /activeCompany==='MGM'&&!_aaTags\.length/);
+  assert.match(loader, /fetchAaTags\(undefined,true\)/);
+  assert.match(loader, /!_partsCodes\.length/);
+  assert.match(loader, /fetchPartsCodes\(true\)/);
+  assert.match(html, /if\(page==='input'\)autoLoadMissingInputLists\(\)/);
+  assert.match(html, /addEventListener\('online',\(\)=>\{if\(activePage==='input'\)autoLoadMissingInputLists\(\);\}\)/);
+});
+
+test("automatic AA Tag and parts downloads reuse requests already in progress", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /let _aaTags=\[\],_aaBySerial=\{\},_serialByAaTag=\{\},_aaTagsRequest=null/);
+  assert.match(html, /if\(_aaTagsRequest\)return _aaTagsRequest/);
+  assert.match(html, /let _partsCodes=\[\],_partsCodesRequest=null/);
+  assert.match(html, /if\(_partsCodesRequest\)return _partsCodesRequest/);
+});

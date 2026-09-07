@@ -7,11 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260906b">
+  <link rel="manifest" href="manifest.json?v=20260907a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260906b">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260906b">
+  <link rel="stylesheet" href="./cvcs.css?v=20260907a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260907a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1668,18 +1668,18 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260906b"></script>
-<script src="./access-control.js?v=20260906b"></script>
-<script src="./cvcs.js?v=20260906b"></script>
-<script src="./token-admin.js?v=20260906b"></script>
-<script src="./xlsx.mini.min.js?v=20260906b"></script>
-<script src="./galaxy-log.js?v=20260906b"></script>
+<script src="./cloud-api.js?v=20260907a"></script>
+<script src="./access-control.js?v=20260907a"></script>
+<script src="./cvcs.js?v=20260907a"></script>
+<script src="./token-admin.js?v=20260907a"></script>
+<script src="./xlsx.mini.min.js?v=20260907a"></script>
+<script src="./galaxy-log.js?v=20260907a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.06-02';
-const _APP_VERSION='v1.101';
+const _APP_BUMP='2026.09.07-01';
+const _APP_VERSION='v1.102';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2164,6 +2164,13 @@ function showFirstPermittedPage(){
   else if(hasAccess('cvcs'))selectCvcsProperty(window.AmrsCvcs?.PROPERTIES?.[0]||'Venetian');
   else if(hasAccess('admin'))showPage('tokenAdmin');
 }
+function autoLoadMissingInputLists(){
+  if(activePage!=='input'||!navigator.onLine||!getScriptUrl())return;
+  if(activeCompany==='SCL'&&!_sclMonthlySettingsLoaded)void loadSclMonthlySettings(false,true);
+  if(activeCompany==='GEG'&&!_gegMonthlySettingsLoaded)void loadGegMonthlySettings(false,true);
+  if(activeCompany==='MGM'&&!_aaTags.length)void fetchAaTags(undefined,true);
+  if(!_partsCodes.length)void fetchPartsCodes(true);
+}
 function showPage(page){
   const permission=window.AmrsAccessControl.pagePermission(page);
   if(!hasAccess(permission)){showToast('此 Token 沒有使用這項功能的權限','err');return;}
@@ -2195,6 +2202,7 @@ function showPage(page){
   renderCvcsPropertyMenu();
   closeMenu();
   // Keep the user's existing query, page and results when returning.
+  if(page==='input')autoLoadMissingInputLists();
   if(page==='schedule')loadScheduleOverview(scheduleShouldForceDailyRefresh());
   if(page==='monthlyStats')loadMonthlyStats();
   if(page==='partsList')loadPartsListPage();
@@ -3063,7 +3071,7 @@ _updateSoundBtn();
 
 // ── MGM AA Tag lookup ──────────────────────────────────────
 const _AA_TAG_KEY='_ml_mgm_aa_tags_v1';
-let _aaTags=[],_aaBySerial={},_serialByAaTag={};
+let _aaTags=[],_aaBySerial={},_serialByAaTag={},_aaTagsRequest=null;
 let _mgmLocation=localStorage.getItem('_ml_mgm_location')||'';
 function setMgmLocation(value){
   _mgmLocation=value==='Floor'||value==='Workshop'?value:'';
@@ -3101,20 +3109,34 @@ function updateAaTagLoadStatus(){
   status.textContent=loaded?`已載入 ${_aaTags.length} 個 AA Tag 號碼`:'尚未載入 AA Tag 號碼';
   status.classList.toggle('loaded',loaded);
 }
-async function fetchAaTags(triggerBtn){
+async function fetchAaTags(triggerBtn,quiet=false){
+  if(_aaTagsRequest)return _aaTagsRequest;
   const btn=triggerBtn||document.getElementById('aaTagLoadBtn');
-  const originalText=btn.textContent;
-  btn.disabled=true;btn.textContent='載入中...';
-  const loadingToken=showLoadingProgress('AA Tag 號碼載入中，請稍等...');
-  try{
-    const data=await fetchJsonWithTimeout(getScriptUrl()+'?action=aaTags&company=MGM&refresh=1',{},45000);
-    if(!data.success||!Array.isArray(data.tags))throw new Error(data.message||'載入失敗');
-    setAaTags(data.tags);
-    localStorage.setItem(_AA_TAG_KEY,JSON.stringify({data:_aaTags,ts:Date.now()}));
-    if(currentDashboardCompany==='MGM'&&dashboardRecords.length)renderDashboardPage();
-    showToast(`✓ 已載入 ${_aaTags.length} 個 AA Tag 號碼`);
-  }catch(e){showToast('AA Tag 號碼載入失敗','err');}
-  finally{hideLoadingProgress(loadingToken);btn.disabled=false;btn.textContent=originalText;}
+  const originalText=btn?.textContent||'↻ 載入 AA Tag';
+  if(btn){btn.disabled=true;btn.textContent='載入中...';}
+  if(quiet){const status=document.getElementById('aaTagLoadStatus');if(status)status.textContent='正在自動載入 AA Tag 號碼...';}
+  const loadingToken=quiet?null:showLoadingProgress('AA Tag 號碼載入中，請稍等...');
+  const request=(async()=>{
+    try{
+      const data=await fetchJsonWithTimeout(getScriptUrl()+'?action=aaTags&company=MGM&refresh=1',{},45000);
+      if(!data.success||!Array.isArray(data.tags))throw new Error(data.message||'載入失敗');
+      setAaTags(data.tags);
+      localStorage.setItem(_AA_TAG_KEY,JSON.stringify({data:_aaTags,ts:Date.now()}));
+      if(currentDashboardCompany==='MGM'&&dashboardRecords.length)renderDashboardPage();
+      if(!quiet)showToast(`✓ 已載入 ${_aaTags.length} 個 AA Tag 號碼`);
+      return true;
+    }catch(e){
+      const status=document.getElementById('aaTagLoadStatus');
+      if(quiet&&status)status.textContent='自動載入失敗，請按「載入 AA Tag」重試';
+      else showToast('AA Tag 號碼載入失敗','err');
+      return false;
+    }finally{
+      if(loadingToken)hideLoadingProgress(loadingToken);
+      if(btn){btn.disabled=false;btn.textContent=originalText;}
+    }
+  })();
+  _aaTagsRequest=request;
+  try{return await request;}finally{if(_aaTagsRequest===request)_aaTagsRequest=null;}
 }
 function syncAaTagFromSerial(){
   if(activeCompany!=='MGM')return;
@@ -3657,7 +3679,7 @@ window.addEventListener('online',()=>_scheduleRetry(1000));
 if(_retryQueue.length&&navigator.onLine)_scheduleRetry(1200);
 
 // ── Broken Parts ───────────────────────────────────────────
-let _partsCodes=[];
+let _partsCodes=[],_partsCodesRequest=null;
 let _partsLanguage=localStorage.getItem('_ml_parts_language')==='en'?'en':'jp';
 let _bpRepairDayMode='none';
 let _bpUodUnlockMode='none';
@@ -3747,22 +3769,32 @@ function _loadPartsFromCache(){
   }catch(e){}
   _updatePartsTs(null);
 }
-async function fetchPartsCodes(){
+async function fetchPartsCodes(quiet=false){
+  if(_partsCodesRequest)return _partsCodesRequest;
   const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL){showToast('尚未設定網站代號','err');return;}
   const btn=document.getElementById('bpUpdateBtn');
   if(btn){btn.textContent='…';btn.disabled=true;}
-  const loadingToken=showLoadingProgress('零件清單載入中，請稍等...');
-  try{
-    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=parts&'+companyParam(),{},45000);
-    if(Array.isArray(data.parts)&&data.parts.length){
+  const loadingToken=quiet?null:showLoadingProgress('零件清單載入中，請稍等...');
+  const request=(async()=>{
+    try{
+      const data=await fetchJsonWithTimeout(SCRIPT_URL+'?action=parts&'+companyParam(),{},45000);
+      if(!Array.isArray(data.parts)||!data.parts.length)throw new Error('沒有零件資料');
       _partsCodes=data.parts;
       const ts=Date.now();
       localStorage.setItem(_PARTS_KEY,JSON.stringify({data:_partsCodes,ts}));
       _rebuildItemCodeSelect();_updatePartsTs(ts);
-      showToast('✓ 零件清單已更新（'+_partsCodes.length+' 項）');
-    }else{showToast('沒有零件資料','err');}
-  }catch(e){showToast('零件清單載入失敗','err');}
-  finally{hideLoadingProgress(loadingToken);if(btn){btn.textContent='↻';btn.disabled=false;}}
+      if(!quiet)showToast('✓ 零件清單已更新（'+_partsCodes.length+' 項）');
+      return true;
+    }catch(e){
+      if(!quiet)showToast(e.message==='沒有零件資料'?'沒有零件資料':'零件清單載入失敗','err');
+      return false;
+    }finally{
+      if(loadingToken)hideLoadingProgress(loadingToken);
+      if(btn){btn.textContent='↻';btn.disabled=false;}
+    }
+  })();
+  _partsCodesRequest=request;
+  try{return await request;}finally{if(_partsCodesRequest===request)_partsCodesRequest=null;}
 }
 _loadPartsFromCache();
 updatePartsLanguageButtons();
@@ -6033,6 +6065,7 @@ initDashboardFilters();
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden&&activePage==='schedule'&&localStorage.getItem('_ml_auth')===_PH&&hasAnyDeployId()&&scheduleShouldForceDailyRefresh())loadScheduleOverview(true);
 });
+window.addEventListener('online',()=>{if(activePage==='input')autoLoadMissingInputLists();});
 if(queue.length>0){renderQueue();setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
 _renderStats();
 _updateRetryNotice();
