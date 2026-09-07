@@ -24,6 +24,11 @@ const {
   writeStoredState,
 } = galaxyModule;
 
+function currentLocalDay() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 test("reconciles offline CSV rows against cloud tasks instead of treating regenerated IDs as changes", () => {
   const cloudTasks = [
     { id: "cloud-1190-17", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 2, duplicateIndex: 0 },
@@ -167,7 +172,7 @@ test("downloads cloud data once on the first Galaxy mount of each local day", as
   const secondApp = createApplication({ document: fakeGalaxyDocument(), storage, transport: { get: async () => { throw new Error("must not download twice"); }, post: async () => ({}) } });
   secondApp.mount();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(storage.getItem("_amrs_galaxy_auto_download_day"), new Date().toISOString().slice(0, 10));
+  assert.equal(storage.getItem("_amrs_galaxy_auto_download_day"), currentLocalDay());
 });
 
 test("retries the daily cloud download after a failed first attempt", async () => {
@@ -180,7 +185,7 @@ test("retries the daily cloud download after a failed first attempt", async () =
   makeApp().mount();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(attempts, 2);
-  assert.equal(storage.getItem("_amrs_galaxy_auto_download_day"), new Date().toISOString().slice(0, 10));
+  assert.equal(storage.getItem("_amrs_galaxy_auto_download_day"), currentLocalDay());
 });
 
 test("replaces stale local rows on the daily refresh but preserves pending field work", async () => {
