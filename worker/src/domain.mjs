@@ -729,6 +729,109 @@ export function aaTagsFromRows(rows = []) {
   return result;
 }
 
+export const MGM_CHECK_REQUEST_SHEETS = ["MGM Macau", "MGM Cotai"];
+export const MGM_CHECK_REQUEST_HEADERS = ["事發日期", "事發時間", "結束時間", "Table", "Serial NO.", "AA Tag", "BOX ID", "Vault ID", "事件詳情", "機台跟進狀況", "實牌跟進狀況", "備注", "欄1"];
+export const MGM_CHECK_REQUEST_EDITABLE_COLUMNS = {
+  serialNo: 5,
+  aaTag: 6,
+  boxId: 7,
+  vaultId: 8,
+  machineStatus: 10,
+  cardStatus: 11,
+  remark: 12,
+};
+
+export const MGM_CHECK_REQUEST_NEW_FIELDS = [
+  "eventDate", "eventTime", "endTime", "table", "serialNo", "aaTag", "boxId", "vaultId",
+  "eventDetails", "machineStatus", "cardStatus", "remark",
+];
+
+function mgmCheckHash(value) {
+  let result = 2166136261;
+  for (const character of String(value)) {
+    result ^= character.charCodeAt(0);
+    result = Math.imul(result, 16777619);
+  }
+  return (result >>> 0).toString(16).padStart(8, "0");
+}
+
+export function mgmCheckRequestVersion(row = []) {
+  return mgmCheckHash(Array.from({ length: 12 }, (_, index) => gasString(rowValue(row, index)).trim()).join("\u0000"));
+}
+
+function mgmCheckPendingValue(value) {
+  const normalized = gasString(value).trim();
+  return !normalized || /未\s*check/i.test(normalized);
+}
+
+export function mgmCheckRequestFromRow(row = [], rowNumber, sheetName, aaTags = [], options = {}) {
+  const values = Array.from({ length: 13 }, (_, index) => gasString(rowValue(row, index)).trim());
+  if (!values.slice(0, 12).some(Boolean)) return null;
+  const aaBySerial = new Map();
+  const serialByAa = new Map();
+  (Array.isArray(aaTags) ? aaTags : []).forEach((item) => {
+    const serialNo = gasString(item?.serialNo).trim();
+    const aaTag = normalizeAaTag(item?.aaTag);
+    if (serialNo && aaTag) { aaBySerial.set(serialNo, aaTag); serialByAa.set(aaTag, serialNo); }
+  });
+  const sourceSerialNo = values[4];
+  const sourceAaTag = normalizeAaTag(values[5]);
+  const serialNo = sourceSerialNo || serialByAa.get(sourceAaTag) || "";
+  const aaTag = sourceAaTag || aaBySerial.get(sourceSerialNo) || "";
+  const machineStatus = values[9];
+  const cardStatus = values[10];
+  return {
+    id: `${sheetName}:${Number(rowNumber)}`,
+    sheetName: gasString(sheetName).trim(),
+    rowNumber: Number(rowNumber),
+    eventDate: normalizeDateParam(values[0], options.timeZone || DEFAULT_TIME_ZONE) || values[0],
+    eventTime: values[1],
+    endTime: values[2],
+    table: values[3],
+    serialNo,
+    aaTag,
+    sourceSerialNo,
+    sourceAaTag,
+    aaTagResolved: !sourceAaTag && !!aaTag,
+    serialResolved: !sourceSerialNo && !!serialNo,
+    boxId: values[6],
+    vaultId: values[7],
+    eventDetails: values[8],
+    machineStatus,
+    cardStatus,
+    remark: values[11],
+    status: mgmCheckPendingValue(machineStatus) || mgmCheckPendingValue(cardStatus) ? "pending" : "done",
+    version: mgmCheckRequestVersion(values),
+  };
+}
+
+export function mgmCheckRequestPatchValues(currentRow = [], patch = {}) {
+  const unsupported = Object.keys(patch || {}).find((field) => !own(MGM_CHECK_REQUEST_EDITABLE_COLUMNS, field));
+  if (unsupported) throw new Error(`Unsupported MGM Check Request field: ${unsupported}`);
+  return Object.entries(MGM_CHECK_REQUEST_EDITABLE_COLUMNS)
+    .filter(([field]) => own(patch, field))
+    .map(([field, column]) => {
+      let value = gasString(patch[field]).trim();
+      if (field === "aaTag" && value) value = normalizeAaTag(value);
+      return { column, value };
+    })
+    .filter(({ column, value }) => gasString(rowValue(currentRow, column - 1)).trim() !== value);
+}
+
+export function mgmCheckRequestNewRow(input = {}) {
+  const unsupported = Object.keys(input || {}).find((field) => !MGM_CHECK_REQUEST_NEW_FIELDS.includes(field));
+  if (unsupported) throw new Error(`Unsupported MGM Check Request field: ${unsupported}`);
+  const row = MGM_CHECK_REQUEST_NEW_FIELDS.map((field) => {
+    const value = gasString(input?.[field]).trim();
+    return field === "aaTag" && value ? normalizeAaTag(value) : value;
+  });
+  if (!row[0]) throw new Error("請填寫事發日期");
+  if (!row[1]) throw new Error("請填寫事發時間");
+  if (!row[3]) throw new Error("請填寫 Table");
+  if (!row[8]) throw new Error("請填寫事件詳情");
+  return [...row, ""];
+}
+
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

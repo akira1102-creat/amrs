@@ -174,3 +174,15 @@ test("automatic AA Tag and parts downloads reuse requests already in progress", 
   assert.match(html, /let _partsCodes=\[\],_partsCodesRequest=null/);
   assert.match(html, /if\(_partsCodesRequest\)return _partsCodesRequest/);
 });
+
+test("MGM Check Request is wired into the AE work tools navigation and cached shell", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const sw = fs.readFileSync(new URL("../sw.js", import.meta.url), "utf8");
+  assert.match(html, /id="mgmCheckRequestMenuBtn"[^>]+showPage\('mgmCheckRequest'\)/);
+  assert.match(html, /id="mgmCheckRequestPage" class="app-page"/);
+  assert.match(html, /\.\/mgm-check-request\.js\?v=/);
+  assert.match(html, /\.\/mgm-check-request\.css\?v=/);
+  assert.match(html, /if\(page==='mgmCheckRequest'\)ensureMgmCheckRequestApp\(\)\?\.mount\(\)/);
+  assert.match(sw, /\.\/mgm-check-request\.js\?v=/);
+  assert.match(sw, /\.\/mgm-check-request\.css\?v=/);
+});

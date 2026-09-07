@@ -7,11 +7,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260907a">
+  <link rel="manifest" href="manifest.json?v=20260907b">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260907a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260907a">
+  <link rel="stylesheet" href="./cvcs.css?v=20260907b">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260907b">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260907b">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1139,6 +1140,7 @@
   <div class="menu-sub menu-collapsible" id="brokenPartsCompanyMenu"></div>
   <div class="menu-section" id="toolsMenuSection">工作工具</div>
   <button class="menu-item" id="galaxyLogMenuBtn" onclick="showPage('galaxyLog')" type="button">Galaxy 取 Log</button>
+  <button class="menu-item" id="mgmCheckRequestMenuBtn" onclick="showPage('mgmCheckRequest')" type="button">MGM Check Request</button>
   <div class="menu-section" id="cvcsQueryMenuSection">CVCS 資料查詢</div>
   <button class="menu-item" id="cvcsQueryMenuBtn" onclick="showPage('cvcsQuery')" type="button">CVCS 資料查詢</button>
   <button class="menu-item" id="cvcsBrokenMenuBtn" onclick="showPage('cvcsBroken')" type="button">CVCS 壞零件 / 跟進</button>
@@ -1621,6 +1623,7 @@
 </div><!-- /brokenPartsPage -->
 
 <div id="galaxyLogPage" class="app-page"></div>
+<div id="mgmCheckRequestPage" class="app-page"></div>
 
 <div id="cvcsInputPage" class="app-page"></div>
 <div id="cvcsQueryPage" class="app-page"></div>
@@ -1668,18 +1671,19 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260907a"></script>
-<script src="./access-control.js?v=20260907a"></script>
-<script src="./cvcs.js?v=20260907a"></script>
-<script src="./token-admin.js?v=20260907a"></script>
-<script src="./xlsx.mini.min.js?v=20260907a"></script>
-<script src="./galaxy-log.js?v=20260907a"></script>
+<script src="./cloud-api.js?v=20260907b"></script>
+<script src="./access-control.js?v=20260907b"></script>
+<script src="./cvcs.js?v=20260907b"></script>
+<script src="./token-admin.js?v=20260907b"></script>
+<script src="./xlsx.mini.min.js?v=20260907b"></script>
+<script src="./galaxy-log.js?v=20260907b"></script>
+<script src="./mgm-check-request.js?v=20260907b"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.07-01';
-const _APP_VERSION='v1.102';
+const _APP_BUMP='2026.09.07-02';
+const _APP_VERSION='v1.103';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2113,7 +2117,7 @@ function initMobileMenuSwipe(){
 }
 initMobileMenuSwipe();
 let _accessPermissions=[];
-let _cvcsApp=null,_tokenAdminApp=null,_galaxyLogApp=null,_cvcsMenuOpen=false;
+let _cvcsApp=null,_tokenAdminApp=null,_galaxyLogApp=null,_mgmCheckRequestApp=null,_cvcsMenuOpen=false;
 function hasAccess(permission){return window.AmrsAccessControl.hasPermission(_accessPermissions,permission);}
 function ensureFeatureApps(){
   if(!_cvcsApp&&window.AmrsCvcs)_cvcsApp=window.AmrsCvcs.createApplication({transport:_dualTransport,storage:localStorage,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
@@ -2122,6 +2126,10 @@ function ensureFeatureApps(){
 function ensureGalaxyLogApp(){
   if(!_galaxyLogApp&&window.AmrsGalaxyLog)_galaxyLogApp=window.AmrsGalaxyLog.createApplication({document,storage:localStorage,toast:showToast,transport:_dualTransport});
   return _galaxyLogApp;
+}
+function ensureMgmCheckRequestApp(){
+  if(!_mgmCheckRequestApp&&window.AmrsMgmCheckRequest)_mgmCheckRequestApp=window.AmrsMgmCheckRequest.createApplication({document,storage:localStorage,toast:showToast,transport:_dualTransport});
+  return _mgmCheckRequestApp;
 }
 async function refreshAccessSession(){
   if(!_dualTransport)return false;
@@ -2144,7 +2152,7 @@ function applyAccessPermissions(){
   const ae=hasAccess('ae'),cvcs=hasAccess('cvcs'),schedule=hasAccess('schedule'),admin=hasAccess('admin');
   document.getElementById('scheduleMenuBtn').style.display=schedule?'':'none';
   document.getElementById('companyMenu').style.display=ae?'':'none';
-  ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu','galaxyLogMenuBtn','toolsMenuSection'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
+  ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu','galaxyLogMenuBtn','mgmCheckRequestMenuBtn','toolsMenuSection'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
   document.getElementById('cvcsInputMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsPropertyMenu').style.display=cvcs?'':'none';
   document.getElementById('cvcsQueryMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsBrokenMenuBtn').style.display=cvcs?'':'none';
   document.getElementById('dataInputMenuSection').style.display=(ae||cvcs)?'':'none';document.getElementById('dataQueryMenuSection').style.display=ae?'':'none';document.getElementById('cvcsQueryMenuSection').style.display=cvcs?'':'none';
@@ -2174,7 +2182,7 @@ function autoLoadMissingInputLists(){
 function showPage(page){
   const permission=window.AmrsAccessControl.pagePermission(page);
   if(!hasAccess(permission)){showToast('此 Token 沒有使用這項功能的權限','err');return;}
-  if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'||page==='cvcsInput'||page==='cvcsQuery'||page==='cvcsBroken'||page==='tokenAdmin'){
+  if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'||page==='mgmCheckRequest'||page==='cvcsInput'||page==='cvcsQuery'||page==='cvcsBroken'||page==='tokenAdmin'){
     if(!hasAnyDeployId()){showToast('請先設定並測試 Token','err');openGasSettings();return;}
     if(!getDeployId())switchQueueCompany(firstConfiguredCompany());
     if(page==='dashboard')syncCasinoOptions();
@@ -2187,7 +2195,7 @@ function showPage(page){
   if(activePage==='input')saveInputDraft();
   activePage=page;
   document.body.classList.toggle('dashboard-view',page!=='input');
-  const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',galaxyLog:'galaxyLogPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage'};
+  const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',galaxyLog:'galaxyLogPage',mgmCheckRequest:'mgmCheckRequestPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage'};
   Object.entries(pageIds).forEach(([name,id])=>document.getElementById(id).classList.toggle('active',page===name));
   document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
   document.getElementById('scheduleMenuBtn').classList.toggle('active',page==='schedule');
@@ -2195,6 +2203,7 @@ function showPage(page){
   document.getElementById('partsListMenuBtn').classList.toggle('active',page==='partsList');
   document.getElementById('brokenPartsMenuBtn').classList.toggle('active',page==='brokenParts');
   document.getElementById('galaxyLogMenuBtn').classList.toggle('active',page==='galaxyLog');
+  document.getElementById('mgmCheckRequestMenuBtn').classList.toggle('active',page==='mgmCheckRequest');
   document.getElementById('cvcsQueryMenuBtn').classList.toggle('active',page==='cvcsQuery');
   document.getElementById('cvcsBrokenMenuBtn').classList.toggle('active',page==='cvcsBroken');
   document.getElementById('tokenAdminMenuBtn').classList.toggle('active',page==='tokenAdmin');
@@ -2208,6 +2217,7 @@ function showPage(page){
   if(page==='partsList')loadPartsListPage();
   if(page==='brokenParts')loadBrokenPartsPage(1);
   if(page==='galaxyLog')ensureGalaxyLogApp()?.mount();
+  if(page==='mgmCheckRequest')ensureMgmCheckRequestApp()?.mount();
   if(page.startsWith('cvcs')){
     ensureFeatureApps();
     _cvcsApp.mount();
@@ -5970,7 +5980,7 @@ function restoreInputDraft(){
 }
 let _updatePending=false;
 function applySafeUpdate(){
-  if(!_updatePending||isSubmitting||_submitCheckBusy||_galaxyLogApp?.isBusy?.()||document.querySelector('#confirmModal.show,#submitWarningModal.show'))return;
+  if(!_updatePending||isSubmitting||_submitCheckBusy||_galaxyLogApp?.isBusy?.()||(typeof _mgmCheckRequestApp!=='undefined'&&_mgmCheckRequestApp?.isBusy?.())||document.querySelector('#confirmModal.show,#submitWarningModal.show'))return;
   if(dashboardEditingIdx>=0||document.querySelector('[id$="Modal"].show')){showToast('請先完成或取消目前編輯，再更新','warn');return;}
   if(!saveInputDraft())return;
   window.location.reload();

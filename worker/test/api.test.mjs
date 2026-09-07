@@ -168,6 +168,8 @@ test("maps every API action to its server-enforced permission group", () => {
   assert.equal(permissionForAction("submissionWarnings"), "ae");
   assert.equal(permissionForAction("galaxyLogOverview"), "ae");
   assert.equal(permissionForAction("syncGalaxyLog"), "ae");
+  assert.equal(permissionForAction("mgmCheckRequests"), "ae");
+  assert.equal(permissionForAction("syncMgmCheckRequests"), "ae");
   assert.equal(permissionForAction("cvcsRecords"), "cvcs");
   assert.equal(permissionForAction("submitCvcsRecords"), "cvcs");
   assert.equal(permissionForAction("createAccessToken"), "admin");
@@ -345,6 +347,25 @@ test("routes Galaxy Log overview and sync through the AE session and dedicated l
   assert.equal(syncResponse.status, 200);
   assert.deepEqual(calls, [["get", "galaxyLogOverview"], ["post", "syncGalaxyLog"]]);
   assert.ok(env.DB.calls.some((call) => call.sql.includes("INSERT INTO write_locks") && call.bindings[0] === "amrs-sheets-write:galaxy-log"));
+});
+
+test("routes MGM Check Request reads and writes through AE with a dedicated lock", async () => {
+  const { env, token } = await createAuthenticatedContext();
+  const calls = [];
+  const repository = {
+    getAction: async (params) => { calls.push(["get", params.action]); return { success: true, requests: [] }; },
+    postAction: async (payload) => { calls.push(["post", payload.action]); return { success: true, results: [] }; },
+  };
+  const readResponse = await handleRequest(request("/api?action=mgmCheckRequests", token), env, { repository });
+  assert.equal(readResponse.status, 200);
+  const writeResponse = await handleRequest(request("/api", token, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "syncMgmCheckRequests", requestId: "mgm-check-lock", mutations: [] }),
+  }), env, { repository });
+  assert.equal(writeResponse.status, 200);
+  assert.deepEqual(calls, [["get", "mgmCheckRequests"], ["post", "syncMgmCheckRequests"]]);
+  assert.ok(env.DB.calls.some((call) => call.sql.includes("INSERT INTO write_locks") && call.bindings[0] === "amrs-sheets-write:mgm-check-request"));
 });
 
 test("uses the global D1 lock for a multi-company submission batch", async () => {

@@ -23,6 +23,9 @@ import {
   isMonthlyVisitCompleted,
   mergeRecord,
   monthlyStatsCompanyFromRows,
+  mgmCheckRequestFromRow,
+  mgmCheckRequestNewRow,
+  mgmCheckRequestPatchValues,
   normalizeAaTag,
   normalizeCompany,
   normalizeDateParam,
@@ -433,4 +436,26 @@ test("maps monthly schedule rows and applies venue-specific completion cutoffs",
   assert.deepEqual(schedule.venues.Venetian, { scheduledVisits: 1, completedVisits: 0, remainingVisits: 1, visitPercent: 0 });
   const completed = getMonthlyScheduleFromRows(rows, "2608", new Date("2026-08-03T05:00:00.000Z"), "2026-AUG");
   assert.equal(completed.venues.Venetian.completedVisits, 1);
+});
+
+test("maps MGM Check Request rows, resolves identifiers and limits editable columns", () => {
+  const row = ["2026/06/09", "11:15", "11:24", "21BB02", "259", "", "BOX-1", "VA-1", "Can't read", "", "未CHECK", "Note", ""];
+  const request = mgmCheckRequestFromRow(row, 2, "MGM Macau", [{ serialNo: "259", aaTag: "TAE0248" }]);
+  assert.equal(request.id, "MGM Macau:2");
+  assert.equal(request.serialNo, "259");
+  assert.equal(request.aaTag, "TAE0248");
+  assert.equal(request.aaTagResolved, true);
+  assert.equal(request.status, "pending");
+  assert.ok(request.version);
+  assert.deepEqual(mgmCheckRequestPatchValues(row, { aaTag: "TAE0248", machineStatus: "已CHECK", remark: "完成" }), [
+    { column: 6, value: "TAE0248" },
+    { column: 10, value: "已CHECK" },
+    { column: 12, value: "完成" },
+  ]);
+  assert.throws(() => mgmCheckRequestPatchValues(row, { eventDetails: "overwrite" }), /Unsupported MGM Check Request field/);
+  assert.deepEqual(mgmCheckRequestNewRow({
+    eventDate: "2026-09-07", eventTime: "10:20", table: "21BB02", serialNo: "259",
+    aaTag: "tae248", eventDetails: "客戶要求檢查",
+  }), ["2026-09-07", "10:20", "", "21BB02", "259", "TAE0248", "", "", "客戶要求檢查", "", "", "", ""]);
+  assert.throws(() => mgmCheckRequestNewRow({ table: "21BB02" }), /事發日期/);
 });

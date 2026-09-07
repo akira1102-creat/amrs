@@ -180,6 +180,7 @@ const config = {
   scheduleSheetId: "schedule",
   cvcsSheetId: "cvcs",
   galaxyLogSheetId: "galaxy-log",
+  mgmCheckRequestSheetId: "mgm-check",
   timeZone: "Asia/Hong_Kong",
 };
 
@@ -201,6 +202,16 @@ const companyData = {
     ["1190", "2026/08/01", "", "1192", "2026/08/02", "2026/08/03"],
     ["1191", "2026/08/04", "", "", "", ""],
   ] }],
+  "mgm-check": [
+    { title: "MGM Macau", values: [
+      ["事發日期", "事發時間", "結束時間", "Table", "Serial NO.", "AA Tag", "BOX ID", "Vault ID", "事件詳情", "機台跟進狀況", "實牌跟進狀況", "備注", "欄1"],
+      ["2026/06/09", "11:15", "11:24", "21BB02", "51", "", "BOX-1", "VA-1", "Can't read", "", "", ""],
+    ] },
+    { title: "MGM Cotai", values: [
+      ["事發日期", "事發時間", "結束時間", "Table", "Serial NO.", "AA Tag", "BOX ID", "Vault ID", "事件詳情", "機台跟進狀況", "實牌跟進狀況", "備注", "欄1"],
+      ["2026/06/29", "0:07", "0:09", "112BB01", "", "TAE0051", "BOX-2", "", "Double draw", "未CHECK", "未CHECK", ""],
+    ] },
+  ],
   cvcs: [
     { title: "CVCS Records", values: [["Property", "Date", "Location", "Sub Location", "Quarter", "Model", "S/N", "Antenna Size", "Antenna Status", "Version", "Reason", "Action Taken & Notes", "Parts Change"], ["Venetian", "2026/08/04", "Cage", "North", "Q1", "SOT", "1234", "Large", "Active", "1.0", "PM", "Inspection", "Cable"]] },
     { title: "Sub Location", values: [["Option"], ["North"], ["South"]] },
@@ -233,6 +244,7 @@ test("implements all GET action contracts against synthetic Sheets", async () =>
     ["scheduleMachineCounts", { month: "2608" }],
     ["scheduleOverview", { from: "2026/08/04", days: "7" }],
     ["monthlySettings", {}],
+    ["mgmCheckRequests", {}],
   ];
   for (const [action, params] of actions) {
     const result = await repository.getAction({ action, ...params });
@@ -241,6 +253,7 @@ test("implements all GET action contracts against synthetic Sheets", async () =>
     if (action === "today") assert.ok(Array.isArray(result.records), action);
     if (action === "parts") assert.ok(Array.isArray(result.parts), action);
     if (action === "aaTags") assert.ok(Array.isArray(result.tags), action);
+    if (action === "mgmCheckRequests") assert.equal(result.requests.length, 2, action);
     if (action === "template") assert.ok(Array.isArray(result.mappings), action);
     if (action === "submissionWarnings") assert.ok(Array.isArray(result.warnings), action);
     if (["dashboard", "brokenPartsList", "monthlyStats", "monthlyStatsBase", "monthlyStatsCompany", "scheduleMachineCounts", "scheduleOverview", "monthlySettings"].includes(action)) {
@@ -249,6 +262,66 @@ test("implements all GET action contracts against synthetic Sheets", async () =>
   }
   assert.equal((await repository.getAction({ action: "parts" })).parts.length, 2);
   assert.equal((await repository.getAction({ action: "aaTags", company: "MGM" })).tags[0].aaTag, "TAE0051");
+});
+
+test("reads both MGM Check Request tabs with SN and AA Tag linkage", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+  const result = await repository.getAction({ action: "mgmCheckRequests", refresh: "1" });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.requests.map((row) => [row.sheetName, row.serialNo, row.aaTag]), [
+    ["MGM Macau", "51", "TAE0051"],
+    ["MGM Cotai", "51", "TAE0051"],
+  ]);
+  assert.equal(result.requests[0].aaTagResolved, true);
+  assert.equal(result.requests[1].serialResolved, true);
+});
+
+test("syncs only allowed MGM Check Request cells and reports stale-row conflicts", async () => {
+  const harness = createSheetsHarness(structuredClone(companyData));
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+  const overview = await repository.getAction({ action: "mgmCheckRequests", refresh: "1" });
+  const target = overview.requests.find((row) => row.sheetName === "MGM Macau");
+  const mutation = {
+    mutationId: "mgm-check-1",
+    requestId: target.id,
+    sheetName: target.sheetName,
+    rowNumber: target.rowNumber,
+    baseVersion: target.version,
+    patch: { aaTag: "TAE0051", machineStatus: "已CHECK", cardStatus: "已CHECK", remark: "完成" },
+  };
+  const applied = await repository.postAction({ action: "syncMgmCheckRequests", mutations: [mutation] });
+  assert.equal(applied.results[0].status, "applied");
+  assert.deepEqual(harness.sheets.get("mgm-check:MGM Macau").values[1].slice(4, 12), ["51", "TAE0051", "BOX-1", "VA-1", "Can't read", "已CHECK", "已CHECK", "完成"]);
+
+  harness.sheets.get("mgm-check:MGM Macau").values[1][9] = "同事已修改";
+  const conflict = await repository.postAction({ action: "syncMgmCheckRequests", mutations: [{ ...mutation, mutationId: "mgm-check-2", patch: { remark: "不應覆蓋" } }] });
+  assert.equal(conflict.results[0].status, "conflict");
+  assert.equal(harness.sheets.get("mgm-check:MGM Macau").values[1][11], "完成");
+});
+
+test("appends a staged customer MGM Check Request into the selected worksheet", async () => {
+  const harness = createSheetsHarness(structuredClone(companyData));
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+  const result = await repository.postAction({
+    action: "syncMgmCheckRequests",
+    mutations: [{
+      kind: "create",
+      mutationId: "mgm-check-create-1",
+      requestId: "local:mgm-check-create-1",
+      sheetName: "MGM Cotai",
+      row: {
+        eventDate: "2026-09-07", eventTime: "10:20", table: "21BB02", serialNo: "51",
+        aaTag: "TAE0051", eventDetails: "客戶要求檢查",
+      },
+    }],
+  });
+  assert.equal(result.results[0].status, "applied");
+  assert.equal(result.results[0].requestId, "local:mgm-check-create-1");
+  assert.deepEqual(harness.sheets.get("mgm-check:MGM Cotai").values.at(-1), [
+    "2026-09-07", "10:20", "", "21BB02", "51", "TAE0051", "", "", "客戶要求檢查", "", "", "", "",
+  ]);
+  assert.ok(result.requests.some((row) => row.sheetName === "MGM Cotai" && row.eventDetails === "客戶要求檢查"));
 });
 
 test("reads and updates GEG monthly targets in the GEG workbook", async () => {

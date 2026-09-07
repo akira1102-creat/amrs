@@ -39,3 +39,12 @@ test("loads the Galaxy Log spreadsheet from protected runtime configuration", ()
   });
   assert.equal(config.galaxyLogSheetId, "synthetic-galaxy-log");
 });
+
+test("loads the MGM Check Request spreadsheet from protected runtime configuration", () => {
+  const sheets = Object.fromEntries(["Melco", "MGM", "SJM", "SCL", "GEG", "Wynn"].map((company) => [company, `synthetic-${company}`]));
+  const config = loadRuntimeConfig({
+    AMRS_CONFIG: JSON.stringify({ sheets, partsSheetId: "synthetic-parts", scheduleSheetId: "synthetic-schedule" }),
+    MGM_CHECK_REQUEST_SHEET_ID: "synthetic-mgm-check-request",
+  });
+  assert.equal(config.mgmCheckRequestSheetId, "synthetic-mgm-check-request");
+});

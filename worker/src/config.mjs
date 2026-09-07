@@ -72,6 +72,7 @@ export function loadRuntimeConfig(env) {
     scheduleSheetId: parsed.scheduleSheetId,
     cvcsSheetId: String(env.CVCS_SHEET_ID || parsed.cvcsSheetId || "").trim(),
     galaxyLogSheetId: String(env.GALAXY_LOG_SHEET_ID || parsed.galaxyLogSheetId || "").trim(),
+    mgmCheckRequestSheetId: String(env.MGM_CHECK_REQUEST_SHEET_ID || parsed.mgmCheckRequestSheetId || "").trim(),
     timeZone: parsed.timeZone || "Asia/Hong_Kong",
   };
 }

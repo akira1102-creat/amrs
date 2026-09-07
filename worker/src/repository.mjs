@@ -26,11 +26,18 @@ import {
   getMonthlyStatsSubsetFromData,
   GEG_MONTHLY_TARGET_CELLS,
   GEG_MONTHLY_TARGETS,
+  MGM_CHECK_REQUEST_EDITABLE_COLUMNS,
+  MGM_CHECK_REQUEST_HEADERS,
+  MGM_CHECK_REQUEST_SHEETS,
   monthlyCompanyStatsCacheKey,
   monthlyStatsBaseFromData,
   monthlyStatsBaseCacheKey,
   monthlyStatsCacheKey,
   monthlyStatsCompanyFromRows,
+  mgmCheckRequestFromRow,
+  mgmCheckRequestNewRow,
+  mgmCheckRequestPatchValues,
+  mgmCheckRequestVersion,
   normalizeDateParam,
   normalizeMonthlyCode,
   partsCodesFromRows,
@@ -68,6 +75,7 @@ const GALAXY_LOG_CACHE_TTL_MS = 15_000;
 const GALAXY_LOG_HEADERS = ["SN末4位", "指定 Log 日期", "取 Log 日期"];
 const GALAXY_NO_LOG_MARKER = "已檢查無log";
 const GALAXY_OFFICE_WRITE_MESSAGE = "Galaxy Log 來源仍是 Excel，請先另存為原生 Google 試算表後再同步";
+const MGM_CHECK_REQUEST_CACHE_TTL_MS = 30_000;
 
 function own(object, key) {
   return Object.prototype.hasOwnProperty.call(object || {}, key);
@@ -1096,6 +1104,127 @@ export function createRepository(env = {}, dependencies = {}) {
     return aaTagsFromRows(values);
   }
 
+  function mgmCheckRequestSpreadsheetId() {
+    const spreadsheetId = text(config.mgmCheckRequestSheetId);
+    if (!spreadsheetId) throw Object.assign(new Error("MGM Check Request spreadsheet is not configured"), { status: 503 });
+    return spreadsheetId;
+  }
+
+  function assertMgmCheckHeaders(values, sheetName) {
+    const headers = Array.isArray(values?.[0]) ? values[0] : [];
+    const mismatch = MGM_CHECK_REQUEST_HEADERS.slice(0, 12).findIndex((header, index) => text(headers[index]).toLowerCase() !== header.toLowerCase());
+    if (mismatch >= 0) throw Object.assign(new Error(`MGM Check Request headers changed in ${sheetName}`), { status: 409 });
+  }
+
+  async function readMgmCheckRequestTables(options = {}) {
+    const spreadsheetId = mgmCheckRequestSpreadsheetId();
+    const metadata = await spreadsheetMetadata(spreadsheetId, { refresh: options.refresh === true });
+    const tables = [];
+    for (const sheetName of MGM_CHECK_REQUEST_SHEETS) {
+      const sheet = findSheet(metadata, sheetName, false);
+      if (!sheet) throw Object.assign(new Error(`MGM Check Request worksheet not found: ${sheetName}`), { status: 502 });
+      const scope = `mgm-check-request:${sheetName}`;
+      const values = await cached(memory, db, cacheAdapter, scope, `${spreadsheetId}:${sheetName}`,
+        () => readValues(spreadsheetId, sheetName, "A1:M"),
+        { refresh: options.refresh === true, cache: options.cache !== false, ttlMs: MGM_CHECK_REQUEST_CACHE_TTL_MS, now });
+      assertMgmCheckHeaders(values, sheetName);
+      tables.push({ spreadsheetId, sheet, sheetName, scope, values });
+    }
+    return tables;
+  }
+
+  async function getMgmCheckRequests(params = {}) {
+    const refresh = text(params.refresh) === "1" || params.refresh === true;
+    const [tables, aaTags] = await Promise.all([
+      readMgmCheckRequestTables({ refresh, cache: !refresh }),
+      readAaTags({ refresh, cache: !refresh }),
+    ]);
+    const requests = tables.flatMap((table) => table.values.slice(1)
+      .map((row, index) => mgmCheckRequestFromRow(row, index + 2, table.sheetName, aaTags, { timeZone: config.timeZone }))
+      .filter(Boolean));
+    return {
+      success: true,
+      requests,
+      aaTags,
+      sheets: tables.map((table) => ({ sheetName: table.sheetName, sheetId: table.sheet.sheetId })),
+      serverUpdatedAt: new Date(nowMs(now)).toISOString(),
+    };
+  }
+
+  async function syncMgmCheckRequests(payload = {}) {
+    if (!Array.isArray(payload.mutations)) throw Object.assign(new Error("MGM Check Request mutations must be an array"), { status: 400 });
+    if (payload.mutations.length > 500) throw Object.assign(new Error("Too many MGM Check Request mutations"), { status: 400 });
+    const spreadsheetId = mgmCheckRequestSpreadsheetId();
+    const tables = await readMgmCheckRequestTables({ refresh: true, cache: false });
+    const tableByName = new Map(tables.map((table) => [table.sheetName, table]));
+    const results = [];
+    const updates = [];
+    const appendsBySheet = new Map();
+    const seen = new Set();
+    for (const mutation of payload.mutations) {
+      const mutationId = text(mutation?.mutationId);
+      const sheetName = text(mutation?.sheetName);
+      const rowNumber = Number.parseInt(mutation?.rowNumber, 10);
+      const requestId = text(mutation?.requestId) || `${sheetName}:${rowNumber}`;
+      const table = tableByName.get(sheetName);
+      if (!table || !mutationId || seen.has(requestId)) {
+        results.push({ mutationId, requestId, status: "failed", message: "Invalid or duplicate MGM Check Request row" });
+        continue;
+      }
+      seen.add(requestId);
+      if (text(mutation?.kind) === "create") {
+        try {
+          const row = mgmCheckRequestNewRow(mutation?.row || {});
+          if (!appendsBySheet.has(sheetName)) appendsBySheet.set(sheetName, []);
+          appendsBySheet.get(sheetName).push(row);
+          results.push({ mutationId, requestId, status: "applied" });
+        } catch (error) {
+          results.push({ mutationId, requestId, status: "failed", message: error.message });
+        }
+        continue;
+      }
+      if (rowNumber < 2 || rowNumber > table.values.length) {
+        results.push({ mutationId, requestId, status: "failed", message: "Invalid or duplicate MGM Check Request row" });
+        continue;
+      }
+      const currentRow = table.values[rowNumber - 1] || [];
+      let changes;
+      try { changes = mgmCheckRequestPatchValues(currentRow, mutation?.patch || {}); }
+      catch (error) { results.push({ mutationId, requestId, status: "failed", message: error.message }); continue; }
+      const desiredAlreadySaved = changes.length === 0;
+      if (desiredAlreadySaved) {
+        results.push({ mutationId, requestId, status: "applied" });
+        continue;
+      }
+      if (!text(mutation?.baseVersion) || mgmCheckRequestVersion(currentRow) !== text(mutation.baseVersion)) {
+        results.push({ mutationId, requestId, status: "conflict", message: "Cloud row changed; download the latest data before retrying" });
+        continue;
+      }
+      changes.forEach(({ column, value }) => updates.push({
+        range: `${quoteSheetName(sheetName)}!${columnNumberToA1(column)}${rowNumber}`,
+        values: [[value]],
+      }));
+      results.push({ mutationId, requestId, status: "applied" });
+    }
+    for (const [sheetName, values] of appendsBySheet) {
+      await sheets.valuesAppend({
+        spreadsheetId,
+        range: `${quoteSheetName(sheetName)}!A:M`,
+        values,
+        valueInputOption: "USER_ENTERED",
+        insertDataOption: "INSERT_ROWS",
+      });
+    }
+    if (updates.length) {
+      await sheets.valuesBatchUpdate({ spreadsheetId, data: updates, valueInputOption: "USER_ENTERED" });
+    }
+    if (updates.length || appendsBySheet.size) {
+      await Promise.all(MGM_CHECK_REQUEST_SHEETS.map((sheetName) => invalidateCache(db, memory, cacheAdapter, `mgm-check-request:${sheetName}`, now)));
+    }
+    const latest = await getMgmCheckRequests({ refresh: true });
+    return { ...latest, results };
+  }
+
   async function readMonthlySettings(options = {}) {
     const table = await readSpecialTable(config.sheets.SCL, MONTHLY_SHEET, "A1:C20", {
       ...options,
@@ -1452,6 +1581,7 @@ export function createRepository(env = {}, dependencies = {}) {
       return { success: true, company, settings };
     }
     if (action === "galaxyLogOverview") return getGalaxyLogOverview(params);
+    if (action === "mgmCheckRequests") return getMgmCheckRequests(params);
     return { error: "unknown action" };
   }
 
@@ -1831,6 +1961,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!Array.isArray(payload) && payload.action === "updateScheduleRemark") return updateScheduleRemark(payload);
     if (!Array.isArray(payload) && payload.action === "updateSchedulePeople") return updateSchedulePeople(payload);
     if (!Array.isArray(payload) && payload.action === "syncGalaxyLog") return syncGalaxyLog(payload);
+    if (!Array.isArray(payload) && payload.action === "syncMgmCheckRequests") return syncMgmCheckRequests(payload);
     if (!Array.isArray(payload) && payload.action === "bulkUpdateRecords") return bulkUpdateRecords(payload);
     if (!Array.isArray(payload) && payload.action === "submitRecords") {
       const repaired = await updateBrokenRepairDays(payload.brokenPartsRepairs || []);
@@ -1894,6 +2025,8 @@ export function createRepository(env = {}, dependencies = {}) {
     updateSchedulePeople,
     getGalaxyLogOverview,
     syncGalaxyLog,
+    getMgmCheckRequests,
+    syncMgmCheckRequests,
     findSubmissionIds,
     invalidateCompany,
     readMainTable,
