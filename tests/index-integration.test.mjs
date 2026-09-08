@@ -149,6 +149,20 @@ test("schedule personnel editor offers a dropdown for every person in the select
   assert.match(html, /schedulePeopleEditSelect/);
 });
 
+test("schedule focus rolls to the next workday at 6pm", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = html.slice(html.indexOf("function scheduleWorkdayDate"), html.indexOf("\nfunction scheduleDateObject"));
+  assert.match(source, /now\.getHours\(\)>=18/);
+  assert.match(html, /workday=scheduleWorkdayDate\(now\)/);
+  assert.match(html, /new Date\(now\.getFullYear\(\),now\.getMonth\(\),now\.getDate\(\),18\)/);
+  const scheduleWorkdayDate = new Function("scheduleLocalIso", `${source}; return scheduleWorkdayDate;`)(
+    (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+  );
+  assert.equal(scheduleWorkdayDate(new Date(2026, 8, 11, 17, 59)), "2026-09-11");
+  assert.equal(scheduleWorkdayDate(new Date(2026, 8, 11, 18, 0)), "2026-09-14");
+  assert.equal(scheduleWorkdayDate(new Date(2026, 8, 12, 10, 0)), "2026-09-14");
+});
+
 test("submission flow checks machine states and offers selectable Hold and Waiting Parts actions", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /submissionWarnings/);
