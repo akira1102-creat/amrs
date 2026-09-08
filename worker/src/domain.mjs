@@ -522,8 +522,10 @@ export function getSubmissionWarningsFromRows(rows = [], machines = [], options 
 export function brokenPartsRecordsFromRows(rows = [], serialNo = "", filters = {}, options = {}) {
   const filterSn = gasString(serialNo).trim();
   const filterCasino = gasString(filters.casino).trim();
+  let filterModel = gasString(filters.model).trim().toUpperCase();
   const filterParts = gasString(filters.partsNo).trim().toLowerCase();
   let filterStatus = gasString(filters.status).trim().toLowerCase();
+  if (!["SAE", "TAE"].includes(filterModel)) filterModel = "";
   const allowedStatuses = ["waiting", "repaired", "uod-waiting", "uod-unlocked", "holding", "hold-released"];
   if (!allowedStatuses.includes(filterStatus)) filterStatus = "";
   const startRow = Number.isFinite(Number(options.startRow)) ? Number(options.startRow) : 1;
@@ -533,6 +535,7 @@ export function brokenPartsRecordsFromRows(rows = [], serialNo = "", filters = {
     if (row.every((value) => value === "" || value == null)) return;
     if (filterSn && gasString(rowValue(row, 2)).trim() !== filterSn) return;
     if (filterCasino && gasString(rowValue(row, 0)).trim() !== filterCasino) return;
+    if (filterModel && gasString(rowValue(row, 1)).trim().toUpperCase() !== filterModel) return;
     if (filterParts && !gasString(rowValue(row, 3)).toLowerCase().includes(filterParts)) return;
     const status = brokenPartStatus(row);
     if (filterStatus === "waiting" && !status.waiting) return;

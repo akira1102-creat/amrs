@@ -249,6 +249,23 @@ test("filters, sorts, and paginates broken-part rows by status", () => {
   });
 });
 
+test("filters broken-part pages by SAE or TAE model", () => {
+  const rows = [
+    [...BROKEN_PARTS_HEADERS],
+    brokenRow({ model: "SAE", serialNo: "1001", partsNo: "AE-1" }),
+    brokenRow({ model: "TAE", serialNo: "2002", partsNo: "TAE-1" }),
+    brokenRow({ model: "SAE", serialNo: "1003", partsNo: "AE-3" }),
+  ];
+
+  const sae = getBrokenPartsPage(rows, "", { model: "SAE", sort: "oldest", page: 1, pageSize: 10 });
+  assert.deepEqual(sae.records.map((record) => record.serialNo), ["1001", "1003"]);
+  assert.equal(sae.totalMatches, 2);
+
+  const tae = getBrokenPartsPage(rows, "", { model: "tae", sort: "oldest", page: 1, pageSize: 10 });
+  assert.deepEqual(tae.records.map((record) => record.serialNo), ["2002"]);
+  assert.equal(tae.totalMatches, 1);
+});
+
 test("finds current Holding and Waiting Parts states by model and serial", () => {
   const rows = [
     [...BROKEN_PARTS_HEADERS],

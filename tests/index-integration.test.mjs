@@ -72,6 +72,48 @@ test("changing the dashboard model reruns an existing query from its first page"
   assert.equal(idleRefreshes, 0);
 });
 
+test("both Broken Parts query builders carry the selected machine model", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /id="bpFilterModel"[^>]*><option value="">全部機型<\/option><option value="SAE">SAE<\/option><option value="TAE">TAE<\/option>/);
+  assert.match(html, /id="bpPageModel"[^>]*><option value="">全部機型<\/option><option value="SAE">SAE<\/option><option value="TAE">TAE<\/option>/);
+  const extractFunction = (name) => {
+    const start = html.indexOf(`function ${name}(`);
+    assert.notEqual(start, -1, `${name} must remain available`);
+    const open = html.indexOf("{", start);
+    let depth = 0;
+    for (let index = open; index < html.length; index += 1) {
+      if (html[index] === "{") depth += 1;
+      if (html[index] === "}") depth -= 1;
+      if (depth === 0) return html.slice(start, index + 1);
+    }
+    throw new Error(`${name} has an unclosed body`);
+  };
+  const values = {
+    bpFilterCasino: "Venetian",
+    bpFilterModel: "SAE",
+    bpFilterSerial: "1001",
+    bpFilterParts: "AE-1",
+    bpFilterStatus: "waiting",
+    bpFilterSort: "newest",
+    bpPageCasino: "Parisian",
+    bpPageModel: "TAE",
+    bpPageSerial: "2002",
+    bpPageParts: "TAE-1",
+    bpPageStatus: "holding",
+    bpPageSort: "oldest",
+  };
+  const document = { getElementById: (id) => ({ value: values[id] || "" }) };
+  const builders = new Function(
+    "document",
+    "URLSearchParams",
+    "activeCompany",
+    `${extractFunction("bpListFilterSerial")};${extractFunction("brokenPartsQueryForPage")};${extractFunction("brokenPartsPageQueryForExport")};return { editor: brokenPartsQueryForPage, page: brokenPartsPageQueryForExport };`,
+  )(document, URLSearchParams, "SCL");
+
+  assert.equal(builders.editor(2, 50).get("model"), "SAE");
+  assert.equal(builders.page(3, 80).get("model"), "TAE");
+});
+
 test("CVCS input shows one Property badge below its title", () => {
   const source = fs.readFileSync(new URL("../cvcs.js", import.meta.url), "utf8");
   const renderInput = source.match(/renderInput\(\) \{([\s\S]*?)\n    \}\n    comboField/)?.[1] || "";

@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260908e">
+  <link rel="manifest" href="manifest.json?v=20260908f">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260908e">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260908e">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260908e">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20260908e">
+  <link rel="stylesheet" href="./cvcs.css?v=20260908f">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260908f">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260908f">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260908f">
   <title>AMRS</title>
   <script>
     (function(){
@@ -222,7 +222,7 @@
     .bp-list-waiting.uod-waiting{background:#6e4b00;border-color:#d29922;color:#f2cc60}
     .bp-list-del{border:1px solid #30363d;border-radius:10px;background:#21262d;color:#f85149;font-size:16px;font-weight:800;cursor:pointer;margin:4px}
     .bp-list-empty{padding:14px;color:#8b949e;text-align:center;border:1px solid #21262d;border-radius:14px;background:#0d1117}
-    .bp-list-filters{display:grid;grid-template-columns:repeat(6,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
+    .bp-list-filters{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) auto;gap:8px;margin-bottom:12px}
     .bp-list-filters input,.bp-list-filters select{font-size:12px;padding:9px 10px;border-radius:10px}
     .bp-list-filters button{padding:8px 13px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     .bp-list-head-actions{display:flex;align-items:center;gap:8px}
@@ -592,7 +592,7 @@
     .list-page-size select{width:auto;min-width:72px;padding:7px 9px;border-radius:9px;font-size:12px}
     .card-column-size{display:inline-flex;align-items:center;gap:7px;color:#8b949e;font-size:12px;font-weight:700;white-space:nowrap}
     .card-column-size select{width:auto;min-width:64px;padding:7px 9px;border-radius:9px;font-size:12px}
-    .broken-parts-page-controls{display:grid;grid-template-columns:minmax(120px,1fr) minmax(100px,.8fr) minmax(120px,1fr) minmax(110px,.7fr) minmax(120px,.7fr) auto;gap:8px;margin-bottom:10px}
+    .broken-parts-page-controls{display:grid;grid-template-columns:repeat(6,minmax(0,1fr)) auto;gap:8px;margin-bottom:10px}
     .broken-parts-page-controls input,.broken-parts-page-controls select,.broken-parts-page-controls button{font-size:12px;padding:9px 10px;border-radius:10px}
     .broken-parts-page-controls button{border:1px solid #30363d;background:#21262d;color:#e6edf3;font-weight:800;cursor:pointer}
     .broken-parts-page-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
@@ -1005,6 +1005,7 @@
     <div class="template-note" id="bpListNote">資料來自目前公司 Sheet 的 Broken Parts List 工作表。</div>
     <div class="bp-list-filters">
       <input id="bpFilterCasino" type="text" placeholder="場地">
+      <select id="bpFilterModel" onchange="applyBrokenPartsListFilter()"><option value="">全部機型</option><option value="SAE">SAE</option><option value="TAE">TAE</option></select>
       <input id="bpFilterSerial" type="text" inputmode="numeric" enterkeyhint="search" placeholder="S/N" onkeydown="if(event.key==='Enter')applyBrokenPartsListFilter()">
       <input id="bpFilterParts" type="text" placeholder="零件編號">
       <select id="bpFilterStatus" onchange="applyBrokenPartsListFilter()"><option value="">全部狀態</option><option value="waiting">等待零件</option><option value="repaired">已完成維修</option><option value="uod-waiting">待 UOD 解鎖</option><option value="uod-unlocked">已解鎖 UOD</option><option value="holding">Holding</option><option value="hold-released">已解除 Hold</option></select>
@@ -1593,6 +1594,7 @@
     <div class="card-title" id="brokenPartsPageTitle">壞零件/UOD/Hold機 列表</div>
     <div class="broken-parts-page-controls">
       <select id="bpPageCasino" onchange="applyBrokenPartsPageFilter()"><option value="">全部場地</option></select>
+      <select id="bpPageModel" onchange="applyBrokenPartsPageFilter()"><option value="">全部機型</option><option value="SAE">SAE</option><option value="TAE">TAE</option></select>
       <input id="bpPageSerial" type="text" inputmode="numeric" enterkeyhint="search" placeholder="S/N" onkeydown="if(event.key==='Enter')applyBrokenPartsPageFilter()">
       <input id="bpPageParts" type="text" placeholder="零件編號">
       <select id="bpPageStatus" onchange="applyBrokenPartsPageFilter()"><option value="">全部狀態</option><option value="waiting">等待零件</option><option value="repaired">已完成維修</option><option value="uod-waiting">待 UOD 解鎖</option><option value="uod-unlocked">已解鎖 UOD</option><option value="holding">Holding</option><option value="hold-released">已解除 Hold</option></select>
@@ -1673,20 +1675,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260908e"></script>
-<script src="./access-control.js?v=20260908e"></script>
-<script src="./cvcs.js?v=20260908e"></script>
-<script src="./token-admin.js?v=20260908e"></script>
-<script src="./xlsx.mini.min.js?v=20260908e"></script>
-<script src="./galaxy-log.js?v=20260908e"></script>
-<script src="./mgm-check-request.js?v=20260908e"></script>
-<script src="./worksheet-editor.js?v=20260908e"></script>
+<script src="./cloud-api.js?v=20260908f"></script>
+<script src="./access-control.js?v=20260908f"></script>
+<script src="./cvcs.js?v=20260908f"></script>
+<script src="./token-admin.js?v=20260908f"></script>
+<script src="./xlsx.mini.min.js?v=20260908f"></script>
+<script src="./galaxy-log.js?v=20260908f"></script>
+<script src="./mgm-check-request.js?v=20260908f"></script>
+<script src="./worksheet-editor.js?v=20260908f"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.08-05';
-const _APP_VERSION='v1.108';
+const _APP_BUMP='2026.09.08-06';
+const _APP_VERSION='v1.109';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3978,6 +3980,7 @@ async function openBrokenPartsListEditor(){
   modal.classList.add('show');
   clearBrokenPartsSelection('editor');
   document.getElementById('bpFilterCasino').value='';
+  document.getElementById('bpFilterModel').value='';
   document.getElementById('bpFilterSerial').value=document.getElementById('serialNo').value.trim();
   document.getElementById('bpFilterParts').value='';
   document.getElementById('bpFilterStatus').value='';
@@ -3990,7 +3993,7 @@ async function loadBrokenPartsListEditor(page=_bpListPage,forceRefresh=false){
   _bpListEditingIndex=-1;
   const loadingToken=showLoadingProgress('壞零件/UOD/Hold機 列表載入中，請稍等...');
   try{
-    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize),...(forceRefresh?{refresh:'1'}:{})});
+    const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpFilterCasino').value.trim(),model:document.getElementById('bpFilterModel').value,partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(_bpListPageSize),...(forceRefresh?{refresh:'1'}:{})});
     const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{},45000);
     if(!data.success)throw new Error(data.message||'載入失敗');
     _bpListRecords=data.records||[];
@@ -4032,13 +4035,13 @@ async function fetchPagedRecords(queryForPage,pageSize=100,concurrency=4){
   return records;
 }
 function brokenPartsQueryForPage(page,pageSize=100){
-  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:bpListFilterSerial(),casino:document.getElementById('bpFilterCasino').value.trim(),partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(pageSize)});
+  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:bpListFilterSerial(),casino:document.getElementById('bpFilterCasino').value.trim(),model:document.getElementById('bpFilterModel').value,partsNo:document.getElementById('bpFilterParts').value.trim(),status:document.getElementById('bpFilterStatus').value,sort:document.getElementById('bpFilterSort').value,page:String(page),pageSize:String(pageSize)});
 }
 async function fetchAllBrokenPartsRecords(){
   return fetchPagedRecords(brokenPartsQueryForPage);
 }
 function brokenPartsPageQueryForExport(page,pageSize=100){
-  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:document.getElementById('bpPageSerial').value.trim(),casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(pageSize)});
+  return new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo:document.getElementById('bpPageSerial').value.trim(),casino:document.getElementById('bpPageCasino').value.trim(),model:document.getElementById('bpPageModel').value,partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(pageSize)});
 }
 async function fetchAllBrokenPartsPageRecords(){
   return fetchPagedRecords(brokenPartsPageQueryForExport);
@@ -4270,7 +4273,7 @@ async function loadBrokenPartsPage(page=_bpPage,forceRefresh=false){
   document.getElementById('bpPageRows').innerHTML='<div class="dash-mobile-empty">載入中...</div>';
   document.getElementById('bpPageSummary').textContent='正在載入資料...';
   const serialNo=document.getElementById('bpPageSerial').value.trim();
-  const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpPageCasino').value.trim(),partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize),...(forceRefresh?{refresh:'1'}:{})});
+  const qs=new URLSearchParams({action:'brokenPartsList',company:activeCompany,serialNo,casino:document.getElementById('bpPageCasino').value.trim(),model:document.getElementById('bpPageModel').value,partsNo:document.getElementById('bpPageParts').value.trim(),status:document.getElementById('bpPageStatus').value,sort:document.getElementById('bpPageSort').value,page:String(page),pageSize:String(_bpPageSize),...(forceRefresh?{refresh:'1'}:{})});
   const loadingToken=showLoadingProgress('壞零件/UOD/Hold機 列表載入中，請稍等...');
   try{
     const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:_bpPageRequest.signal},45000);
