@@ -7,12 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260907b">
+  <link rel="manifest" href="manifest.json?v=20260908a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260907b">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260907b">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260907b">
+  <link rel="stylesheet" href="./cvcs.css?v=20260908a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260908a">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260908a">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260908a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1158,7 +1159,7 @@
 <div id="mainLayout">
 <div id="mainLeft">
 <div class="card">
-  <div class="card-title">基本資料</div>
+  <div class="card-title worksheet-entry-title"><span>基本資料</span><button class="worksheet-open-btn" id="aeWorksheetEditorBtn" onclick="openWorksheetEditor('ae',activeCompany)" type="button">▦ 表格編輯</button></div>
   <div class="grid2">
     <div>
       <label>場地</label>
@@ -1629,6 +1630,7 @@
 <div id="cvcsQueryPage" class="app-page"></div>
 <div id="cvcsBrokenPage" class="app-page"></div>
 <div id="tokenAdminPage" class="app-page"></div>
+<div id="worksheetEditorPage" class="app-page"></div>
 
 <div style="height:16px"></div>
 <div id="appVersion"></div>
@@ -1671,19 +1673,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260907b"></script>
-<script src="./access-control.js?v=20260907b"></script>
-<script src="./cvcs.js?v=20260907b"></script>
-<script src="./token-admin.js?v=20260907b"></script>
-<script src="./xlsx.mini.min.js?v=20260907b"></script>
-<script src="./galaxy-log.js?v=20260907b"></script>
-<script src="./mgm-check-request.js?v=20260907b"></script>
+<script src="./cloud-api.js?v=20260908a"></script>
+<script src="./access-control.js?v=20260908a"></script>
+<script src="./cvcs.js?v=20260908a"></script>
+<script src="./token-admin.js?v=20260908a"></script>
+<script src="./xlsx.mini.min.js?v=20260908a"></script>
+<script src="./galaxy-log.js?v=20260908a"></script>
+<script src="./mgm-check-request.js?v=20260908a"></script>
+<script src="./worksheet-editor.js?v=20260908a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.07-02';
-const _APP_VERSION='v1.103';
+const _APP_BUMP='2026.09.08-01';
+const _APP_VERSION='v1.104';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2117,7 +2120,7 @@ function initMobileMenuSwipe(){
 }
 initMobileMenuSwipe();
 let _accessPermissions=[];
-let _cvcsApp=null,_tokenAdminApp=null,_galaxyLogApp=null,_mgmCheckRequestApp=null,_cvcsMenuOpen=false;
+let _cvcsApp=null,_tokenAdminApp=null,_galaxyLogApp=null,_mgmCheckRequestApp=null,_worksheetEditorApp=null,_worksheetEditorReturnPage='input',_cvcsMenuOpen=false;
 function hasAccess(permission){return window.AmrsAccessControl.hasPermission(_accessPermissions,permission);}
 function ensureFeatureApps(){
   if(!_cvcsApp&&window.AmrsCvcs)_cvcsApp=window.AmrsCvcs.createApplication({transport:_dualTransport,storage:localStorage,toast:showToast,showLoading:showLoadingProgress,hideLoading:hideLoadingProgress});
@@ -2130,6 +2133,19 @@ function ensureGalaxyLogApp(){
 function ensureMgmCheckRequestApp(){
   if(!_mgmCheckRequestApp&&window.AmrsMgmCheckRequest)_mgmCheckRequestApp=window.AmrsMgmCheckRequest.createApplication({document,storage:localStorage,toast:showToast,transport:_dualTransport});
   return _mgmCheckRequestApp;
+}
+function ensureWorksheetEditorApp(){
+  if(!_worksheetEditorApp&&window.AmrsWorksheetEditor)_worksheetEditorApp=window.AmrsWorksheetEditor.createApplication({document,transport:_dualTransport,toast:showToast,confirm:message=>confirm(message),onClose:()=>showPage(_worksheetEditorReturnPage)});
+  return _worksheetEditorApp;
+}
+function openWorksheetEditor(kind,scope){
+  const app=ensureWorksheetEditorApp();
+  if(!app){showToast('表格編輯器未能載入，請重新整理','err');return;}
+  const permission=kind==='cvcs'?'cvcs':'ae';
+  if(!hasAccess(permission)){showToast('此 Token 沒有使用這項功能的權限','err');return;}
+  _worksheetEditorReturnPage=activePage;
+  app.setContext(kind==='cvcs'?{kind:'cvcs',property:scope}:{kind:'ae',company:scope||activeCompany});
+  showPage('worksheetEditor');
 }
 async function refreshAccessSession(){
   if(!_dualTransport)return false;
@@ -2180,9 +2196,13 @@ function autoLoadMissingInputLists(){
   if(!_partsCodes.length)void fetchPartsCodes(true);
 }
 function showPage(page){
-  const permission=window.AmrsAccessControl.pagePermission(page);
+  const permission=page==='worksheetEditor'?ensureWorksheetEditorApp()?.permission():window.AmrsAccessControl.pagePermission(page);
   if(!hasAccess(permission)){showToast('此 Token 沒有使用這項功能的權限','err');return;}
-  if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'||page==='mgmCheckRequest'||page==='cvcsInput'||page==='cvcsQuery'||page==='cvcsBroken'||page==='tokenAdmin'){
+  if(activePage==='worksheetEditor'&&page!=='worksheetEditor'&&_worksheetEditorApp?.isBusy?.()){
+    if(!confirm('尚有未儲存變更，確定離開？'))return;
+    _worksheetEditorApp.discardChanges();
+  }
+  if(page==='dashboard'||page==='schedule'||page==='monthlyStats'||page==='partsList'||page==='brokenParts'||page==='mgmCheckRequest'||page==='cvcsInput'||page==='cvcsQuery'||page==='cvcsBroken'||page==='tokenAdmin'||page==='worksheetEditor'){
     if(!hasAnyDeployId()){showToast('請先設定並測試 Token','err');openGasSettings();return;}
     if(!getDeployId())switchQueueCompany(firstConfiguredCompany());
     if(page==='dashboard')syncCasinoOptions();
@@ -2195,7 +2215,7 @@ function showPage(page){
   if(activePage==='input')saveInputDraft();
   activePage=page;
   document.body.classList.toggle('dashboard-view',page!=='input');
-  const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',galaxyLog:'galaxyLogPage',mgmCheckRequest:'mgmCheckRequestPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage'};
+  const pageIds={input:'inputPage',dashboard:'dashboardPage',schedule:'schedulePage',monthlyStats:'monthlyStatsPage',partsList:'partsListPage',brokenParts:'brokenPartsPage',galaxyLog:'galaxyLogPage',mgmCheckRequest:'mgmCheckRequestPage',cvcsInput:'cvcsInputPage',cvcsQuery:'cvcsQueryPage',cvcsBroken:'cvcsBrokenPage',tokenAdmin:'tokenAdminPage',worksheetEditor:'worksheetEditorPage'};
   Object.entries(pageIds).forEach(([name,id])=>document.getElementById(id).classList.toggle('active',page===name));
   document.getElementById('dashMenuBtn').classList.toggle('active',page==='dashboard');
   document.getElementById('scheduleMenuBtn').classList.toggle('active',page==='schedule');
@@ -2218,6 +2238,7 @@ function showPage(page){
   if(page==='brokenParts')loadBrokenPartsPage(1);
   if(page==='galaxyLog')ensureGalaxyLogApp()?.mount();
   if(page==='mgmCheckRequest')ensureMgmCheckRequestApp()?.mount();
+  if(page==='worksheetEditor')ensureWorksheetEditorApp()?.mount();
   if(page.startsWith('cvcs')){
     ensureFeatureApps();
     _cvcsApp.mount();
@@ -5980,7 +6001,7 @@ function restoreInputDraft(){
 }
 let _updatePending=false;
 function applySafeUpdate(){
-  if(!_updatePending||isSubmitting||_submitCheckBusy||_galaxyLogApp?.isBusy?.()||(typeof _mgmCheckRequestApp!=='undefined'&&_mgmCheckRequestApp?.isBusy?.())||document.querySelector('#confirmModal.show,#submitWarningModal.show'))return;
+  if(!_updatePending||isSubmitting||_submitCheckBusy||_galaxyLogApp?.isBusy?.()||(typeof _mgmCheckRequestApp!=='undefined'&&_mgmCheckRequestApp?.isBusy?.())||(typeof _worksheetEditorApp!=='undefined'&&_worksheetEditorApp?.isBusy?.())||document.querySelector('#confirmModal.show,#submitWarningModal.show'))return;
   if(dashboardEditingIdx>=0||document.querySelector('[id$="Modal"].show')){showToast('請先完成或取消目前編輯，再更新','warn');return;}
   if(!saveInputDraft())return;
   window.location.reload();

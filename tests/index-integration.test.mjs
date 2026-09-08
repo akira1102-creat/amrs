@@ -109,6 +109,24 @@ test("GitHub Pages stages the independent Galaxy Log assets", () => {
   }
 });
 
+test("worksheet editor is available from AE and CVCS input pages and ships with the cached app", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const cvcs = fs.readFileSync(new URL("../cvcs.js", import.meta.url), "utf8");
+  const worker = fs.readFileSync(new URL("../sw.js", import.meta.url), "utf8");
+  const workflow = fs.readFileSync(new URL("../.github/workflows/deploy.yml", import.meta.url), "utf8");
+  assert.match(html, /id="aeWorksheetEditorBtn"[^>]+openWorksheetEditor\('ae'/);
+  assert.match(cvcs, /id="cvcs-sheet-editor-btn"/);
+  assert.match(html, /id="worksheetEditorPage" class="app-page"/);
+  assert.match(html, /function openWorksheetEditor\(/);
+  assert.match(html, /page==='worksheetEditor'/);
+  for (const asset of ["worksheet-editor.js", "worksheet-editor.css"]) {
+    const url = html.match(new RegExp(`(?:href|src)="\\./(${asset.replaceAll('.', '\\.') }\\?v=[^"]+)"`))?.[1];
+    assert.ok(url, `${asset} must have a versioned URL`);
+    assert.ok(worker.includes(`'./${url}'`), `${asset} must use the same cached URL`);
+    assert.match(workflow, new RegExp(`\\b${asset.replaceAll('.', '\\.') }\\b`));
+  }
+});
+
 test("schedule remarks expose edit controls for both shifts", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /updateScheduleRemark/);

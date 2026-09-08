@@ -1040,6 +1040,44 @@ test("syncs Galaxy Log completion idempotently and reports a cloud conflict", as
   assert.equal(harness.sheets.get("galaxy-log:Galaxy Log").values[1][2], "2026-08-06");
 });
 
+test("reads and safely updates an AE worksheet grid without exposing its identity column", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => "synthetic-grid-id" });
+  const grid = await repository.getAction({ action: "worksheetGrid", company: "SCL", page: "1", pageSize: "50", refresh: "1" });
+
+  assert.deepEqual(grid.headers, commonHeaders);
+  assert.equal(grid.rows.length, 1);
+  assert.equal(grid.rows[0].values.length, commonHeaders.length);
+  assert.equal(grid.rows[0].recordId, "synthetic-grid-id");
+
+  const mutation = { ...grid.rows[0], values: grid.rows[0].values.map((value, index) => index === 5 ? "Fault" : value), originalValues: grid.rows[0].values };
+  const saved = await repository.postAction({ action: "updateWorksheetGrid", company: "SCL", mutations: [mutation] });
+  assert.equal(saved.saved, 1);
+  const refreshed = await repository.getAction({ action: "worksheetGrid", company: "SCL", page: "1", pageSize: "50", refresh: "1" });
+  assert.equal(refreshed.rows[0].values[5], "Fault");
+
+  await assert.rejects(
+    repository.postAction({ action: "updateWorksheetGrid", company: "SCL", mutations: [{ ...mutation, values: mutation.values.map((value, index) => index === 5 ? "Stale" : value) }] }),
+    /changed.*reload/i,
+  );
+});
+
+test("reads and safely updates the CVCS worksheet grid for one Property", async () => {
+  const harness = createSheetsHarness(companyData);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => "synthetic-cvcs-grid-id" });
+  const grid = await repository.getAction({ action: "cvcsWorksheetGrid", property: "Venetian", page: "1", pageSize: "50", refresh: "1" });
+
+  assert.deepEqual(grid.headers, ["Property", "Date", "Location", "Sub Location", "Quarter", "Model", "S/N", "Antenna Size", "Antenna Status", "Version", "Reason", "Action Taken & Notes", "Parts Change"]);
+  assert.equal(grid.rows.length, 1);
+  assert.equal(grid.rows[0].values[6], "1234");
+
+  const mutation = { ...grid.rows[0], values: grid.rows[0].values.map((value, index) => index === 10 ? "Fault" : value), originalValues: grid.rows[0].values };
+  const saved = await repository.postAction({ action: "updateCvcsWorksheetGrid", property: "Venetian", mutations: [mutation] });
+  assert.equal(saved.saved, 1);
+  const refreshed = await repository.getAction({ action: "cvcsWorksheetGrid", property: "Venetian", page: "1", pageSize: "50", refresh: "1" });
+  assert.equal(refreshed.rows[0].values[10], "Fault");
+});
+
 test("appends a new Galaxy task into its requested repeated-column group", async () => {
   const data = structuredClone(companyData);
   data["galaxy-log"] = [{ title: "Galaxy Log", columnCount: 3, values: [

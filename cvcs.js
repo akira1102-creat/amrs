@@ -203,7 +203,7 @@
       const form = this.forms[this.activeProperty] || createDefaultForm(this.activeProperty);
       const queue = this.getQueue();
       host.innerHTML = `<div class="cvcs-shell">
-        <div class="cvcs-page-head"><div><h2>CVCS 資料輸入</h2><span class="cvcs-property-badge">${escapeHtml(this.activeProperty)}</span></div></div>
+        <div class="cvcs-page-head"><div><h2>CVCS 資料輸入</h2><span class="cvcs-property-badge">${escapeHtml(this.activeProperty)}</span></div><button class="cvcs-secondary" id="cvcs-sheet-editor-btn" type="button">▦ 表格編輯</button></div>
         <div class="cvcs-input-layout"><div class="cvcs-main-column">
           <section class="cvcs-panel"><h3>基本資料</h3><div class="cvcs-grid cvcs-grid-4">
             <label><span>日期 / Date *</span><input id="cvcs-date" type="date" required value="${escapeHtml(form.date)}"></label>
@@ -290,6 +290,7 @@
         const active = event.currentTarget.getAttribute("aria-pressed") !== "true"; event.currentTarget.setAttribute("aria-pressed", String(active)); event.currentTarget.classList.toggle("active", active);
       });
       doc.getElementById("cvcs-add-btn")?.addEventListener("click", () => this.addQueueItem());
+      doc.getElementById("cvcs-sheet-editor-btn")?.addEventListener("click", () => root.openWorksheetEditor?.("cvcs", this.activeProperty));
       doc.getElementById("cvcs-submit-btn")?.addEventListener("click", () => this.submitQueue());
       doc.getElementById("cvcs-select-all")?.addEventListener("click", () => doc.querySelectorAll("[data-queue-select]").forEach((box) => { box.checked = true; }));
       doc.getElementById("cvcs-delete-selected")?.addEventListener("click", () => this.deleteSelectedQueue());

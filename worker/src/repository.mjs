@@ -85,6 +85,23 @@ function text(value) {
   return String(value == null ? "" : value).trim();
 }
 
+function gridCell(value) {
+  return String(value == null ? "" : value);
+}
+
+function gridValues(row, width) {
+  return Array.from({ length: width }, (_, index) => gridCell(row?.[index]));
+}
+
+function gridValuesEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => gridCell(value) === gridCell(right[index]));
+}
+
+function gridPage(value, fallback, maximum = Number.POSITIVE_INFINITY) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
+}
+
 function hasRecordValue(value) {
   return Array.isArray(value) ? value.length > 0 : text(value) !== "";
 }
@@ -1582,7 +1599,74 @@ export function createRepository(env = {}, dependencies = {}) {
     }
     if (action === "galaxyLogOverview") return getGalaxyLogOverview(params);
     if (action === "mgmCheckRequests") return getMgmCheckRequests(params);
+    if (action === "worksheetGrid") return getWorksheetGrid(params);
     return { error: "unknown action" };
+  }
+
+  async function getWorksheetGrid(params = {}) {
+    const company = normalizeRequestCompany(params.company);
+    const table = await readMainTable(company, { refresh: text(params.refresh) === "1" });
+    if (!table.sheet) throw Object.assign(new Error("Worksheet not found"), { status: 404 });
+    const headers = gridValues(table.values[0], table.width);
+    const rows = table.rows.map((row, index) => ({
+      rowNumber: index + 2,
+      recordId: text(arrayValue(row, table.idColumn)),
+      values: gridValues(row, table.width),
+    })).filter((row) => row.recordId);
+    const pageSize = gridPage(params.pageSize, 60, 100);
+    const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+    const page = Math.min(gridPage(params.page, 1), pages);
+    return {
+      success: true,
+      kind: "ae",
+      company,
+      title: `${company} / ${table.sheet.title}`,
+      sheetName: table.sheet.title,
+      headers,
+      rows: rows.slice((page - 1) * pageSize, page * pageSize),
+      total: rows.length,
+      page,
+      pageSize,
+      pages,
+    };
+  }
+
+  async function updateWorksheetGrid(payload = {}) {
+    const company = normalizeRequestCompany(payload.company);
+    const mutations = Array.isArray(payload.mutations) ? payload.mutations : [];
+    if (!mutations.length) throw Object.assign(new Error("No worksheet changes supplied"), { status: 400 });
+    const table = await readMainTable(company, { refresh: true, cache: false });
+    const rowById = new Map(table.rows.map((row, index) => [text(arrayValue(row, table.idColumn)), { row, rowNumber: index + 2 }]));
+    const fields = companySchema(company).fields;
+    const data = [];
+    const seen = new Set();
+    let saved = 0;
+    for (const mutation of mutations) {
+      const recordId = text(mutation?.recordId);
+      if (!recordId || seen.has(recordId)) throw Object.assign(new Error("Invalid or duplicate worksheet row"), { status: 400 });
+      seen.add(recordId);
+      const target = rowById.get(recordId);
+      if (!target) throw Object.assign(new Error("Worksheet row changed; please reload"), { status: 409 });
+      const currentValues = gridValues(target.row, table.width);
+      const originalValues = gridValues(mutation?.originalValues, table.width);
+      if (!gridValuesEqual(currentValues, originalValues)) throw Object.assign(new Error("Worksheet row changed; please reload"), { status: 409 });
+      const requestedValues = gridValues(mutation?.values, table.width);
+      const changedColumns = requestedValues.map((value, index) => gridCell(value) === currentValues[index] ? -1 : index).filter((index) => index >= 0);
+      if (!changedColumns.length) continue;
+      const originalRecord = recordFromRow(currentValues, formatSheetDate(currentValues[1], config.timeZone), target.rowNumber, company, recordId);
+      const requestedRecord = recordFromRow(requestedValues, formatSheetDate(requestedValues[1], config.timeZone), target.rowNumber, company, recordId);
+      const changes = Object.fromEntries(changedColumns.map((index) => [fields[index], requestedRecord[fields[index]]]));
+      validateEditedRecord(requestedRecord, originalRecord, changes);
+      const normalizedValues = recordToValues(requestedRecord, company).map(gridCell);
+      changedColumns.forEach((index) => data.push({
+        range: `${quoteSheetName(table.sheet.title)}!${columnNumberToA1(index + 1)}${target.rowNumber}`,
+        values: [[normalizedValues[index]]],
+      }));
+      saved += 1;
+    }
+    if (data.length) await sheets.valuesBatchUpdate({ spreadsheetId: table.spreadsheetId, data, valueInputOption: "USER_ENTERED" });
+    await invalidateCompany(company);
+    return { success: true, saved, updatedCells: data.length };
   }
 
   function writeValueRangeForRow(sheetName, rowNumber, values) {
@@ -1962,6 +2046,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (!Array.isArray(payload) && payload.action === "updateSchedulePeople") return updateSchedulePeople(payload);
     if (!Array.isArray(payload) && payload.action === "syncGalaxyLog") return syncGalaxyLog(payload);
     if (!Array.isArray(payload) && payload.action === "syncMgmCheckRequests") return syncMgmCheckRequests(payload);
+    if (!Array.isArray(payload) && payload.action === "updateWorksheetGrid") return updateWorksheetGrid(payload);
     if (!Array.isArray(payload) && payload.action === "bulkUpdateRecords") return bulkUpdateRecords(payload);
     if (!Array.isArray(payload) && payload.action === "submitRecords") {
       const repaired = await updateBrokenRepairDays(payload.brokenPartsRepairs || []);
@@ -2027,6 +2112,8 @@ export function createRepository(env = {}, dependencies = {}) {
     syncGalaxyLog,
     getMgmCheckRequests,
     syncMgmCheckRequests,
+    getWorksheetGrid,
+    updateWorksheetGrid,
     findSubmissionIds,
     invalidateCompany,
     readMainTable,

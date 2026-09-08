@@ -28,6 +28,23 @@ function equalValues(left, right) {
   return left.length === right.length && left.every((value, index) => text(value) === text(right[index]));
 }
 
+function gridCell(value) {
+  return String(value == null ? "" : value);
+}
+
+function gridValues(row, width) {
+  return Array.from({ length: width }, (_, index) => gridCell(row?.[index]));
+}
+
+function gridPage(value, fallback, maximum = Number.POSITIVE_INFINITY) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, maximum) : fallback;
+}
+
+function gridValuesEqual(left, right) {
+  return left.length === right.length && left.every((value, index) => gridCell(value) === gridCell(right[index]));
+}
+
 function mapTable(table, mapper) {
   return (table.rows || []).map((row, index) => mapper(row, index + 2, text(row?.[table.idColumn - 1])));
 }
@@ -88,6 +105,61 @@ export function createCvcsRepository(deps) {
   async function getBrokenParts(params = {}) {
     const table = await brokenTable({ refresh: text(params.refresh) === "1" });
     return { success: true, ...getCvcsBrokenPartsPage(mapTable(table, cvcsBrokenPartFromRow), params) };
+  }
+
+  async function getWorksheetGrid(params = {}) {
+    const table = await recordTable({ refresh: text(params.refresh) === "1" });
+    const property = text(params.property);
+    const width = CVCS_RECORD_HEADERS.length;
+    const rows = (table.rows || []).map((row, index) => ({
+      rowNumber: index + 2,
+      recordId: text(row?.[table.idColumn - 1]),
+      values: gridValues(row, width),
+    })).filter((row) => row.recordId && (!property || text(row.values[0]) === property));
+    const pageSize = gridPage(params.pageSize, 60, 100);
+    const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+    const page = Math.min(gridPage(params.page, 1), pages);
+    return {
+      success: true,
+      kind: "cvcs",
+      title: `CVCS Records${property ? ` / ${property}` : ""}`,
+      sheetName: table.sheet.title,
+      headers: CVCS_RECORD_HEADERS.slice(),
+      rows: rows.slice((page - 1) * pageSize, page * pageSize),
+      total: rows.length,
+      page,
+      pageSize,
+      pages,
+    };
+  }
+
+  async function updateWorksheetGrid(payload = {}) {
+    const property = text(payload.property);
+    const mutations = Array.isArray(payload.mutations) ? payload.mutations : [];
+    if (!mutations.length) throw Object.assign(new Error("No worksheet changes supplied"), { status: 400 });
+    const table = await recordTable({ refresh: true, cache: false });
+    const width = CVCS_RECORD_HEADERS.length;
+    const rows = [];
+    const seen = new Set();
+    for (const mutation of mutations) {
+      const recordId = text(mutation?.recordId);
+      if (!recordId || seen.has(recordId)) throw Object.assign(new Error("Invalid or duplicate worksheet row"), { status: 400 });
+      seen.add(recordId);
+      const index = (table.rows || []).findIndex((row) => text(row?.[table.idColumn - 1]) === recordId);
+      if (index < 0) throw Object.assign(new Error("Worksheet row changed; please reload"), { status: 409 });
+      const currentValues = gridValues(table.rows[index], width);
+      const originalValues = gridValues(mutation?.originalValues, width);
+      if (!gridValuesEqual(currentValues, originalValues) || (property && text(currentValues[0]) !== property)) {
+        throw Object.assign(new Error("Worksheet row changed; please reload"), { status: 409 });
+      }
+      const requestedValues = gridValues(mutation?.values, width);
+      if (gridValuesEqual(currentValues, requestedValues)) continue;
+      const normalized = cvcsRecordToValues(cvcsRecordFromRow(requestedValues, index + 2, recordId));
+      rows.push({ rowNumber: index + 2, values: normalized });
+    }
+    if (rows.length) await writeRows(table, rows);
+    await invalidate(["cvcs:records"]);
+    return { success: true, saved: rows.length };
   }
 
   async function updateOptions(payload = {}) {
@@ -249,6 +321,7 @@ export function createCvcsRepository(deps) {
   }
 
   async function getAction(params = {}) {
+    if (params.action === "cvcsWorksheetGrid") return getWorksheetGrid(params);
     if (params.action === "cvcsOptions") return getOptions(params);
     if (params.action === "cvcsRecords") return getRecords(params);
     if (params.action === "cvcsBrokenParts") return getBrokenParts(params);
@@ -256,6 +329,7 @@ export function createCvcsRepository(deps) {
   }
 
   async function postAction(payload = {}) {
+    if (payload.action === "updateCvcsWorksheetGrid") return updateWorksheetGrid(payload);
     if (payload.action === "updateCvcsOptions") return updateOptions(payload);
     if (payload.action === "submitCvcsRecords") return submitRecords(payload);
     if (payload.action === "submitCvcsBrokenParts") return submitBrokenParts(payload);
@@ -269,5 +343,5 @@ export function createCvcsRepository(deps) {
     return null;
   }
 
-  return { getAction, postAction, findSubmissionIds, recordTable, brokenTable };
+  return { getAction, postAction, findSubmissionIds, recordTable, brokenTable, getWorksheetGrid, updateWorksheetGrid };
 }
