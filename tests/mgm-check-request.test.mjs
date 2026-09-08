@@ -139,11 +139,12 @@ test("stages a new customer request offline and links SN with AA Tag", () => {
   });
 });
 
-test("first mount downloads automatically only when no local request list exists", async () => {
+test("every page mount downloads the latest cloud request list even when local data exists", async () => {
   const calls = [];
   const transport = { get: async (query) => { calls.push(query); return { success: true, requests: [], aaTags: [] }; }, post: async () => ({ success: true }) };
   const storage = new MemoryStorage();
-  createApplication({ document: fakeDocument(), storage, transport, isOnline: () => true }).mount();
+  const app = createApplication({ document: fakeDocument(), storage, transport, isOnline: () => true });
+  app.mount();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(calls.length, 1);
   assert.match(calls[0], /action=mgmCheckRequests/);
@@ -151,8 +152,18 @@ test("first mount downloads automatically only when no local request list exists
   const localRequest = parseRequestRows({ sheetName: "MGM Macau", rows: [headers, ["2026/6/9", "11:15", "", "21BB02", "259", "TAE0248", "BOX-1", "", "Issue", "", "", ""]] })[0];
   const cached = new MemoryStorage();
   writeStoredState(cached, { requests: [localRequest], cloudRequests: [localRequest], outbox: [] });
-  createApplication({ document: fakeDocument(), storage: cached, transport: { get: async () => { throw new Error("must not auto download"); } }, isOnline: () => true }).mount();
+  const cachedCalls = [];
+  const cachedApp = createApplication({
+    document: fakeDocument(),
+    storage: cached,
+    transport: { get: async (query) => { cachedCalls.push(query); return { success: true, requests: [localRequest], aaTags: [] }; }, post: async () => ({ success: true }) },
+    isOnline: () => true,
+  });
+  cachedApp.mount();
   await new Promise((resolve) => setTimeout(resolve, 0));
+  cachedApp.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(cachedCalls.length, 2);
   assert.equal(readStoredState(cached).requests.length, 1);
 });
 
@@ -162,8 +173,10 @@ test("renders the operational search, cloud actions and editable E-H J-L fields"
   const html = document.getElementById("mgmCheckRequestPage").innerHTML;
   assert.match(html, /MGM Check Request/);
   assert.match(html, /輸入 SN、AA Tag、Table 或 BOX ID/);
-  assert.match(html, /下載雲端資料/);
-  assert.match(html, /同步至雲端/);
+  assert.match(html, /重新載入/);
+  assert.match(html, /儲存資料/);
+  assert.doesNotMatch(html, /同步至雲端/);
+  assert.match(html, /直接讀取及儲存最新雲端資料/);
   assert.match(html, /新增檢查請求/);
   assert.deepEqual(EDITABLE_FIELDS, ["serialNo", "aaTag", "boxId", "vaultId", "machineStatus", "cardStatus", "remark"]);
 });

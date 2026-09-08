@@ -234,10 +234,10 @@
 
   function shell() {
     return `<div class="mgm-check-shell">
-      <header class="mgm-check-head"><div><h1>MGM Check Request</h1><p>MGM Macau／MGM Cotai · 現場可離線查詢及填寫</p></div><div class="mgm-check-actions"><button id="mgmCheckAddBtn" class="mgm-check-btn add" type="button">＋ 新增檢查請求</button><button id="mgmCheckSyncBtn" class="mgm-check-btn sync" type="button">同步至雲端</button><button id="mgmCheckDownloadBtn" class="mgm-check-btn primary" type="button">下載雲端資料</button></div></header>
+      <header class="mgm-check-head"><div><h1>MGM Check Request</h1><p>MGM Macau／MGM Cotai · 直接讀取及儲存最新雲端資料</p></div><div class="mgm-check-actions"><button id="mgmCheckAddBtn" class="mgm-check-btn add" type="button">＋ 新增檢查請求</button><button id="mgmCheckSyncBtn" class="mgm-check-btn sync" type="button">儲存資料</button><button id="mgmCheckDownloadBtn" class="mgm-check-btn primary" type="button">重新載入</button></div></header>
       <div class="mgm-check-status"><span id="mgmCheckSummary">尚未下載清單</span><strong id="mgmCheckConnection">本機未有資料</strong><span id="mgmCheckMessage"></span></div>
       <form id="mgmCheckNewForm" class="mgm-check-new" hidden>
-        <div class="mgm-check-new-title"><strong>新增客戶檢查請求</strong><span>先儲存到本機，返公司後再同步至雲端</span></div>
+        <div class="mgm-check-new-title"><strong>新增客戶檢查請求</strong><span>加入後按「儲存資料」寫入雲端</span></div>
         <div class="mgm-check-new-grid">
           <label><span>場地 *</span><select id="mgmCheckNewSheet"><option>MGM Macau</option><option>MGM Cotai</option></select></label>
           <label><span>事發日期 *</span><input id="mgmCheckNewDate" type="date" required></label>
@@ -250,7 +250,7 @@
           <label><span>Vault ID</span><input id="mgmCheckNewVault" autocomplete="off"></label>
           <label class="wide"><span>事件詳情 *</span><textarea id="mgmCheckNewDetails" rows="3" required></textarea></label>
         </div>
-        <div class="mgm-check-editor-actions"><button id="mgmCheckNewCancel" type="button">取消</button><button class="save" type="submit">儲存到本機</button></div>
+        <div class="mgm-check-editor-actions"><button id="mgmCheckNewCancel" type="button">取消</button><button class="save" type="submit">加入待儲存</button></div>
       </form>
       <div class="mgm-check-filters"><input id="mgmCheckSearch" type="search" inputmode="search" autocomplete="off" placeholder="輸入 SN、AA Tag、Table 或 BOX ID"><select id="mgmCheckSiteFilter"><option value="all">兩個場地</option><option>MGM Macau</option><option>MGM Cotai</option></select><select id="mgmCheckStatusFilter"><option value="pending">未完成</option><option value="done">已完成</option><option value="all">全部</option></select></div>
       <div id="mgmCheckConflicts"></div><div id="mgmCheckList" class="mgm-check-list"></div><button id="mgmCheckMoreBtn" class="mgm-check-more" type="button" hidden>顯示更多</button>
@@ -304,7 +304,7 @@
 
     async function syncCloud() {
       if (busy || !state.outbox.length || !online() || !transportAvailable()) return false;
-      busy = true; render(); setMessage("正在同步本機變更…");
+      busy = true; render(); setMessage("正在儲存資料…");
       const mutations = state.outbox.map((item) => ({ ...item }));
       const requestId = `mgm-check-sync-${hash(mutations.map((item) => item.mutationId).sort().join("|"))}`;
       try {
@@ -316,11 +316,11 @@
         let next = mergeCloudSnapshot({ ...state, outbox: remaining }, response, Date.now());
         next = { ...next, outbox: remaining, conflicts, lastSyncAt: new Date().toISOString() };
         persist(next);
-        setMessage(conflicts.length ? `${applied.size} 筆已同步，${conflicts.length} 筆需要重新下載檢查` : `已同步 ${applied.size} 筆`, conflicts.length ? "warn" : "ok");
-        notify(conflicts.length ? "部分記錄有衝突，未有覆蓋雲端資料" : `✓ 已同步 ${applied.size} 筆` , conflicts.length ? "err" : undefined);
+        setMessage(conflicts.length ? `${applied.size} 筆已儲存，${conflicts.length} 筆需要重新載入檢查` : `已儲存 ${applied.size} 筆`, conflicts.length ? "warn" : "ok");
+        notify(conflicts.length ? "部分記錄有衝突，未有覆蓋雲端資料" : `✓ 已儲存 ${applied.size} 筆` , conflicts.length ? "err" : undefined);
         return conflicts.length === 0;
       } catch (error) {
-        setMessage("同步失敗，本機變更已保留", "err"); notify("同步失敗，本機資料沒有遺失", "err"); return false;
+        setMessage("儲存失敗，未儲存變更已保留", "err"); notify("儲存失敗，變更沒有遺失", "err"); return false;
       } finally { busy = false; render(); }
     }
 
@@ -328,7 +328,7 @@
       const field = (name, label, multiline = false) => `<label><span>${label}</span>${multiline ? `<textarea data-mgm-check-field="${name}" rows="2">${escapeHtml(request[name])}</textarea>` : `<input data-mgm-check-field="${name}" value="${escapeHtml(request[name])}">`}</label>`;
       return `<div class="mgm-check-editor">
         <div class="mgm-check-editor-grid">${field("serialNo", "Serial NO.")}${field("aaTag", "AA Tag")}${field("boxId", "BOX ID")}${field("vaultId", "Vault ID")}${field("machineStatus", "機台跟進狀況", true)}${field("cardStatus", "實牌跟進狀況", true)}${field("remark", "備注", true)}</div>
-        <div class="mgm-check-editor-actions"><button data-mgm-check-action="cancel" type="button">取消</button><button class="save" data-mgm-check-action="save" type="button">儲存到本機</button></div>
+        <div class="mgm-check-editor-actions"><button data-mgm-check-action="cancel" type="button">取消</button><button class="save" data-mgm-check-action="save" type="button">加入待儲存</button></div>
       </div>`;
     }
 
@@ -340,7 +340,7 @@
         <div class="mgm-check-meta"><span>事發 ${escapeHtml(request.eventDate)} ${escapeHtml(request.eventTime)}</span>${request.endTime ? `<span>結束 ${escapeHtml(request.endTime)}</span>` : ""}<span>Table ${escapeHtml(request.table || "—")}</span></div>
         <div class="mgm-check-source"><span>BOX ${escapeHtml(request.boxId || "—")}</span><span>Vault ${escapeHtml(request.vaultId || "—")}</span></div>
         <div class="mgm-check-event">${escapeHtml(request.eventDetails || "未有事件詳情")}</div>
-        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup"><div><span>機台跟進</span><strong>${escapeHtml(request.machineStatus || "未填寫")}</strong></div><div><span>實牌跟進</span><strong>${escapeHtml(request.cardStatus || "未填寫")}</strong></div>${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions"><span class="mgm-check-state ${request.status}">${request.status === "done" ? "已完成" : "待檢查"}${pending ? " · 待同步" : ""}</span><button data-mgm-check-action="edit" type="button">${request.status === "done" ? "修改" : "填寫檢查結果"}</button></div>`}
+        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup"><div><span>機台跟進</span><strong>${escapeHtml(request.machineStatus || "未填寫")}</strong></div><div><span>實牌跟進</span><strong>${escapeHtml(request.cardStatus || "未填寫")}</strong></div>${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions"><span class="mgm-check-state ${request.status}">${request.status === "done" ? "已完成" : "待檢查"}${pending ? " · 待儲存" : ""}</span><button data-mgm-check-action="edit" type="button">${request.status === "done" ? "修改" : "填寫檢查結果"}</button></div>`}
       </article>`;
     }
 
@@ -349,19 +349,19 @@
       const filtered = filterRequests(state.requests, filter);
       const pendingTotal = state.requests.filter((request) => request.status === "pending").length;
       const summary = documentRef.getElementById("mgmCheckSummary");
-      if (summary) summary.textContent = `全部 ${state.requests.length} · 未完成 ${pendingTotal} · 已完成 ${state.requests.length - pendingTotal} · 待同步 ${state.outbox.length}`;
+      if (summary) summary.textContent = `全部 ${state.requests.length} · 未完成 ${pendingTotal} · 已完成 ${state.requests.length - pendingTotal} · 待儲存 ${state.outbox.length}`;
       const connection = documentRef.getElementById("mgmCheckConnection");
-      if (connection) connection.textContent = !online() ? "離線模式" : state.lastCloudError ? "雲端讀取失敗" : state.outbox.length ? `有本機變更（${state.outbox.length}）` : state.requests.length ? "資料已下載" : "本機未有資料";
+      if (connection) connection.textContent = !online() ? "暫時離線" : state.lastCloudError ? "雲端讀取失敗" : state.outbox.length ? `有未儲存變更（${state.outbox.length}）` : state.requests.length ? "雲端最新資料" : "正在連接雲端";
       const sync = documentRef.getElementById("mgmCheckSyncBtn");
-      if (sync) { sync.disabled = busy || !online() || !transportAvailable() || !state.outbox.length; sync.textContent = busy ? "處理中…" : state.outbox.length ? `同步至雲端（${state.outbox.length}）` : "同步至雲端"; }
+      if (sync) { sync.disabled = busy || !online() || !transportAvailable() || !state.outbox.length; sync.textContent = busy ? "處理中…" : state.outbox.length ? `儲存資料（${state.outbox.length}）` : "儲存資料"; }
       const download = documentRef.getElementById("mgmCheckDownloadBtn");
-      if (download) { download.disabled = busy || !online() || !transport || typeof transport.get !== "function"; download.textContent = busy ? "下載中…" : "下載雲端資料"; }
+      if (download) { download.disabled = busy || !online() || !transport || typeof transport.get !== "function"; download.textContent = busy ? "載入中…" : "重新載入"; }
       const list = documentRef.getElementById("mgmCheckList");
-      if (list) list.innerHTML = filtered.length ? filtered.slice(0, visibleLimit).map(requestMarkup).join("") : `<div class="mgm-check-empty"><strong>${state.requests.length ? "找不到符合條件的記錄" : "尚未有 MGM Check Request 清單"}</strong><span>${state.requests.length ? "請檢查 SN／AA Tag 或改為查看全部。" : "有網絡時會自動下載；下載後可完全離線查詢及填寫。"}</span></div>`;
+      if (list) list.innerHTML = filtered.length ? filtered.slice(0, visibleLimit).map(requestMarkup).join("") : `<div class="mgm-check-empty"><strong>${state.requests.length ? "找不到符合條件的記錄" : "正在載入 MGM Check Request 清單"}</strong><span>${state.requests.length ? "請檢查 SN／AA Tag 或改為查看全部。" : "每次進入頁面都會自動載入最新雲端資料。"}</span></div>`;
       const more = documentRef.getElementById("mgmCheckMoreBtn");
       if (more) { more.hidden = filtered.length <= visibleLimit; more.textContent = `顯示更多（${Math.min(visibleLimit, filtered.length)} / ${filtered.length}）`; }
       const conflicts = documentRef.getElementById("mgmCheckConflicts");
-      if (conflicts) conflicts.innerHTML = state.conflicts.length ? `<div class="mgm-check-conflict">${state.conflicts.length} 筆資料在雲端已有改動，未有覆蓋。請先下載最新資料再檢查。</div>` : "";
+      if (conflicts) conflicts.innerHTML = state.conflicts.length ? `<div class="mgm-check-conflict">${state.conflicts.length} 筆資料在雲端已有改動，未有覆蓋。請先重新載入再檢查。</div>` : "";
       const search = documentRef.getElementById("mgmCheckSearch"); if (search && search.value !== filter.query) search.value = filter.query;
       const site = documentRef.getElementById("mgmCheckSiteFilter"); if (site) site.value = filter.site;
       const status = documentRef.getElementById("mgmCheckStatusFilter"); if (status) status.value = filter.status;
@@ -400,7 +400,7 @@
           }, Date.now());
           persist(next); creating = false; filter = { query: "", site: "all", status: "pending" };
           ["mgmCheckNewTime", "mgmCheckNewEndTime", "mgmCheckNewTable", "mgmCheckNewSerial", "mgmCheckNewAaTag", "mgmCheckNewBox", "mgmCheckNewVault", "mgmCheckNewDetails"].forEach((id) => { const input = documentRef.getElementById(id); if (input) input.value = ""; });
-          setMessage("新請求已儲存到本機，待同步至雲端", "ok"); notify("✓ 新請求已儲存到本機（待同步）"); render();
+          setMessage("新請求已加入，請按「儲存資料」", "ok"); notify("✓ 新請求已加入待儲存清單"); render();
         } catch (error) { setMessage(text(error?.message || "未能新增檢查請求"), "err"); }
       });
       documentRef.getElementById("mgmCheckNewSerial")?.addEventListener("input", (event) => { const mapped = tagMaps(state.aaTags).aaBySerial.get(normalizeSerial(event.target.value)); const target = documentRef.getElementById("mgmCheckNewAaTag"); if (mapped && target) target.value = mapped; });
@@ -419,7 +419,7 @@
         if (button.dataset.mgmCheckAction === "save") {
           const next = applyDraft(state, requestId, draftFromEditor(), Date.now());
           if (JSON.stringify(next.outbox) === JSON.stringify(state.outbox)) { setMessage("沒有需要儲存的變更", "warn"); editingId = ""; render(); return; }
-          persist(next); editingId = ""; filter.status = "all"; setMessage("已儲存到本機，返公司後按同步至雲端", "ok"); notify("✓ 已儲存到本機（待同步）"); render();
+          persist(next); editingId = ""; filter.status = "all"; setMessage("修改已加入，請按「儲存資料」", "ok"); notify("✓ 修改已加入待儲存清單"); render();
         }
       });
       documentRef.getElementById("mgmCheckList")?.addEventListener("input", (event) => {
@@ -430,7 +430,7 @@
         if (field === "serialNo") { const other = card?.querySelector?.('[data-mgm-check-field="aaTag"]'); const mapped = maps.aaBySerial.get(normalizeSerial(input.value)); if (other && mapped) other.value = mapped; }
         else { const other = card?.querySelector?.('[data-mgm-check-field="serialNo"]'); const mapped = maps.serialByAa.get(normalizeAaTag(input.value)); if (other && mapped) other.value = mapped; }
       });
-      root?.addEventListener?.("online", () => { render(); if (!state.requests.length && !state.lastDownloadedAt) void loadCloud({ silent: true }); });
+      root?.addEventListener?.("online", () => { render(); void loadCloud({ silent: true }); });
       root?.addEventListener?.("offline", render);
     }
 
@@ -438,7 +438,7 @@
       const page = documentRef?.getElementById?.("mgmCheckRequestPage"); if (!page) return false;
       if (!mounted) { page.innerHTML = shell(); mounted = true; bind(); }
       render();
-      if (!state.requests.length && !state.lastDownloadedAt && online()) void loadCloud({ silent: true });
+      if (online()) void loadCloud({ silent: true });
       return true;
     }
 
