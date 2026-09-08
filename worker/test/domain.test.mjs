@@ -317,6 +317,24 @@ test("filters dashboard rows and computes full-result statistics", () => {
   assert.equal(queryResult.records[0].serialNo, "8");
 });
 
+test("filters dashboard results and statistics by the selected SAE or TAE model", () => {
+  const rows = [
+    ["Venetian", "2026/08/01", "PO-1", "SAE", "1001", "PM", "Preventive Maintenance"],
+    ["Parisian", "2026/08/02", "PO-2", "TAE", "1002", "Error", "Repair"],
+    ["Londoner", "2026/08/03", "PO-3", "SAE", "1003", "PM", "Preventive Maintenance"],
+  ];
+
+  const sae = getDashboardRecords(rows, { company: "SCL", model: "SAE", page: 1, pageSize: 10 });
+  assert.deepEqual(sae.records.map((record) => record.serialNo), ["1003", "1001"]);
+  assert.deepEqual(sae.stats.models, { SAE: 2 });
+  assert.equal(sae.totalMatches, 2);
+
+  const tae = getDashboardRecords(rows, { company: "SCL", model: "TAE", page: 1, pageSize: 10 });
+  assert.deepEqual(tae.records.map((record) => record.serialNo), ["1002"]);
+  assert.deepEqual(tae.stats.models, { TAE: 1 });
+  assert.equal(tae.totalMatches, 1);
+});
+
 test("normalizes AA tags and drops invalid rows", () => {
   assert.equal(normalizeAaTag("TAE12"), "TAE0012");
   assert.equal(normalizeAaTag("AA-7"), "TAE0007");

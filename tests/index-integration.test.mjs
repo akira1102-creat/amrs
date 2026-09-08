@@ -49,6 +49,29 @@ test("sidebar separates AE and CVCS query sections", () => {
   assert.ok(cvcsSection < html.indexOf('id="cvcsQueryMenuBtn"'));
 });
 
+test("changing the dashboard model reruns an existing query from its first page", () => {
+  const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const handlerSource = html.match(/function changeDashboardModel\(\)\{([\s\S]*?)\n\}/)?.[0] || "";
+  assert.ok(handlerSource, "dashboard model changes need a query refresh handler");
+  assert.match(html, /id="dashModel"[^>]*onchange="changeDashboardModel\(\)"/);
+
+  let refreshedPage = null;
+  const activeHandler = new Function("dashboardLastQuery", "loadDashboard", `${handlerSource}; return changeDashboardModel;`)(
+    { company: "SCL", model: "SAE" },
+    (page) => { refreshedPage = page; },
+  );
+  activeHandler();
+  assert.equal(refreshedPage, 1);
+
+  let idleRefreshes = 0;
+  const idleHandler = new Function("dashboardLastQuery", "loadDashboard", `${handlerSource}; return changeDashboardModel;`)(
+    null,
+    () => { idleRefreshes += 1; },
+  );
+  idleHandler();
+  assert.equal(idleRefreshes, 0);
+});
+
 test("CVCS input shows one Property badge below its title", () => {
   const source = fs.readFileSync(new URL("../cvcs.js", import.meta.url), "utf8");
   const renderInput = source.match(/renderInput\(\) \{([\s\S]*?)\n    \}\n    comboField/)?.[1] || "";
