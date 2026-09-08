@@ -1062,6 +1062,22 @@ test("reads and safely updates an AE worksheet grid without exposing its identit
   );
 });
 
+test("opens a 100-row worksheet grid on its last page", async () => {
+  const data = structuredClone(companyData);
+  data.scl[0].values = [commonHeaders, ...Array.from({ length: 101 }, (_, index) => ["Venetian", "2026/09/08", "2609", "SAE", String(1000 + index), "PM", "Preventive Maintenance", "", "", "Alice"])];
+  let identity = 0;
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => `grid-${++identity}` });
+
+  const grid = await repository.getAction({ action: "worksheetGrid", company: "SCL", page: "last", pageSize: "100", refresh: "1" });
+
+  assert.equal(grid.pageSize, 100);
+  assert.equal(grid.page, 2);
+  assert.equal(grid.pages, 2);
+  assert.equal(grid.rows.length, 1);
+  assert.equal(grid.rows[0].rowNumber, 102);
+});
+
 test("reads and safely updates the CVCS worksheet grid for one Property", async () => {
   const harness = createSheetsHarness(companyData);
   const repository = createRepository({}, { config, sheetsClient: harness.client, uuid: () => "synthetic-cvcs-grid-id" });

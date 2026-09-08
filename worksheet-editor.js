@@ -57,6 +57,25 @@
     };
   }
 
+  function fillDraftRange(draft, sourceKey, targetKey, columnIndex) {
+    const rows = Array.isArray(draft?.rows) ? draft.rows : [];
+    const sourceIndex = rows.findIndex((row) => row.key === text(sourceKey));
+    const targetIndex = rows.findIndex((row) => row.key === text(targetKey));
+    const column = Number(columnIndex);
+    if (sourceIndex < 0 || targetIndex < 0 || !Number.isInteger(column) || column < 0) return 0;
+    const value = rows[sourceIndex]?.values?.[column];
+    if (value == null) return 0;
+    const first = Math.min(sourceIndex, targetIndex);
+    const last = Math.max(sourceIndex, targetIndex);
+    let filled = 0;
+    for (let index = first; index <= last; index += 1) {
+      if (index === sourceIndex || column >= rows[index].values.length) continue;
+      draft.setCell(rows[index].key, column, value);
+      filled += 1;
+    }
+    return filled;
+  }
+
   function createApplication(options = {}) {
     const documentRef = options.document || root?.document;
     const transport = options.transport || null;
@@ -64,12 +83,14 @@
     const confirmAction = options.confirm || ((message) => root?.confirm ? root.confirm(message) : true);
     const onClose = options.onClose || (() => {});
     let context = { kind: "ae", company: "SCL", property: "" };
-    let state = { title: "表格編輯", headers: [], rows: [], page: 1, pages: 1, pageSize: 60, total: 0 };
+    let state = { title: "表格編輯", headers: [], rows: [], page: 1, pages: 1, pageSize: 100, total: 0 };
     let draft = createGridDraft(state);
     let loading = false;
     let saving = false;
     let mounted = false;
     let bound = false;
+    let selectedCell = null;
+    let fillDrag = null;
 
     function host() { return documentRef?.getElementById?.("worksheetEditorPage") || null; }
     function permission() { return context.kind === "cvcs" ? "cvcs" : "ae"; }
@@ -79,15 +100,17 @@
         company: text(next.company || "SCL"),
         property: text(next.property),
       };
-      state = { title: "表格編輯", headers: [], rows: [], page: 1, pages: 1, pageSize: 60, total: 0 };
+      state = { title: "表格編輯", headers: [], rows: [], page: 1, pages: 1, pageSize: 100, total: 0 };
       draft = createGridDraft(state);
+      selectedCell = null;
+      fillDrag = null;
       mounted = false;
     }
     function queryFor(page = 1, refresh = false) {
       const params = new URLSearchParams({
         action: context.kind === "cvcs" ? "cvcsWorksheetGrid" : "worksheetGrid",
         page: String(page),
-        pageSize: String(state.pageSize || 60),
+        pageSize: String(state.pageSize || 100),
         ...(refresh ? { refresh: "1" } : {}),
       });
       if (context.kind === "cvcs") params.set("property", context.property);
@@ -96,7 +119,10 @@
     }
     function renderRows() {
       if (!draft.rows.length) return `<tr><td class="worksheet-row-number">—</td><td class="worksheet-empty" colspan="${Math.max(state.headers.length, 1)}">沒有資料</td></tr>`;
-      return draft.rows.map((row) => `<tr data-grid-row="${escapeHtml(row.key)}"><th class="worksheet-row-number" scope="row">${Number(row.rowNumber) || ""}</th>${row.values.map((value, columnIndex) => `<td class="worksheet-cell${draft.cellChanged(row.key, columnIndex) ? " changed" : ""}" data-grid-cell="${escapeHtml(row.key)}" data-grid-column="${columnIndex}" contenteditable="true" role="textbox" spellcheck="false">${escapeHtml(value)}</td>`).join("")}</tr>`).join("");
+      return draft.rows.map((row) => `<tr data-grid-row="${escapeHtml(row.key)}"><th class="worksheet-row-number" scope="row">${Number(row.rowNumber) || ""}</th>${row.values.map((value, columnIndex) => {
+        const selected = selectedCell?.key === row.key && selectedCell?.column === columnIndex;
+        return `<td class="worksheet-cell${draft.cellChanged(row.key, columnIndex) ? " changed" : ""}${selected ? " selected" : ""}" data-grid-cell="${escapeHtml(row.key)}" data-grid-column="${columnIndex}"><div class="worksheet-cell-editor" contenteditable="true" role="textbox" spellcheck="false">${escapeHtml(value)}</div><button class="worksheet-fill-handle" data-fill-handle contenteditable="false" type="button" aria-label="拖曳填滿"></button></td>`;
+      }).join("")}</tr>`).join("");
     }
     function render() {
       const target = host(); if (!target) return;
@@ -107,7 +133,7 @@
           <div class="worksheet-heading"><h2>${escapeHtml(state.title)}</h2><p>可修改現有資料；標題列及系統 ID 已鎖定</p></div>
           <div class="worksheet-actions"><button data-ws-action="reload" type="button" ${loading || saving ? "disabled" : ""}>重新載入</button><button class="worksheet-save" data-ws-action="save" type="button" ${!changes || loading || saving ? "disabled" : ""}>${saving ? "儲存中…" : `儲存 ${changes} 格變更`}</button></div>
         </header>
-        <div class="worksheet-summary">${loading ? "正在載入雲端資料…" : `共 ${state.total || 0} 行 · 第 ${state.page || 1} / ${state.pages || 1} 頁 · 每頁 ${state.pageSize || 60} 行`}</div>
+        <div class="worksheet-summary">${loading ? "正在載入雲端資料…" : `共 ${state.total || 0} 行 · 第 ${state.page || 1} / ${state.pages || 1} 頁 · 每頁 ${state.pageSize || 100} 行`}</div>
         <div class="worksheet-grid-wrap" tabindex="0">
           <table class="worksheet-grid">
             <thead><tr><th class="worksheet-corner"></th>${state.headers.map((_, index) => `<th class="worksheet-column-letter">${columnLabel(index + 1)}</th>`).join("")}</tr>
@@ -133,18 +159,86 @@
       target.addEventListener("input", (event) => {
         const cell = event.target?.closest?.("[data-grid-cell]");
         if (!cell) return;
-        const changed = draft.setCell(cell.dataset.gridCell, Number(cell.dataset.gridColumn), cell.innerText ?? cell.textContent ?? "");
+        const changed = draft.setCell(cell.dataset.gridCell, Number(cell.dataset.gridColumn), event.target.innerText ?? event.target.textContent ?? "");
         cell.classList?.toggle?.("changed", changed);
         updateSaveButton();
+      });
+      function selectCell(cell) {
+        if (!cell) return;
+        target.querySelector?.(".worksheet-cell.selected")?.classList?.remove?.("selected");
+        selectedCell = { key: text(cell.dataset.gridCell), column: Number(cell.dataset.gridColumn) };
+        cell.classList?.add?.("selected");
+      }
+      function previewFill() {
+        target.querySelectorAll?.(".worksheet-cell.fill-preview")?.forEach?.((cell) => cell.classList.remove("fill-preview"));
+        if (!fillDrag) return;
+        const sourceIndex = draft.rows.findIndex((row) => row.key === fillDrag.sourceKey);
+        const targetIndex = draft.rows.findIndex((row) => row.key === fillDrag.targetKey);
+        if (sourceIndex < 0 || targetIndex < 0) return;
+        const first = Math.min(sourceIndex, targetIndex);
+        const last = Math.max(sourceIndex, targetIndex);
+        draft.rows.slice(first, last + 1).forEach((row) => {
+          const cell = target.querySelector?.(`[data-grid-cell="${row.key.replace(/["\\]/g, "\\$&")}"][data-grid-column="${fillDrag.column}"]`);
+          cell?.classList?.add?.("fill-preview");
+        });
+      }
+      target.addEventListener("focusin", (event) => selectCell(event.target?.closest?.("[data-grid-cell]")));
+      target.addEventListener("pointerdown", (event) => {
+        const handle = event.target?.closest?.("[data-fill-handle]");
+        if (!handle) return;
+        const cell = handle.closest?.("[data-grid-cell]");
+        if (!cell) return;
+        event.preventDefault();
+        selectCell(cell);
+        fillDrag = { sourceKey: text(cell.dataset.gridCell), targetKey: text(cell.dataset.gridCell), column: Number(cell.dataset.gridColumn), pointerId: event.pointerId };
+        handle.setPointerCapture?.(event.pointerId);
+        previewFill();
+      });
+      target.addEventListener("pointermove", (event) => {
+        if (!fillDrag || event.pointerId !== fillDrag.pointerId) return;
+        event.preventDefault();
+        const wrap = target.querySelector?.(".worksheet-grid-wrap");
+        const bounds = wrap?.getBoundingClientRect?.();
+        if (bounds && event.clientY > bounds.bottom - 32) wrap.scrollTop += 24;
+        else if (bounds && event.clientY < bounds.top + 32) wrap.scrollTop -= 24;
+        const cell = documentRef?.elementFromPoint?.(event.clientX, event.clientY)?.closest?.("[data-grid-cell]");
+        if (!cell || Number(cell.dataset.gridColumn) !== fillDrag.column) return;
+        fillDrag.targetKey = text(cell.dataset.gridCell);
+        previewFill();
+      });
+      function finishFill(event) {
+        if (!fillDrag || (event.pointerId != null && event.pointerId !== fillDrag.pointerId)) return;
+        const current = fillDrag;
+        fillDrag = null;
+        const filled = fillDraftRange(draft, current.sourceKey, current.targetKey, current.column);
+        target.querySelectorAll?.(".worksheet-cell.fill-preview")?.forEach?.((cell) => cell.classList.remove("fill-preview"));
+        if (!filled) return;
+        const source = draft.rows.find((row) => row.key === current.sourceKey);
+        target.querySelectorAll?.(`[data-grid-column="${current.column}"]`)?.forEach?.((cell) => {
+          const row = draft.rows.find((item) => item.key === text(cell.dataset.gridCell));
+          if (!row || row.values[current.column] !== source?.values?.[current.column]) return;
+          const editor = cell.querySelector?.(".worksheet-cell-editor");
+          if (editor) editor.textContent = row.values[current.column];
+          cell.classList?.toggle?.("changed", draft.cellChanged(row.key, current.column));
+        });
+        updateSaveButton();
+      }
+      target.addEventListener("pointerup", finishFill);
+      target.addEventListener("pointercancel", (event) => {
+        if (!fillDrag || event.pointerId !== fillDrag.pointerId) return;
+        fillDrag = null;
+        previewFill();
       });
       target.addEventListener("keydown", (event) => {
         const cell = event.target?.closest?.("[data-grid-cell]");
         if (!cell || event.key !== "Enter" || event.shiftKey) return;
         event.preventDefault();
         const row = cell.closest("tr")?.nextElementSibling;
-        row?.querySelector?.(`[data-grid-column="${cell.dataset.gridColumn}"]`)?.focus?.();
+        row?.querySelector?.(`[data-grid-column="${cell.dataset.gridColumn}"] .worksheet-cell-editor`)?.focus?.();
       });
       target.addEventListener("click", async (event) => {
+        const clickedCell = event.target?.closest?.("[data-grid-cell]");
+        if (clickedCell) selectCell(clickedCell);
         const action = event.target?.closest?.("[data-ws-action]")?.dataset?.wsAction;
         if (action === "close") {
           if (!draft.changeCount() || confirmAction("尚有未儲存變更，確定離開？")) {
@@ -200,7 +294,7 @@
       render();
       if (mounted) return true;
       mounted = true;
-      return load(1, true, false);
+      return load("last", true, false);
     }
     return {
       setContext,
@@ -216,5 +310,5 @@
     };
   }
 
-  return { columnLabel, createGridDraft, createApplication };
+  return { columnLabel, createGridDraft, fillDraftRange, createApplication };
 }));

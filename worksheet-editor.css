@@ -16,11 +16,13 @@
 .worksheet-grid .worksheet-column-letter{height:31px;min-width:132px;padding:6px 9px;text-align:center;color:#8b949e;background:#21262d}
 .worksheet-grid .worksheet-row-number,.worksheet-grid .worksheet-corner{position:sticky;left:0;z-index:5;min-width:52px;width:52px;max-width:52px;text-align:center;color:#8b949e;background:#21262d}
 .worksheet-grid .worksheet-corner{top:0;z-index:7}.worksheet-grid thead .worksheet-row-number{top:31px;z-index:7}
-.worksheet-cell{outline:none;cursor:text}.worksheet-cell:focus{position:relative;box-shadow:inset 0 0 0 2px #58a6ff;background:#0d1b2e}.worksheet-cell.changed{background:#352d10;color:#f2cc60}
+.worksheet-cell{position:relative;outline:none;cursor:text}.worksheet-cell-editor{min-height:20px;outline:none}.worksheet-cell:focus-within,.worksheet-cell.selected{box-shadow:inset 0 0 0 2px #58a6ff;background:#0d1b2e}.worksheet-cell.changed{background:#352d10;color:#f2cc60}.worksheet-cell.fill-preview{box-shadow:inset 0 0 0 2px #58a6ff}
+.worksheet-fill-handle{position:absolute;right:-1px;bottom:-1px;z-index:3;display:none;width:13px;height:13px;padding:0;border:2px solid #0d1117;border-radius:0;background:#58a6ff;cursor:crosshair;touch-action:none}.worksheet-cell.selected .worksheet-fill-handle{display:block}
 .worksheet-empty{height:120px!important;text-align:center;color:#8b949e!important;vertical-align:middle!important}
 .worksheet-pager{display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 0}.worksheet-pager button{padding:8px 14px}.worksheet-pager span{color:#8b949e;font-size:13px}
 @media(max-width:720px){
   .worksheet-open-btn{padding:6px 9px;font-size:11px}
   .worksheet-shell{padding:10px 8px 18px}.worksheet-toolbar{align-items:flex-start;flex-wrap:wrap}.worksheet-heading{order:-1;flex-basis:100%}.worksheet-heading h2{font-size:19px}.worksheet-actions{margin-left:auto}.worksheet-actions button,.worksheet-back{padding:9px 11px;font-size:12px}
   .worksheet-grid-wrap{max-height:calc(100vh - 235px)}.worksheet-grid th,.worksheet-grid td,.worksheet-grid .worksheet-column-letter{min-width:116px;max-width:220px;font-size:12px}.worksheet-grid .worksheet-row-number,.worksheet-grid .worksheet-corner{min-width:44px;width:44px;max-width:44px}
+  .worksheet-fill-handle{width:20px;height:20px}
 }

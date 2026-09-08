@@ -118,7 +118,7 @@ export function createCvcsRepository(deps) {
     })).filter((row) => row.recordId && (!property || text(row.values[0]) === property));
     const pageSize = gridPage(params.pageSize, 60, 100);
     const pages = Math.max(1, Math.ceil(rows.length / pageSize));
-    const page = Math.min(gridPage(params.page, 1), pages);
+    const page = text(params.page).toLowerCase() === "last" ? pages : Math.min(gridPage(params.page, 1), pages);
     return {
       success: true,
       kind: "cvcs",

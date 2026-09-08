@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import worksheetModule from "../worksheet-editor.js";
 
-const { columnLabel, createGridDraft, createApplication } = worksheetModule;
+const { columnLabel, createGridDraft, createApplication, fillDraftRange } = worksheetModule;
 
 class FakeElement {
   constructor(id) {
@@ -48,6 +48,22 @@ test("worksheet draft submits only rows whose editable cells changed", () => {
   }]);
 });
 
+test("drag fill copies one cell through the same column in either direction", () => {
+  const draft = createGridDraft({
+    rows: [
+      { rowNumber: 2, recordId: "row-a", values: ["Venetian", "PM"] },
+      { rowNumber: 3, recordId: "row-b", values: ["Parisian", "Fault"] },
+      { rowNumber: 4, recordId: "row-c", values: ["Sands", "Repair"] },
+      { rowNumber: 5, recordId: "row-d", values: ["Plaza", "Inspect"] },
+    ],
+  });
+
+  assert.equal(fillDraftRange(draft, "row-b", "row-d", 1), 2);
+  assert.deepEqual(draft.rows.map((row) => row.values[1]), ["PM", "Fault", "Fault", "Fault"]);
+  assert.equal(fillDraftRange(draft, "row-d", "row-a", 0), 3);
+  assert.deepEqual(draft.rows.map((row) => row.values[0]), ["Plaza", "Plaza", "Plaza", "Plaza"]);
+});
+
 test("opens an AE worksheet as an Excel-like locked-header grid", async () => {
   const document = fakeDocument();
   const calls = [];
@@ -75,9 +91,12 @@ test("opens an AE worksheet as an Excel-like locked-header grid", async () => {
 
   assert.match(calls[0], /action=worksheetGrid/);
   assert.match(calls[0], /company=SCL/);
+  assert.match(calls[0], /page=last/);
+  assert.match(calls[0], /pageSize=100/);
   assert.match(document.host.innerHTML, /SCL \/ Worksheet/);
   assert.match(document.host.innerHTML, /data-grid-header/);
   assert.match(document.host.innerHTML, /data-grid-cell/);
+  assert.match(document.host.innerHTML, /data-fill-handle/);
   assert.match(document.host.innerHTML, /儲存 0 格變更/);
 });
 
