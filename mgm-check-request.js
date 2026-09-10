@@ -236,7 +236,7 @@
 
   function filterRequests(requests = [], filter = {}) {
     const query = text(filter.query);
-    const status = text(filter.status || "pending");
+    const status = text(filter.status || "all");
     const site = text(filter.site || "all");
     const aaQuery = /^TAE/i.test(query) ? normalizeAaTag(query) : "";
     const serialQuery = /^\d{1,4}$/.test(query) ? normalizeSerial(query) : "";
@@ -283,7 +283,7 @@
         </div>
         <div class="mgm-check-editor-actions"><button id="mgmCheckNewCancel" type="button">取消</button><button class="save" type="submit">加入待儲存</button></div>
       </form>
-      <div class="mgm-check-filters"><input id="mgmCheckSearch" type="search" inputmode="search" autocomplete="off" placeholder="輸入 SN、AA Tag、Table 或 BOX ID"><select id="mgmCheckSiteFilter"><option value="all">場地篩選</option><option>MGM Macau</option><option>MGM Cotai</option></select><select id="mgmCheckStatusFilter"><option value="pending">未完成</option><option value="done">已完成</option><option value="machine-pending">機台未完成</option><option value="machine-done">機台已完成</option><option value="card-pending">實牌未完成</option><option value="card-done">實牌已完成</option></select></div>
+      <div class="mgm-check-filters"><input id="mgmCheckSearch" type="search" inputmode="search" autocomplete="off" placeholder="輸入 SN、AA Tag、Table 或 BOX ID"><select id="mgmCheckSiteFilter"><option value="all">場地篩選</option><option>MGM Macau</option><option>MGM Cotai</option></select><select id="mgmCheckStatusFilter"><option value="all">全部</option><option value="pending">未完成</option><option value="done">已完成</option><option value="machine-pending">機台未完成</option><option value="machine-done">機台已完成</option><option value="card-pending">實牌未完成</option><option value="card-done">實牌已完成</option></select></div>
       <div id="mgmCheckConflicts"></div><div id="mgmCheckList" class="mgm-check-list"></div><button id="mgmCheckMoreBtn" class="mgm-check-more" type="button" hidden>顯示更多</button>
     </div>`;
   }
@@ -306,7 +306,7 @@
     let creating = false;
     let searchTimer = null;
     let visibleLimit = 50;
-    let filter = { query: "", site: "all", status: "pending" };
+    let filter = { query: "", site: "all", status: "all" };
     let pendingPanelOpen = state.outbox.length > 0;
     let pendingSelectedIds = new Set();
 
@@ -515,7 +515,7 @@
             table: value("mgmCheckNewTable"), serialNo: value("mgmCheckNewSerial"), aaTag: value("mgmCheckNewAaTag"), boxId: value("mgmCheckNewBox"),
             vaultId: value("mgmCheckNewVault"), eventDetails: value("mgmCheckNewDetails"),
           }, Date.now());
-          persist(next); creating = false; pendingPanelOpen = true; pendingSelectedIds.clear(); filter = { query: "", site: "all", status: "pending" };
+          persist(next); creating = false; pendingPanelOpen = true; pendingSelectedIds.clear(); filter = { query: "", site: "all", status: "all" };
           ["mgmCheckNewTime", "mgmCheckNewEndTime", "mgmCheckNewTable", "mgmCheckNewSerial", "mgmCheckNewAaTag", "mgmCheckNewBox", "mgmCheckNewVault", "mgmCheckNewDetails"].forEach((id) => { const input = documentRef.getElementById(id); if (input) input.value = ""; });
           setMessage("新請求已加入，請按「儲存資料」", "ok"); notify("✓ 新請求已加入待儲存清單"); render();
         } catch (error) { setMessage(text(error?.message || "未能新增檢查請求"), "err"); }

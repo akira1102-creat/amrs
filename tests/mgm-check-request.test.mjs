@@ -146,6 +146,25 @@ test("filters MGM requests by overall, machine and card inspection completion", 
   assert.deepEqual(serials("card-done"), ["400", "300"]);
 });
 
+test("defaults MGM Check Request to show every completion status", () => {
+  const requests = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers,
+      ["2026/06/10", "08:00", "", "21BB01", "100", "TAE0100", "BOX-1", "", "Still pending", "", "", ""],
+      ["2026/06/10", "09:00", "", "21BB02", "200", "TAE0200", "BOX-2", "", "Already checked", "已CHECK", "已CHECK", ""],
+    ],
+  });
+  const document = fakeDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { requests, cloudRequests: requests, outbox: [] });
+
+  createApplication({ document, storage, transport: null, isOnline: () => false }).mount();
+
+  assert.equal(document.getElementById("mgmCheckStatusFilter").value, "all");
+  assert.match(document.getElementById("mgmCheckList").innerHTML, /Still pending/);
+  assert.match(document.getElementById("mgmCheckList").innerHTML, /Already checked/);
+});
+
 test("renders card follow-up controls with the stored choice highlighted", () => {
   const requests = parseRequestRows({
     sheetName: "MGM Macau",
@@ -358,6 +377,7 @@ test("renders the operational search, cloud actions and editable E-H J-L fields"
   assert.match(html, /直接讀取及儲存最新雲端資料/);
   assert.match(html, /新增檢查請求/);
   assert.match(html, /<option value="all">場地篩選<\/option>/);
+  assert.match(html, /<option value="all">全部<\/option>/);
   assert.match(html, /<option value="machine-pending">機台未完成<\/option>/);
   assert.match(html, /<option value="machine-done">機台已完成<\/option>/);
   assert.match(html, /<option value="card-pending">實牌未完成<\/option>/);
