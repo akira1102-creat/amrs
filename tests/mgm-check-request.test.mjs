@@ -86,6 +86,22 @@ test("searches SN and AA Tag exactly while allowing Table and BOX text lookup", 
   assert.equal(filterRequests(requests, { query: "", status: "done", site: "all" }).length, 1);
 });
 
+test("orders MGM Check Request results from the latest event date and time to the oldest", () => {
+  const requests = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers,
+      ["2026/06/09", "11:15", "", "21BB02", "100", "TAE0100", "BOX-1", "", "Oldest", "", "", ""],
+      ["2026-06-10", "08:00", "", "21BB03", "200", "TAE0200", "BOX-2", "", "Morning", "", "", ""],
+      ["2026/6/10", "13:30", "", "21BB04", "300", "TAE0300", "BOX-3", "", "Latest", "", "", ""],
+    ],
+  });
+
+  assert.deepEqual(
+    filterRequests(requests, { query: "", status: "all", site: "all" }).map((row) => row.serialNo),
+    ["300", "200", "100"],
+  );
+});
+
 test("stores one merged offline mutation and keeps it over a refreshed cloud snapshot", () => {
   const request = parseRequestRows({
     sheetName: "MGM Macau",

@@ -29,6 +29,20 @@
   }
   function pendingValue(value) { const clean = text(value); return !clean || /未\s*check/i.test(clean); }
   function requestStatus(request) { return pendingValue(request?.machineStatus) || pendingValue(request?.cardStatus) ? "pending" : "done"; }
+  function requestEventStamp(request = {}) {
+    const dateMatch = text(request.eventDate).match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+    if (!dateMatch) return Number.NEGATIVE_INFINITY;
+    const [, yearText, monthText, dayText] = dateMatch;
+    const year = Number(yearText), month = Number(monthText), day = Number(dayText);
+    const timeMatch = text(request.eventTime).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    const hour = timeMatch ? Number(timeMatch[1]) : 0;
+    const minute = timeMatch ? Number(timeMatch[2]) : 0;
+    const second = timeMatch && timeMatch[3] ? Number(timeMatch[3]) : 0;
+    const stamp = Date.UTC(year, month - 1, day, hour, minute, second);
+    const parsed = new Date(stamp);
+    if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day || hour > 23 || minute > 59 || second > 59) return Number.NEGATIVE_INFINITY;
+    return stamp;
+  }
   function hash(value) {
     let result = 2166136261;
     for (const character of String(value)) { result ^= character.charCodeAt(0); result = Math.imul(result, 16777619); }
@@ -229,7 +243,9 @@
       if (aaQuery) return normalizeAaTag(request.aaTag) === aaQuery;
       if (serialQuery) return normalizeSerial(request.serialNo) === serialQuery;
       return [request.table, request.boxId, request.vaultId].some((value) => text(value).toLowerCase().includes(freeQuery));
-    });
+    }).map((request, index) => ({ request, index, stamp: requestEventStamp(request) }))
+      .sort((left, right) => right.stamp - left.stamp || left.index - right.index)
+      .map(({ request }) => request);
   }
 
   function shell() {
