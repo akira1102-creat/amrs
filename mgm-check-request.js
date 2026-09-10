@@ -28,11 +28,12 @@
     return digits ? `TAE${digits.padStart(4, "0")}` : "";
   }
   function pendingValue(value) { const clean = text(value); return !clean || /未\s*check/i.test(clean); }
-  function requestStatus(request) { return pendingValue(request?.machineStatus) || pendingValue(request?.cardStatus) ? "pending" : "done"; }
+  function isFollowupChecked(value) { return /^已\s*(?:check|檢查)$/i.test(text(value)); }
+  function requestStatus(request) { return isFollowupChecked(request?.machineStatus) && isFollowupChecked(request?.cardStatus) ? "done" : "pending"; }
   function followupDisplay(value) {
     const clean = text(value);
     if (pendingValue(clean)) return { label: "待跟進", tone: "pending" };
-    if (/^已\s*(?:check|檢查)$/i.test(clean)) return { label: "已檢查", tone: "done" };
+    if (isFollowupChecked(clean)) return { label: "已檢查", tone: "done" };
     return { label: clean, tone: "" };
   }
   function requestEventStamp(request = {}) {
@@ -243,7 +244,16 @@
     const serialQuery = /^\d{1,4}$/.test(query) ? normalizeSerial(query) : "";
     const freeQuery = !aaQuery && !serialQuery ? query.toLowerCase() : "";
     return (Array.isArray(requests) ? requests : []).filter((request) => {
-      if (status !== "all" && request.status !== status) return false;
+      const machineChecked = isFollowupChecked(request.machineStatus);
+      const cardChecked = isFollowupChecked(request.cardStatus);
+      const statusMatches = status === "all"
+        || (status === "pending" && (!machineChecked || !cardChecked))
+        || (status === "done" && machineChecked && cardChecked)
+        || (status === "machine-pending" && !machineChecked)
+        || (status === "machine-done" && machineChecked)
+        || (status === "card-pending" && !cardChecked)
+        || (status === "card-done" && cardChecked);
+      if (!statusMatches) return false;
       if (site !== "all" && request.sheetName !== site) return false;
       if (!query) return true;
       if (aaQuery) return normalizeAaTag(request.aaTag) === aaQuery;
@@ -274,7 +284,7 @@
         </div>
         <div class="mgm-check-editor-actions"><button id="mgmCheckNewCancel" type="button">取消</button><button class="save" type="submit">加入待儲存</button></div>
       </form>
-      <div class="mgm-check-filters"><input id="mgmCheckSearch" type="search" inputmode="search" autocomplete="off" placeholder="輸入 SN、AA Tag、Table 或 BOX ID"><select id="mgmCheckSiteFilter"><option value="all">兩個場地</option><option>MGM Macau</option><option>MGM Cotai</option></select><select id="mgmCheckStatusFilter"><option value="pending">未完成</option><option value="done">已完成</option><option value="all">全部</option></select></div>
+      <div class="mgm-check-filters"><input id="mgmCheckSearch" type="search" inputmode="search" autocomplete="off" placeholder="輸入 SN、AA Tag、Table 或 BOX ID"><select id="mgmCheckSiteFilter"><option value="all">場地篩選</option><option>MGM Macau</option><option>MGM Cotai</option></select><select id="mgmCheckStatusFilter"><option value="pending">未完成</option><option value="done">已完成</option><option value="machine-pending">機台未完成</option><option value="machine-done">機台已完成</option><option value="card-pending">實牌未完成</option><option value="card-done">實牌已完成</option></select></div>
       <div id="mgmCheckConflicts"></div><div id="mgmCheckList" class="mgm-check-list"></div><button id="mgmCheckMoreBtn" class="mgm-check-more" type="button" hidden>顯示更多</button>
     </div>`;
   }
@@ -349,13 +359,14 @@
     function editorMarkup(request) {
       const field = (name, label, multiline = false) => `<label><span>${label}</span>${multiline ? `<textarea data-mgm-check-field="${name}" rows="2">${escapeHtml(request[name])}</textarea>` : `<input data-mgm-check-field="${name}" value="${escapeHtml(request[name])}">`}</label>`;
       return `<div class="mgm-check-editor">
-        <div class="mgm-check-editor-grid">${field("serialNo", "Serial NO.")}${field("aaTag", "AA Tag")}${field("boxId", "BOX ID")}${field("vaultId", "Vault ID")}${field("machineStatus", "機台跟進狀況", true)}${field("cardStatus", "實牌跟進狀況", true)}${field("remark", "備注", true)}</div>
+        <div class="mgm-check-editor-grid">${field("serialNo", "Serial NO.")}${field("aaTag", "AA Tag")}${field("boxId", "BOX ID")}${field("vaultId", "Vault ID")}${field("machineStatus", "機台檢查狀況", true)}${field("cardStatus", "實牌檢查狀況", true)}${field("remark", "備注", true)}</div>
         <div class="mgm-check-editor-actions"><button data-mgm-check-action="cancel" type="button">取消</button><button class="save" data-mgm-check-action="save" type="button">加入待儲存</button></div>
       </div>`;
     }
 
     function requestMarkup(request) {
       const pending = state.outbox.some((item) => item.requestId === request.id);
+      const cardState = [request.status === "done" ? "已完成" : "", pending ? "待儲存" : ""].filter(Boolean).join(" · ");
       const resolved = [request.serialResolved ? "SN 由 AA Tag 對照" : "", request.aaTagResolved ? "AA Tag 由 SN 對照" : ""].filter(Boolean).join(" · ");
       const eventDateTime = [request.eventDate, request.eventTime].filter(Boolean).join(" ") || "未有日期及時間";
       const followup = (label, value) => {
@@ -367,7 +378,7 @@
         <div class="mgm-check-datetime"><span>事發日期及時間</span><strong>${escapeHtml(eventDateTime)}</strong>${request.endTime ? `<small>結束 ${escapeHtml(request.endTime)}</small>` : ""}</div>
         <div class="mgm-check-location"><span>Table ${escapeHtml(request.table || "—")}</span><span>BOX ID ${escapeHtml(request.boxId || "—")}</span><span>Vault ID ${escapeHtml(request.vaultId || "—")}</span></div>
         <div class="mgm-check-event">${escapeHtml(request.eventDetails || "未有事件詳情")}</div>
-        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup">${followup("機台跟進", request.machineStatus)}${followup("實牌跟進", request.cardStatus)}${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions"><span class="mgm-check-state ${request.status}">${request.status === "done" ? "已完成" : "待檢查"}${pending ? " · 待儲存" : ""}</span><button data-mgm-check-action="edit" type="button">${request.status === "done" ? "修改" : "填寫檢查結果"}</button></div>`}
+        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup">${followup("機台檢查", request.machineStatus)}${followup("實牌檢查", request.cardStatus)}${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions">${cardState ? `<span class="mgm-check-state ${request.status}">${cardState}</span>` : ""}<button data-mgm-check-action="edit" type="button">${request.status === "done" ? "修改" : "填寫檢查結果"}</button></div>`}
       </article>`;
     }
 
@@ -446,7 +457,7 @@
         if (button.dataset.mgmCheckAction === "save") {
           const next = applyDraft(state, requestId, draftFromEditor(), Date.now());
           if (JSON.stringify(next.outbox) === JSON.stringify(state.outbox)) { setMessage("沒有需要儲存的變更", "warn"); editingId = ""; render(); return; }
-          persist(next); editingId = ""; filter.status = "all"; setMessage("修改已加入，請按「儲存資料」", "ok"); notify("✓ 修改已加入待儲存清單"); render();
+          persist(next); editingId = ""; setMessage("修改已加入，請按「儲存資料」", "ok"); notify("✓ 修改已加入待儲存清單"); render();
         }
       });
       documentRef.getElementById("mgmCheckList")?.addEventListener("input", (event) => {

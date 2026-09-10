@@ -102,6 +102,26 @@ test("orders MGM Check Request results from the latest event date and time to th
   );
 });
 
+test("filters MGM requests by overall, machine and card inspection completion", () => {
+  const requests = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers,
+      ["2026/06/10", "08:00", "", "21BB01", "100", "TAE0100", "BOX-1", "", "Both pending", "", "", ""],
+      ["2026/06/10", "09:00", "", "21BB02", "200", "TAE0200", "BOX-2", "", "Machine checked", "已CHECK", "", ""],
+      ["2026/06/10", "10:00", "", "21BB03", "300", "TAE0300", "BOX-3", "", "Card checked", "", "已檢查", ""],
+      ["2026/06/10", "11:00", "", "21BB04", "400", "TAE0400", "BOX-4", "", "Both checked", "已CHECK", "已檢查", ""],
+    ],
+  });
+  const serials = (status) => filterRequests(requests, { query: "", status, site: "all" }).map((row) => row.serialNo);
+
+  assert.deepEqual(serials("pending"), ["300", "200", "100"]);
+  assert.deepEqual(serials("done"), ["400"]);
+  assert.deepEqual(serials("machine-pending"), ["300", "100"]);
+  assert.deepEqual(serials("machine-done"), ["400", "200"]);
+  assert.deepEqual(serials("card-pending"), ["200", "100"]);
+  assert.deepEqual(serials("card-done"), ["400", "300"]);
+});
+
 test("renders empty and checked follow-up fields with clear MGM status labels", () => {
   const requests = parseRequestRows({
     sheetName: "MGM Macau",
@@ -121,6 +141,10 @@ test("renders empty and checked follow-up fields with clear MGM status labels", 
   const html = document.getElementById("mgmCheckList").innerHTML;
   assert.equal((html.match(/class="mgm-check-followup-value pending">待跟進/g) || []).length, 2);
   assert.equal((html.match(/class="mgm-check-followup-value done">已檢查/g) || []).length, 2);
+  assert.match(html, /機台檢查/);
+  assert.match(html, /實牌檢查/);
+  assert.equal((html.match(/class="mgm-check-state done">已完成/g) || []).length, 1);
+  assert.doesNotMatch(html, /待檢查/);
   assert.doesNotMatch(html, />未填寫</);
 });
 
@@ -235,5 +259,10 @@ test("renders the operational search, cloud actions and editable E-H J-L fields"
   assert.doesNotMatch(html, /同步至雲端/);
   assert.match(html, /直接讀取及儲存最新雲端資料/);
   assert.match(html, /新增檢查請求/);
+  assert.match(html, /<option value="all">場地篩選<\/option>/);
+  assert.match(html, /<option value="machine-pending">機台未完成<\/option>/);
+  assert.match(html, /<option value="machine-done">機台已完成<\/option>/);
+  assert.match(html, /<option value="card-pending">實牌未完成<\/option>/);
+  assert.match(html, /<option value="card-done">實牌已完成<\/option>/);
   assert.deepEqual(EDITABLE_FIELDS, ["serialNo", "aaTag", "boxId", "vaultId", "machineStatus", "cardStatus", "remark"]);
 });
