@@ -47,6 +47,19 @@ function fakeDocument() {
   };
 }
 
+function followupToggleTarget(requestId, field, choice) {
+  const card = { dataset: { mgmCheckId: requestId } };
+  const button = {
+    dataset: { mgmCheckFollowupField: field, mgmCheckFollowupValue: choice },
+    closest(selector) {
+      if (selector === "button[data-mgm-check-followup-field]") return button;
+      if (selector === "[data-mgm-check-id]") return card;
+      return null;
+    },
+  };
+  return button;
+}
+
 const headers = ["事發日期", "事發時間", "結束時間", "Table", "Serial NO.", "AA Tag", "BOX ID", "Vault ID", "事件詳情", "機台跟進狀況", "實牌跟進狀況", "備注", "欄1"];
 const tagRows = [{ serialNo: "259", aaTag: "TAE0248" }, { serialNo: "532", aaTag: "TAE0521" }];
 
@@ -122,7 +135,7 @@ test("filters MGM requests by overall, machine and card inspection completion", 
   assert.deepEqual(serials("card-done"), ["400", "300"]);
 });
 
-test("renders empty and checked follow-up fields with clear MGM status labels", () => {
+test("renders card follow-up controls with the stored choice highlighted", () => {
   const requests = parseRequestRows({
     sheetName: "MGM Macau",
     rows: [headers,
@@ -139,13 +152,37 @@ test("renders empty and checked follow-up fields with clear MGM status labels", 
   app.setFilter({ status: "all" });
 
   const html = document.getElementById("mgmCheckList").innerHTML;
-  assert.equal((html.match(/class="mgm-check-followup-value pending">待跟進/g) || []).length, 2);
-  assert.equal((html.match(/class="mgm-check-followup-value done">已檢查/g) || []).length, 2);
-  assert.match(html, /機台檢查/);
-  assert.match(html, /實牌檢查/);
+  assert.equal((html.match(/data-mgm-check-followup-field=/g) || []).length, 8);
+  assert.match(html, /機台檢查狀況/);
+  assert.match(html, /實牌檢查狀況/);
+  assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="pending"[^>]*aria-pressed="true"/);
+  assert.match(html, /data-mgm-check-followup-field="cardStatus" data-mgm-check-followup-value="done"[^>]*aria-pressed="true"/);
   assert.equal((html.match(/class="mgm-check-state done">已完成/g) || []).length, 1);
   assert.doesNotMatch(html, /待檢查/);
-  assert.doesNotMatch(html, />未填寫</);
+});
+
+test("tapping a card follow-up choice updates only that check and queues it for storage", () => {
+  const request = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers, ["2026/06/10", "08:00", "", "21BB02", "100", "TAE0100", "BOX-1", "", "Waiting", "未CHECK", "未CHECK", ""]],
+  })[0];
+  const document = fakeDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { requests: [request], cloudRequests: [request], outbox: [] });
+  const app = createApplication({ document, storage, transport: null, isOnline: () => false });
+  app.mount();
+  const click = document.getElementById("mgmCheckList").listeners.get("click");
+
+  click({ target: followupToggleTarget(request.id, "machineStatus", "done") });
+  assert.equal(app.getState().requests[0].machineStatus, "已CHECK");
+  assert.equal(app.getState().requests[0].cardStatus, "未CHECK");
+  assert.equal(app.getState().requests[0].status, "pending");
+  assert.deepEqual(app.getState().outbox[0].patch, { machineStatus: "已CHECK" });
+
+  click({ target: followupToggleTarget(request.id, "cardStatus", "done") });
+  assert.equal(app.getState().requests[0].cardStatus, "已CHECK");
+  assert.equal(app.getState().requests[0].status, "done");
+  assert.deepEqual(app.getState().outbox[0].patch, { machineStatus: "已CHECK", cardStatus: "已CHECK" });
 });
 
 test("renders MGM event date and time prominently before Table, BOX ID and Vault ID", () => {

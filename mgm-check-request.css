@@ -48,9 +48,11 @@
 .mgm-check-followup{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .mgm-check-followup>div{padding:9px;border:1px solid #21262d;border-radius:9px;background:#0d1117}
 .mgm-check-followup span{display:block;color:#8b949e;font-size:10px}
-.mgm-check-followup strong{display:block;margin-top:3px;color:#e6edf3;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
-.mgm-check-followup strong.mgm-check-followup-value.pending{color:#f2cc60}
-.mgm-check-followup strong.mgm-check-followup-value.done{color:#7ee787}
+.mgm-check-followup-options{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}
+.mgm-check-followup-option{min-height:34px;padding:0 6px;border:1px solid #30363d;border-radius:7px;background:#161b22;color:#8b949e;font:inherit;font-size:11px;font-weight:850;cursor:pointer}
+.mgm-check-followup-option.pending.selected{border-color:#d29922;background:#3d2e0a;color:#f2cc60}
+.mgm-check-followup-option.done.selected{border-color:#238636;background:#0d3d20;color:#7ee787}
+.mgm-check-followup-option:focus-visible{outline:2px solid #58a6ff;outline-offset:2px}
 .mgm-check-followup p{grid-column:1/-1;padding:8px 9px;border-left:2px solid #8b949e;color:#c9d1d9;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
 .mgm-check-card-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px}
 .mgm-check-card-actions button{margin-left:auto;border-color:#1f6feb;background:#0d2a4d;color:#79c0ff}

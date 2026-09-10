@@ -27,15 +27,8 @@
     const digits = text(value).toUpperCase().replace(/^TAE/, "").replace(/\D/g, "").slice(-4);
     return digits ? `TAE${digits.padStart(4, "0")}` : "";
   }
-  function pendingValue(value) { const clean = text(value); return !clean || /未\s*check/i.test(clean); }
   function isFollowupChecked(value) { return /^已\s*(?:check|檢查)$/i.test(text(value)); }
   function requestStatus(request) { return isFollowupChecked(request?.machineStatus) && isFollowupChecked(request?.cardStatus) ? "done" : "pending"; }
-  function followupDisplay(value) {
-    const clean = text(value);
-    if (pendingValue(clean)) return { label: "待跟進", tone: "pending" };
-    if (isFollowupChecked(clean)) return { label: "已檢查", tone: "done" };
-    return { label: clean, tone: "" };
-  }
   function requestEventStamp(request = {}) {
     const dateMatch = text(request.eventDate).match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
     if (!dateMatch) return Number.NEGATIVE_INFINITY;
@@ -369,16 +362,17 @@
       const cardState = [request.status === "done" ? "已完成" : "", pending ? "待儲存" : ""].filter(Boolean).join(" · ");
       const resolved = [request.serialResolved ? "SN 由 AA Tag 對照" : "", request.aaTagResolved ? "AA Tag 由 SN 對照" : ""].filter(Boolean).join(" · ");
       const eventDateTime = [request.eventDate, request.eventTime].filter(Boolean).join(" ") || "未有日期及時間";
-      const followup = (label, value) => {
-        const display = followupDisplay(value);
-        return `<div><span>${label}</span><strong class="mgm-check-followup-value${display.tone ? ` ${display.tone}` : ""}">${escapeHtml(display.label)}</strong></div>`;
+      const followup = (field, label, value) => {
+        const selected = isFollowupChecked(value) ? "done" : "pending";
+        const option = (choice, optionLabel) => `<button type="button" class="mgm-check-followup-option ${choice}${selected === choice ? " selected" : ""}" data-mgm-check-followup-field="${field}" data-mgm-check-followup-value="${choice}" aria-pressed="${selected === choice}">${optionLabel}</button>`;
+        return `<div class="mgm-check-followup-control"><span>${label}</span><div class="mgm-check-followup-options">${option("pending", "待跟進")}${option("done", "已檢查")}</div></div>`;
       };
       return `<article class="mgm-check-card ${request.status}${pending ? " local-change" : ""}" data-mgm-check-id="${escapeHtml(request.id)}">
         <div class="mgm-check-card-top"><div class="mgm-check-identifiers"><strong>${escapeHtml(request.serialNo || "未有 SN")}</strong><span>↔</span><strong>${escapeHtml(request.aaTag || "未有 AA Tag")}</strong>${resolved ? `<small>${escapeHtml(resolved)}</small>` : ""}</div><span class="mgm-check-site">${escapeHtml(request.sheetName)}</span></div>
         <div class="mgm-check-datetime"><span>事發日期及時間</span><strong>${escapeHtml(eventDateTime)}</strong>${request.endTime ? `<small>結束 ${escapeHtml(request.endTime)}</small>` : ""}</div>
         <div class="mgm-check-location"><span>Table ${escapeHtml(request.table || "—")}</span><span>BOX ID ${escapeHtml(request.boxId || "—")}</span><span>Vault ID ${escapeHtml(request.vaultId || "—")}</span></div>
         <div class="mgm-check-event">${escapeHtml(request.eventDetails || "未有事件詳情")}</div>
-        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup">${followup("機台檢查", request.machineStatus)}${followup("實牌檢查", request.cardStatus)}${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions">${cardState ? `<span class="mgm-check-state ${request.status}">${cardState}</span>` : ""}<button data-mgm-check-action="edit" type="button">${request.status === "done" ? "修改" : "填寫檢查結果"}</button></div>`}
+        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup">${followup("machineStatus", "機台檢查狀況", request.machineStatus)}${followup("cardStatus", "實牌檢查狀況", request.cardStatus)}${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions">${cardState ? `<span class="mgm-check-state ${request.status}">${cardState}</span>` : ""}<button data-mgm-check-action="edit" type="button">修改資料</button></div>`}
       </article>`;
     }
 
@@ -450,6 +444,25 @@
       documentRef.getElementById("mgmCheckStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; visibleLimit = 50; render(); });
       documentRef.getElementById("mgmCheckMoreBtn")?.addEventListener("click", () => { visibleLimit += 50; render(); });
       documentRef.getElementById("mgmCheckList")?.addEventListener("click", (event) => {
+        const followupButton = event?.target?.closest?.("button[data-mgm-check-followup-field]");
+        if (followupButton && !busy) {
+          const card = followupButton.closest?.("[data-mgm-check-id]");
+          const requestId = card?.dataset?.mgmCheckId;
+          const field = text(followupButton.dataset?.mgmCheckFollowupField);
+          const choice = text(followupButton.dataset?.mgmCheckFollowupValue);
+          const request = state.requests.find((item) => item.id === requestId);
+          const nextValue = choice === "done" ? "已CHECK" : choice === "pending" ? "未CHECK" : "";
+          if (!request || !["machineStatus", "cardStatus"].includes(field) || !nextValue || (isFollowupChecked(request[field]) ? "done" : "pending") === choice) return;
+          const next = applyDraft(state, requestId, { [field]: nextValue }, Date.now());
+          if (JSON.stringify(next.outbox) === JSON.stringify(state.outbox)) return;
+          persist(next);
+          const fieldLabel = field === "machineStatus" ? "機台檢查狀況" : "實牌檢查狀況";
+          const choiceLabel = choice === "done" ? "已檢查" : "待跟進";
+          setMessage(`${fieldLabel}已設為${choiceLabel}，請按「儲存資料」`, "ok");
+          notify(`✓ ${fieldLabel}已設為${choiceLabel}`);
+          render();
+          return;
+        }
         const button = event?.target?.closest?.("button[data-mgm-check-action]"); if (!button || busy) return;
         const card = button.closest?.("[data-mgm-check-id]"); const requestId = card?.dataset?.mgmCheckId || editingId;
         if (button.dataset.mgmCheckAction === "edit") { editingId = requestId; render(); return; }
