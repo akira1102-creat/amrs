@@ -60,6 +60,17 @@ function followupToggleTarget(requestId, field, choice) {
   return button;
 }
 
+function pendingActionTarget(action, requestId) {
+  const button = {
+    dataset: { mgmCheckPendingAction: action, mgmCheckPendingId: requestId },
+    closest(selector) {
+      if (selector === "button[data-mgm-check-pending-action]") return button;
+      return null;
+    },
+  };
+  return button;
+}
+
 const headers = ["事發日期", "事發時間", "結束時間", "Table", "Serial NO.", "AA Tag", "BOX ID", "Vault ID", "事件詳情", "機台跟進狀況", "實牌跟進狀況", "備注", "欄1"];
 const tagRows = [{ serialNo: "259", aaTag: "TAE0248" }, { serialNo: "532", aaTag: "TAE0521" }];
 
@@ -183,6 +194,56 @@ test("tapping a card follow-up choice updates only that check and queues it for 
   assert.equal(app.getState().requests[0].cardStatus, "已CHECK");
   assert.equal(app.getState().requests[0].status, "done");
   assert.deepEqual(app.getState().outbox[0].patch, { machineStatus: "已CHECK", cardStatus: "已CHECK" });
+});
+
+test("lists a pending MGM change above the cards and lets the user discard it back to the cloud value", () => {
+  const request = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers, ["2026/09/10", "08:00", "", "21BB02", "1190", "TAE1190", "BOX-1", "", "Waiting", "未CHECK", "未CHECK", ""]],
+  })[0];
+  const changed = applyDraft({ requests: [request], cloudRequests: [request], outbox: [] }, request.id, { machineStatus: "已CHECK" }, 9000);
+  const document = fakeDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, changed);
+  const app = createApplication({ document, storage, transport: null, isOnline: () => false });
+
+  app.mount();
+
+  const badge = document.getElementById("mgmCheckPendingBadge");
+  const panel = document.getElementById("mgmCheckPendingPanel");
+  assert.equal(badge.textContent, "待儲存變更（1）");
+  assert.equal(panel.hidden, false);
+  assert.match(panel.innerHTML, /1190/);
+  assert.match(panel.innerHTML, /機台檢查狀況：已檢查/);
+  assert.match(panel.innerHTML, /刪除此變更/);
+
+  panel.listeners.get("click")({ target: pendingActionTarget("delete-one", request.id) });
+  assert.equal(app.getState().outbox.length, 0);
+  assert.equal(app.getState().requests[0].machineStatus, "未CHECK");
+  assert.equal(app.getState().requests[0].cardStatus, "未CHECK");
+});
+
+test("discarding a pending new MGM request removes the local-only row", () => {
+  const staged = stageNewRequest({}, {
+    sheetName: "MGM Cotai",
+    eventDate: "2026-09-10",
+    eventTime: "09:30",
+    table: "112BB01",
+    serialNo: "1193",
+    eventDetails: "新增後需要刪除",
+  }, 9100);
+  const document = fakeDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, staged);
+  const app = createApplication({ document, storage, transport: null, isOnline: () => false });
+
+  app.mount();
+
+  const panel = document.getElementById("mgmCheckPendingPanel");
+  assert.match(panel.innerHTML, /新增客戶檢查請求/);
+  panel.listeners.get("click")({ target: pendingActionTarget("delete-one", staged.requests[0].id) });
+  assert.equal(app.getState().outbox.length, 0);
+  assert.equal(app.getState().requests.length, 0);
 });
 
 test("renders MGM event date and time prominently before Table, BOX ID and Vault ID", () => {

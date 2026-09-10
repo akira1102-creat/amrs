@@ -9,6 +9,10 @@
   const EDITABLE_FIELDS = ["serialNo", "aaTag", "boxId", "vaultId", "machineStatus", "cardStatus", "remark"];
   const NEW_FIELDS = ["eventDate", "eventTime", "endTime", "table", "serialNo", "aaTag", "boxId", "vaultId", "eventDetails", "machineStatus", "cardStatus", "remark"];
   const SHEETS = ["MGM Macau", "MGM Cotai"];
+  const PENDING_FIELD_LABELS = {
+    serialNo: "Serial NO.", aaTag: "AA Tag", boxId: "BOX ID", vaultId: "Vault ID",
+    machineStatus: "機台檢查狀況", cardStatus: "實牌檢查狀況", remark: "備注",
+  };
 
   function text(value) { return String(value == null ? "" : value).trim(); }
   function escapeHtml(value) {
@@ -28,6 +32,7 @@
     return digits ? `TAE${digits.padStart(4, "0")}` : "";
   }
   function isFollowupChecked(value) { return /^已\s*(?:check|檢查)$/i.test(text(value)); }
+  function followupLabel(value) { return isFollowupChecked(value) ? "已檢查" : "待跟進"; }
   function requestStatus(request) { return isFollowupChecked(request?.machineStatus) && isFollowupChecked(request?.cardStatus) ? "done" : "pending"; }
   function requestEventStamp(request = {}) {
     const dateMatch = text(request.eventDate).match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
@@ -260,7 +265,8 @@
   function shell() {
     return `<div class="mgm-check-shell">
       <header class="mgm-check-head"><div><h1>MGM Check Request</h1><p>MGM Macau／MGM Cotai · 直接讀取及儲存最新雲端資料</p></div><div class="mgm-check-actions"><button id="mgmCheckAddBtn" class="mgm-check-btn add" type="button">＋ 新增檢查請求</button><button id="mgmCheckSyncBtn" class="mgm-check-btn sync" type="button">儲存資料</button><button id="mgmCheckDownloadBtn" class="mgm-check-btn primary" type="button">重新載入</button></div></header>
-      <div class="mgm-check-status"><span id="mgmCheckSummary">尚未下載清單</span><strong id="mgmCheckConnection">本機未有資料</strong><span id="mgmCheckMessage"></span></div>
+      <div class="mgm-check-status"><span id="mgmCheckSummary">尚未下載清單</span><button id="mgmCheckPendingBadge" type="button" hidden>待儲存變更</button><strong id="mgmCheckConnection">本機未有資料</strong><span id="mgmCheckMessage"></span></div>
+      <div id="mgmCheckPendingPanel" hidden></div>
       <form id="mgmCheckNewForm" class="mgm-check-new" hidden>
         <div class="mgm-check-new-title"><strong>新增客戶檢查請求</strong><span>加入後按「儲存資料」寫入雲端</span></div>
         <div class="mgm-check-new-grid">
@@ -301,6 +307,8 @@
     let searchTimer = null;
     let visibleLimit = 50;
     let filter = { query: "", site: "all", status: "pending" };
+    let pendingPanelOpen = state.outbox.length > 0;
+    let pendingSelectedIds = new Set();
 
     function persist(next) { state = writeStoredState(storage, next); return state; }
     function setMessage(message, kind = "") {
@@ -376,14 +384,90 @@
       </article>`;
     }
 
+    function pendingEntries() {
+      const requestById = new Map(state.requests.map((request) => [request.id, request]));
+      const cloudById = new Map(state.cloudRequests.map((request) => [request.id, request]));
+      return state.outbox.map((mutation) => ({
+        mutation,
+        request: requestById.get(mutation.requestId),
+        canDiscard: mutation.kind === "create" || cloudById.has(mutation.requestId),
+      }));
+    }
+
+    function pendingChangeMarkup(entry) {
+      const mutation = entry.mutation;
+      const request = entry.request || {};
+      const isCreate = mutation.kind === "create";
+      const dateTime = [request.eventDate || mutation.row?.eventDate, request.eventTime || mutation.row?.eventTime].filter(Boolean).join(" ");
+      const identifiers = [request.serialNo || mutation.row?.serialNo, request.aaTag || mutation.row?.aaTag].filter(Boolean).join(" ↔ ");
+      const table = request.table || mutation.row?.table;
+      const subtitle = [request.sheetName || mutation.sheetName, dateTime, table ? `Table ${table}` : "", identifiers].filter(Boolean).join(" · ");
+      const changes = isCreate
+        ? [["事件詳情", request.eventDetails || mutation.row?.eventDetails || "未填寫"]]
+        : Object.entries(mutation.patch || {}).map(([field, value]) => [PENDING_FIELD_LABELS[field] || field, ["machineStatus", "cardStatus"].includes(field) ? followupLabel(value) : text(value) || "（清空）"]);
+      const selected = pendingSelectedIds.has(mutation.requestId);
+      return `<article class="mgm-check-pending-row${selected ? " selected" : ""}">
+        <label class="mgm-check-pending-select"><input type="checkbox" data-mgm-check-pending-select="1" data-mgm-check-pending-id="${escapeHtml(mutation.requestId)}"${selected ? " checked" : ""}${entry.canDiscard ? "" : " disabled"}><span><strong>${isCreate ? "新增客戶檢查請求" : "修改檢查請求"}</strong><small>${escapeHtml(subtitle || "未有記錄資料")}</small></span></label>
+        <div class="mgm-check-pending-changes">${changes.map(([label, value]) => `<span>${escapeHtml(label)}：${escapeHtml(value)}</span>`).join("")}</div>
+        <button type="button" class="mgm-check-pending-delete" data-mgm-check-pending-action="delete-one" data-mgm-check-pending-id="${escapeHtml(mutation.requestId)}"${entry.canDiscard ? "" : " disabled"}>刪除此變更</button>
+      </article>`;
+    }
+
+    function renderPendingPanel() {
+      const panel = documentRef.getElementById("mgmCheckPendingPanel");
+      if (!panel) return;
+      const entries = pendingEntries();
+      if (!entries.length || !pendingPanelOpen) { panel.hidden = true; panel.innerHTML = ""; return; }
+      const removable = entries.filter((entry) => entry.canDiscard);
+      const selectedCount = [...pendingSelectedIds].filter((requestId) => removable.some((entry) => entry.mutation.requestId === requestId)).length;
+      const allSelected = removable.length > 0 && selectedCount === removable.length;
+      panel.hidden = false;
+      panel.innerHTML = `<section class="mgm-check-pending-panel-inner" aria-label="待儲存變更">
+        <div class="mgm-check-pending-head"><div><strong>待儲存變更（${entries.length}）</strong><span>可查看每筆變更內容，或刪除後還原至最近雲端資料。</span></div><button type="button" data-mgm-check-pending-action="close">收起</button></div>
+        <div class="mgm-check-pending-toolbar"><label><input type="checkbox" data-mgm-check-pending-select-all="1"${allSelected ? " checked" : ""}${removable.length ? "" : " disabled"}> 全選</label><span>已選 ${selectedCount} 筆</span><button type="button" data-mgm-check-pending-action="delete-selected"${selectedCount ? "" : " disabled"}>刪除選取</button></div>
+        <div class="mgm-check-pending-list">${entries.map(pendingChangeMarkup).join("")}</div>
+      </section>`;
+    }
+
+    function discardPendingChanges(requestIds = []) {
+      const requestedIds = new Set((Array.isArray(requestIds) ? requestIds : []).map(text).filter(Boolean));
+      if (!requestedIds.size) return 0;
+      const cloudById = new Map(state.cloudRequests.map((request) => [request.id, request]));
+      const mutationByRequestId = new Map(state.outbox.map((mutation) => [mutation.requestId, mutation]));
+      const removableIds = new Set([...requestedIds].filter((requestId) => mutationByRequestId.get(requestId)?.kind === "create" || cloudById.has(requestId)));
+      if (!removableIds.size) return 0;
+      persist({
+        ...state,
+        requests: state.requests.flatMap((request) => {
+          if (!removableIds.has(request.id)) return [request];
+          const baseline = cloudById.get(request.id);
+          return baseline ? [baseline] : [];
+        }),
+        outbox: state.outbox.filter((mutation) => !removableIds.has(mutation.requestId)),
+        conflicts: state.conflicts.filter((conflict) => !removableIds.has(conflict.requestId)),
+      });
+      pendingSelectedIds = new Set([...pendingSelectedIds].filter((requestId) => !removableIds.has(requestId)));
+      if (!state.outbox.length) pendingPanelOpen = false;
+      return removableIds.size;
+    }
+
     function render() {
       if (!mounted) return;
       const filtered = filterRequests(state.requests, filter);
       const pendingTotal = state.requests.filter((request) => request.status === "pending").length;
       const summary = documentRef.getElementById("mgmCheckSummary");
       if (summary) summary.textContent = `全部 ${state.requests.length} · 未完成 ${pendingTotal} · 已完成 ${state.requests.length - pendingTotal} · 待儲存 ${state.outbox.length}`;
+      const pendingBadge = documentRef.getElementById("mgmCheckPendingBadge");
+      if (pendingBadge) {
+        const pendingCount = state.outbox.length;
+        pendingBadge.hidden = !pendingCount;
+        pendingBadge.disabled = !pendingCount;
+        pendingBadge.textContent = `待儲存變更（${pendingCount}）`;
+        pendingBadge.setAttribute("aria-expanded", String(pendingCount && pendingPanelOpen));
+        pendingBadge.setAttribute("aria-label", pendingCount ? `開啟待儲存變更清單，共 ${pendingCount} 筆` : "沒有待儲存變更");
+      }
       const connection = documentRef.getElementById("mgmCheckConnection");
-      if (connection) connection.textContent = !online() ? "暫時離線" : state.lastCloudError ? "雲端讀取失敗" : state.outbox.length ? `有未儲存變更（${state.outbox.length}）` : state.requests.length ? "雲端最新資料" : "正在連接雲端";
+      if (connection) connection.textContent = !online() ? "暫時離線" : state.lastCloudError ? "雲端讀取失敗" : state.requests.length ? "雲端最新資料" : "正在連接雲端";
       const sync = documentRef.getElementById("mgmCheckSyncBtn");
       if (sync) { sync.disabled = busy || !online() || !transportAvailable() || !state.outbox.length; sync.textContent = busy ? "處理中…" : state.outbox.length ? `儲存資料（${state.outbox.length}）` : "儲存資料"; }
       const download = documentRef.getElementById("mgmCheckDownloadBtn");
@@ -399,6 +483,7 @@
       const status = documentRef.getElementById("mgmCheckStatusFilter"); if (status) status.value = filter.status;
       const form = documentRef.getElementById("mgmCheckNewForm"); if (form) form.hidden = !creating;
       const add = documentRef.getElementById("mgmCheckAddBtn"); if (add) { add.disabled = busy; add.textContent = creating ? "收起新增表格" : "＋ 新增檢查請求"; }
+      renderPendingPanel();
     }
 
     function draftFromEditor() {
@@ -430,7 +515,7 @@
             table: value("mgmCheckNewTable"), serialNo: value("mgmCheckNewSerial"), aaTag: value("mgmCheckNewAaTag"), boxId: value("mgmCheckNewBox"),
             vaultId: value("mgmCheckNewVault"), eventDetails: value("mgmCheckNewDetails"),
           }, Date.now());
-          persist(next); creating = false; filter = { query: "", site: "all", status: "pending" };
+          persist(next); creating = false; pendingPanelOpen = true; pendingSelectedIds.clear(); filter = { query: "", site: "all", status: "pending" };
           ["mgmCheckNewTime", "mgmCheckNewEndTime", "mgmCheckNewTable", "mgmCheckNewSerial", "mgmCheckNewAaTag", "mgmCheckNewBox", "mgmCheckNewVault", "mgmCheckNewDetails"].forEach((id) => { const input = documentRef.getElementById(id); if (input) input.value = ""; });
           setMessage("新請求已加入，請按「儲存資料」", "ok"); notify("✓ 新請求已加入待儲存清單"); render();
         } catch (error) { setMessage(text(error?.message || "未能新增檢查請求"), "err"); }
@@ -439,6 +524,39 @@
       documentRef.getElementById("mgmCheckNewAaTag")?.addEventListener("input", (event) => { const mapped = tagMaps(state.aaTags).serialByAa.get(normalizeAaTag(event.target.value)); const target = documentRef.getElementById("mgmCheckNewSerial"); if (mapped && target) target.value = mapped; });
       documentRef.getElementById("mgmCheckDownloadBtn")?.addEventListener("click", () => loadCloud());
       documentRef.getElementById("mgmCheckSyncBtn")?.addEventListener("click", syncCloud);
+      documentRef.getElementById("mgmCheckPendingBadge")?.addEventListener("click", () => {
+        if (!state.outbox.length) return;
+        pendingPanelOpen = !pendingPanelOpen;
+        if (!pendingPanelOpen) pendingSelectedIds.clear();
+        render();
+      });
+      documentRef.getElementById("mgmCheckPendingPanel")?.addEventListener("change", (event) => {
+        const input = event?.target;
+        const entries = pendingEntries().filter((entry) => entry.canDiscard);
+        if (input?.dataset?.mgmCheckPendingSelectAll) {
+          pendingSelectedIds = input.checked ? new Set(entries.map((entry) => entry.mutation.requestId)) : new Set();
+          render();
+          return;
+        }
+        const requestId = text(input?.dataset?.mgmCheckPendingId);
+        if (!requestId || !entries.some((entry) => entry.mutation.requestId === requestId)) return;
+        if (input.checked) pendingSelectedIds.add(requestId); else pendingSelectedIds.delete(requestId);
+        render();
+      });
+      documentRef.getElementById("mgmCheckPendingPanel")?.addEventListener("click", (event) => {
+        const button = event?.target?.closest?.("button[data-mgm-check-pending-action]");
+        if (!button || busy) return;
+        const action = text(button.dataset?.mgmCheckPendingAction);
+        if (action === "close") { pendingPanelOpen = false; pendingSelectedIds.clear(); render(); return; }
+        const requestIds = action === "delete-one" ? [text(button.dataset?.mgmCheckPendingId)] : action === "delete-selected" ? [...pendingSelectedIds] : [];
+        if (!requestIds.length) return;
+        if (typeof root?.confirm === "function" && !root.confirm(`確定刪除 ${requestIds.length} 筆待儲存變更？這些資料會還原至最近雲端資料。`)) return;
+        const removed = discardPendingChanges(requestIds);
+        if (!removed) { setMessage("這筆變更暫時未能還原，請重新載入後再試", "warn"); render(); return; }
+        setMessage(`已刪除 ${removed} 筆待儲存變更`, "ok");
+        notify(`✓ 已刪除 ${removed} 筆待儲存變更`);
+        render();
+      });
       documentRef.getElementById("mgmCheckSearch")?.addEventListener("input", (event) => { filter.query = event.target.value; visibleLimit = 50; clearTimeout(searchTimer); searchTimer = setTimeout(render, 90); });
       documentRef.getElementById("mgmCheckSiteFilter")?.addEventListener("change", (event) => { filter.site = event.target.value; visibleLimit = 50; render(); });
       documentRef.getElementById("mgmCheckStatusFilter")?.addEventListener("change", (event) => { filter.status = event.target.value; visibleLimit = 50; render(); });
@@ -455,7 +573,7 @@
           if (!request || !["machineStatus", "cardStatus"].includes(field) || !nextValue || (isFollowupChecked(request[field]) ? "done" : "pending") === choice) return;
           const next = applyDraft(state, requestId, { [field]: nextValue }, Date.now());
           if (JSON.stringify(next.outbox) === JSON.stringify(state.outbox)) return;
-          persist(next);
+          persist(next); pendingPanelOpen = state.outbox.length > 0; pendingSelectedIds.clear();
           const fieldLabel = field === "machineStatus" ? "機台檢查狀況" : "實牌檢查狀況";
           const choiceLabel = choice === "done" ? "已檢查" : "待跟進";
           setMessage(`${fieldLabel}已設為${choiceLabel}，請按「儲存資料」`, "ok");
@@ -470,7 +588,7 @@
         if (button.dataset.mgmCheckAction === "save") {
           const next = applyDraft(state, requestId, draftFromEditor(), Date.now());
           if (JSON.stringify(next.outbox) === JSON.stringify(state.outbox)) { setMessage("沒有需要儲存的變更", "warn"); editingId = ""; render(); return; }
-          persist(next); editingId = ""; setMessage("修改已加入，請按「儲存資料」", "ok"); notify("✓ 修改已加入待儲存清單"); render();
+          persist(next); editingId = ""; pendingPanelOpen = state.outbox.length > 0; pendingSelectedIds.clear(); setMessage("修改已加入，請按「儲存資料」", "ok"); notify("✓ 修改已加入待儲存清單"); render();
         }
       });
       documentRef.getElementById("mgmCheckList")?.addEventListener("input", (event) => {
