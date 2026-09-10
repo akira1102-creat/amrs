@@ -102,6 +102,47 @@ test("orders MGM Check Request results from the latest event date and time to th
   );
 });
 
+test("renders empty and checked follow-up fields with clear MGM status labels", () => {
+  const requests = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers,
+      ["2026/06/10", "08:00", "", "21BB02", "100", "TAE0100", "BOX-1", "", "Waiting", "", "", ""],
+      ["2026/06/10", "09:00", "", "21BB03", "200", "TAE0200", "BOX-2", "", "Checked", "已CHECK", "已檢查", ""],
+    ],
+  });
+  const document = fakeDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { requests, cloudRequests: requests, outbox: [] });
+  const app = createApplication({ document, storage, transport: null, isOnline: () => false });
+
+  app.mount();
+  app.setFilter({ status: "all" });
+
+  const html = document.getElementById("mgmCheckList").innerHTML;
+  assert.equal((html.match(/class="mgm-check-followup-value pending">待跟進/g) || []).length, 2);
+  assert.equal((html.match(/class="mgm-check-followup-value done">已檢查/g) || []).length, 2);
+  assert.doesNotMatch(html, />未填寫</);
+});
+
+test("renders MGM event date and time prominently before Table, BOX ID and Vault ID", () => {
+  const requests = parseRequestRows({
+    sheetName: "MGM Cotai",
+    rows: [headers,
+      ["2026/06/11", "08:30", "09:10", "21BB02", "100", "TAE0100", "BOX-1", "VA-1", "Check", "", "", ""],
+    ],
+  });
+  const document = fakeDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { requests, cloudRequests: requests, outbox: [] });
+
+  createApplication({ document, storage, transport: null, isOnline: () => false }).mount();
+
+  const html = document.getElementById("mgmCheckList").innerHTML;
+  assert.match(html, /<div class="mgm-check-datetime"><span>事發日期及時間<\/span><strong>2026\/06\/11 08:30<\/strong><small>結束 09:10<\/small><\/div>/);
+  assert.match(html, /<div class="mgm-check-location"><span>Table 21BB02<\/span><span>BOX ID BOX-1<\/span><span>Vault ID VA-1<\/span><\/div>/);
+  assert.ok(html.indexOf("mgm-check-datetime") < html.indexOf("mgm-check-location"));
+});
+
 test("stores one merged offline mutation and keeps it over a refreshed cloud snapshot", () => {
   const request = parseRequestRows({
     sheetName: "MGM Macau",

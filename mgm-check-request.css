@@ -39,13 +39,18 @@
 .mgm-check-identifiers span{color:#484f58}
 .mgm-check-identifiers small{flex-basis:100%;color:#8b949e;font-size:10px}
 .mgm-check-site{flex:0 0 auto;padding:4px 7px;border:1px solid #30363d;border-radius:999px;color:#c9d1d9;font-size:10px;font-weight:800}
-.mgm-check-meta,.mgm-check-source{display:flex;gap:9px 14px;flex-wrap:wrap;margin-top:9px;color:#8b949e;font-size:11px}
-.mgm-check-source{margin-top:5px}
+.mgm-check-datetime{display:flex;align-items:center;gap:7px 10px;flex-wrap:wrap;margin-top:10px;padding:10px 11px;border:1px solid #1f6feb;border-radius:9px;background:#0d2a4d}
+.mgm-check-datetime span{color:#79c0ff;font-size:11px;font-weight:800}
+.mgm-check-datetime strong{color:#fff;font-size:15px;letter-spacing:.01em;white-space:nowrap}
+.mgm-check-datetime small{color:#c9d1d9;font-size:11px;font-weight:750;white-space:nowrap}
+.mgm-check-location{display:flex;gap:7px 14px;flex-wrap:wrap;margin-top:7px;color:#8b949e;font-size:11px;font-weight:700}
 .mgm-check-event{margin-top:10px;padding:10px;border:1px solid #21262d;border-radius:9px;background:#0d1117;color:#e6edf3;font-size:12px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
 .mgm-check-followup{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .mgm-check-followup>div{padding:9px;border:1px solid #21262d;border-radius:9px;background:#0d1117}
 .mgm-check-followup span{display:block;color:#8b949e;font-size:10px}
 .mgm-check-followup strong{display:block;margin-top:3px;color:#e6edf3;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.mgm-check-followup strong.mgm-check-followup-value.pending{color:#f2cc60}
+.mgm-check-followup strong.mgm-check-followup-value.done{color:#7ee787}
 .mgm-check-followup p{grid-column:1/-1;padding:8px 9px;border-left:2px solid #8b949e;color:#c9d1d9;font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere}
 .mgm-check-card-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px}
 .mgm-check-card-actions button{border-color:#1f6feb;background:#0d2a4d;color:#79c0ff}

@@ -29,6 +29,12 @@
   }
   function pendingValue(value) { const clean = text(value); return !clean || /未\s*check/i.test(clean); }
   function requestStatus(request) { return pendingValue(request?.machineStatus) || pendingValue(request?.cardStatus) ? "pending" : "done"; }
+  function followupDisplay(value) {
+    const clean = text(value);
+    if (pendingValue(clean)) return { label: "待跟進", tone: "pending" };
+    if (/^已\s*(?:check|檢查)$/i.test(clean)) return { label: "已檢查", tone: "done" };
+    return { label: clean, tone: "" };
+  }
   function requestEventStamp(request = {}) {
     const dateMatch = text(request.eventDate).match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
     if (!dateMatch) return Number.NEGATIVE_INFINITY;
@@ -351,12 +357,17 @@
     function requestMarkup(request) {
       const pending = state.outbox.some((item) => item.requestId === request.id);
       const resolved = [request.serialResolved ? "SN 由 AA Tag 對照" : "", request.aaTagResolved ? "AA Tag 由 SN 對照" : ""].filter(Boolean).join(" · ");
+      const eventDateTime = [request.eventDate, request.eventTime].filter(Boolean).join(" ") || "未有日期及時間";
+      const followup = (label, value) => {
+        const display = followupDisplay(value);
+        return `<div><span>${label}</span><strong class="mgm-check-followup-value${display.tone ? ` ${display.tone}` : ""}">${escapeHtml(display.label)}</strong></div>`;
+      };
       return `<article class="mgm-check-card ${request.status}${pending ? " local-change" : ""}" data-mgm-check-id="${escapeHtml(request.id)}">
         <div class="mgm-check-card-top"><div class="mgm-check-identifiers"><strong>${escapeHtml(request.serialNo || "未有 SN")}</strong><span>↔</span><strong>${escapeHtml(request.aaTag || "未有 AA Tag")}</strong>${resolved ? `<small>${escapeHtml(resolved)}</small>` : ""}</div><span class="mgm-check-site">${escapeHtml(request.sheetName)}</span></div>
-        <div class="mgm-check-meta"><span>事發 ${escapeHtml(request.eventDate)} ${escapeHtml(request.eventTime)}</span>${request.endTime ? `<span>結束 ${escapeHtml(request.endTime)}</span>` : ""}<span>Table ${escapeHtml(request.table || "—")}</span></div>
-        <div class="mgm-check-source"><span>BOX ${escapeHtml(request.boxId || "—")}</span><span>Vault ${escapeHtml(request.vaultId || "—")}</span></div>
+        <div class="mgm-check-datetime"><span>事發日期及時間</span><strong>${escapeHtml(eventDateTime)}</strong>${request.endTime ? `<small>結束 ${escapeHtml(request.endTime)}</small>` : ""}</div>
+        <div class="mgm-check-location"><span>Table ${escapeHtml(request.table || "—")}</span><span>BOX ID ${escapeHtml(request.boxId || "—")}</span><span>Vault ID ${escapeHtml(request.vaultId || "—")}</span></div>
         <div class="mgm-check-event">${escapeHtml(request.eventDetails || "未有事件詳情")}</div>
-        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup"><div><span>機台跟進</span><strong>${escapeHtml(request.machineStatus || "未填寫")}</strong></div><div><span>實牌跟進</span><strong>${escapeHtml(request.cardStatus || "未填寫")}</strong></div>${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions"><span class="mgm-check-state ${request.status}">${request.status === "done" ? "已完成" : "待檢查"}${pending ? " · 待儲存" : ""}</span><button data-mgm-check-action="edit" type="button">${request.status === "done" ? "修改" : "填寫檢查結果"}</button></div>`}
+        ${editingId === request.id ? editorMarkup(request) : `<div class="mgm-check-followup">${followup("機台跟進", request.machineStatus)}${followup("實牌跟進", request.cardStatus)}${request.remark ? `<p>${escapeHtml(request.remark)}</p>` : ""}</div><div class="mgm-check-card-actions"><span class="mgm-check-state ${request.status}">${request.status === "done" ? "已完成" : "待檢查"}${pending ? " · 待儲存" : ""}</span><button data-mgm-check-action="edit" type="button">${request.status === "done" ? "修改" : "填寫檢查結果"}</button></div>`}
       </article>`;
     }
 
