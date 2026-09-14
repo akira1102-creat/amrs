@@ -5,6 +5,7 @@ import { createAccessToken, listAccessTokens } from '../worker/src/access-tokens
 import { saveWorksheetBackup } from './backup.mjs';
 import { openWorksheets } from './worksheets.mjs';
 import { existsSync, readFileSync } from 'node:fs';
+import { readWorkbookManifest } from './import-workbooks.mjs';
 
 const [command = 'start', folder = './intranet-data'] = process.argv.slice(2);
 const directory = resolve(folder);
@@ -24,11 +25,11 @@ if (command === 'setup') {
     const result = saveWorksheetBackup(sheets, resolve(destination));
     process.stdout.write(`已備份 ${result.workbooks} 個資料簿（不包含登入憑證）。\n`);
   } finally { sheets.close(); }
-} else if (command === 'restore') {
+} else if (command === 'restore' || command === 'import') {
   const source = process.argv[4];
   const database = resolve(directory, 'worksheets.sqlite');
   if (!source || existsSync(directory)) throw new Error('還原請使用全新資料目錄：restore <新資料目錄> <備份.json>；不會覆蓋現有資料。');
-  const snapshot = JSON.parse(readFileSync(resolve(source), 'utf8'));
+  const snapshot = command === 'import' ? readWorkbookManifest(resolve(source)) : JSON.parse(readFileSync(resolve(source), 'utf8'));
   const sheets = openWorksheets(database);
   try {
     sheets.restoreEmpty(snapshot);
@@ -43,5 +44,5 @@ if (command === 'setup') {
   const stop = () => app.close().then(() => process.exit(0));
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
 } else {
-  throw new Error('支援指令：setup、start、backup、restore');
+  throw new Error('支援指令：setup、start、backup、restore、import');
 }
