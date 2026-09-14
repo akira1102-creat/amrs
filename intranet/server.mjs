@@ -7,13 +7,20 @@ import { openRuntime } from './runtime.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Set(['index.html', 'cloud-api.js', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
 const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', png: 'image/png' };
-export const INTRANET_VERSION = 'intranet-0.1.0';
+export const INTRANET_VERSION = 'intranet-0.2.0';
 
 export function localAsset(name, content) {
   if (name === 'index.html') {
     return content.replace(/const _CLOUDFLARE_API_URL='[^']*';/, 'const _CLOUDFLARE_API_URL=location.origin;')
-      .replace(/const _APP_VERSION='[^']*';/, `const _APP_VERSION='${INTRANET_VERSION}';`);
+      .replace(/const _APP_VERSION='[^']*';/, `const _APP_VERSION='${INTRANET_VERSION}';`)
+      // The shared cloud PIN is replaced by the local server's per-user tokens.
+      .replace(/const _PH='[^']*';/, "const _PH='intranet-token-login';localStorage.setItem('_ml_auth',_PH);")
+      .replace(/function getScriptUrl\(\)\{[\s\S]*?\n\}/, "function getScriptUrl(){return hasPersonalToken()?location.origin+'/api':'';}")
+      .replace(/function hasAnyDeployId\(\)\{[^\n]*\}/, 'function hasAnyDeployId(){return hasPersonalToken();}')
+      .replace(/雲端/g, '內網主機');
   }
+  if (name === 'cloud-api.js') return content.replace(/function deployIdToGasUrl\(value\) \{[\s\S]*?\n  \}/, 'function deployIdToGasUrl(value) { return ""; }');
+  if (['galaxy-log.js', 'mgm-check-request.js', 'worksheet-editor.js'].includes(name)) return content.replace(/雲端/g, '內網主機');
   if (name === 'sw.js') return content.replace(/const CACHE = '[^']*';/, `const CACHE = '${INTRANET_VERSION}';`);
   return content;
 }
