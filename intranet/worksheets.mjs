@@ -120,6 +120,10 @@ export function openWorksheets(filename) {
   };
   return {
     ...client,
+    snapshot() {
+      return { format: 'amrs-local-worksheets', version: 1, createdAt: new Date().toISOString(), workbooks:
+        db.prepare('SELECT id, data FROM workbooks ORDER BY id').all().map(row => ({ id: row.id, ...JSON.parse(row.data) })) };
+    },
     exists(id) { return !!db.prepare('SELECT id FROM workbooks WHERE id=?').get(String(id)); },
     initialize(id, sheets) {
       if (db.prepare('SELECT id FROM workbooks WHERE id=?').get(String(id))) throw new Error('Workbook already exists');
