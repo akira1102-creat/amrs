@@ -7,7 +7,7 @@ import { openRuntime } from './runtime.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Set(['index.html', 'cloud-api.js', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
 const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', png: 'image/png' };
-export const INTRANET_VERSION = 'intranet-0.2.0';
+export const INTRANET_VERSION = 'intranet-0.2.1';
 
 export function localAsset(name, content) {
   if (name === 'index.html') {

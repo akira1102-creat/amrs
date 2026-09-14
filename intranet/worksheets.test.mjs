@@ -19,5 +19,11 @@ test('local worksheet storage supports repository ranges, appends, atomic edits 
     assert.equal(created.replies[0].addSheet.properties.title, "Test's sheet");
     await sheets.valuesUpdate({ spreadsheetId: 'example', range: "'Test''s sheet'!AA3", values: [['local']] });
     assert.deepEqual((await sheets.valuesGet({ spreadsheetId: 'example', range: "'Test''s sheet'!AA3:AB" })).values, [['local']]);
+    assert.deepEqual((await sheets.valuesGet({ spreadsheetId: 'example', range: "'Test''s sheet'!AA1:AB" })).values, [[], [], ['local']]);
+    await sheets.valuesUpdate({ spreadsheetId: 'example', range: "'Test''s sheet'!A1001", values: [['last']] });
+    const metadata = await sheets.request({ path: 'spreadsheets/example' });
+    assert.equal(metadata.sheets[1].properties.gridProperties.rowCount, 1001);
+    await sheets.spreadsheetBatchUpdate({ spreadsheetId: 'example', requests: [{ insertDimension: { range: { sheetId: created.replies[0].addSheet.properties.sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 } } }] });
+    assert.deepEqual((await sheets.valuesGet({ spreadsheetId: 'example', range: "'Test''s sheet'!AB3" })).values, [['local']]);
   } finally { sheets.close(); }
 });

@@ -50,7 +50,9 @@ export function openWorksheets(filename) {
     values.forEach((row, offset) => {
       const target = sheet.values[area.startRow + offset] ||= [];
       row.forEach((value, index) => { if (value !== null) target[area.startCol + index] = value; });
+      sheet.properties.gridProperties.columnCount = Math.max(sheet.properties.gridProperties.columnCount, target.length);
     });
+    sheet.properties.gridProperties.rowCount = Math.max(sheet.properties.gridProperties.rowCount, sheet.values.length);
     return { updatedRange: range, updatedRows: values.length, updatedCells: values.reduce((sum, row) => sum + row.length, 0) };
   }
   const client = {
@@ -63,6 +65,7 @@ export function openWorksheets(filename) {
     async valuesGet({ spreadsheetId, range }) {
       const area = rangeParts(range), sheet = sheetFor(read(spreadsheetId), area.title);
       const values = sheet.values.slice(area.startRow, area.endRow + 1).map(row => {
+        row ||= [];
         const cells = Array.from({ length: Math.max(0, Math.min(row.length, area.endCol + 1) - area.startCol) }, (_, index) => row[area.startCol + index] ?? '');
         while (cells.length && cells.at(-1) === '') cells.pop();
         return cells;
@@ -79,7 +82,7 @@ export function openWorksheets(filename) {
       return mutate(spreadsheetId, workbook => {
         const area = rangeParts(range), sheet = sheetFor(workbook, area.title);
         let end = sheet.values.length;
-        while (end && !sheet.values[end - 1].some(value => value !== '' && value != null)) end--;
+        while (end && !(sheet.values[end - 1] || []).some(value => value !== '' && value != null)) end--;
         const letters = String(range).split('!').at(-1).match(/[A-Z]+/i)[0];
         const target = `'${area.title.replaceAll("'", "''")}'!${letters}${end + 1}`;
         return { updates: put(workbook, target, values) };
@@ -102,7 +105,10 @@ export function openWorksheets(filename) {
           const count = endIndex - startIndex;
           if (!Number.isInteger(count) || count < 0 || startIndex < 0) throw new Error('Invalid worksheet indexes');
           if (dimension === 'ROWS') sheet.values.splice(startIndex, request.deleteDimension ? count : 0, ...(request.insertDimension ? Array.from({ length: count }, () => []) : []));
-          else sheet.values.forEach(row => row.splice(startIndex, request.deleteDimension ? count : 0, ...(request.insertDimension ? Array(count).fill('') : [])));
+          else sheet.values.forEach(row => {
+            if (!row || row.length <= startIndex) return;
+            row.splice(startIndex, request.deleteDimension ? count : 0, ...(request.insertDimension ? Array(count).fill('') : []));
+          });
           const key = dimension === 'ROWS' ? 'rowCount' : 'columnCount';
           sheet.properties.gridProperties[key] += request.deleteDimension ? -count : count;
           return {};
