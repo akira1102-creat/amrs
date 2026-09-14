@@ -91,3 +91,50 @@ test('whole AMRS read pages use local workbooks without public network access', 
     assert.equal(cvcs.success, true);
   } finally { db.close(); sheets.close(); }
 });
+
+test('Galaxy Log and MGM Check Request save and reload through local workbooks', async () => {
+  const sheets = openWorksheets(':memory:');
+  const db = openDatabase(':memory:');
+  initializeWorkbooks(sheets);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error('External network forbidden'); };
+  try {
+    const config = {
+      sheets: Object.fromEntries(COMPANIES.map(company => [company, company])),
+      partsSheetId: 'parts', scheduleSheetId: 'schedule', cvcsSheetId: 'cvcs',
+      galaxyLogSheetId: 'galaxy-log', mgmCheckRequestSheetId: 'mgm-check-request',
+      timeZone: 'Asia/Hong_Kong',
+    };
+    const repository = createRepository({}, { db, config, sheetsClient: sheets });
+    const galaxy = await repository.postAction({ action: 'syncGalaxyLog', mutations: [{
+      mutationId: 'synthetic-galaxy-mutation', taskId: 'synthetic-galaxy-task',
+      serialLast4: '1190', fullSerial: 'A02-001190', targetDate: '2026/09/15', groupIndex: 0, duplicateIndex: 0,
+      patch: { completedDate: '2026/09/15' },
+    }] });
+    assert.equal(galaxy.success, true);
+    assert.equal(galaxy.results[0].status, 'applied');
+    const galaxyRead = await repository.getAction({ action: 'galaxyLogOverview', refresh: '1' });
+    assert.equal(galaxyRead.tasks[0].fullSerial, 'A02-001190');
+    assert.equal(galaxyRead.tasks[0].completedDate, '2026-09-15');
+
+    const created = await repository.postAction({ action: 'syncMgmCheckRequests', mutations: [{
+      mutationId: 'synthetic-mgm-create', requestId: 'synthetic-mgm-request', kind: 'create', sheetName: 'MGM Macau',
+      row: { eventDate: '2026/09/15', eventTime: '10:00', table: 'QA TABLE', serialNo: '9988', eventDetails: 'Synthetic offline check' },
+    }] });
+    assert.equal(created.results[0].status, 'applied');
+    const mgmRead = await repository.getAction({ action: 'mgmCheckRequests', refresh: '1' });
+    const request = mgmRead.requests.find(item => item.eventDetails === 'Synthetic offline check');
+    assert.ok(request);
+    const updated = await repository.postAction({ action: 'syncMgmCheckRequests', mutations: [{
+      mutationId: 'synthetic-mgm-update', requestId: request.id, sheetName: request.sheetName,
+      rowNumber: request.rowNumber, baseVersion: request.version,
+      patch: { machineStatus: '已檢查', cardStatus: '已檢查' },
+    }] });
+    assert.equal(updated.results[0].status, 'applied');
+    const confirmed = await repository.getAction({ action: 'mgmCheckRequests', refresh: '1' });
+    const savedRequest = confirmed.requests.find(item => item.eventDetails === 'Synthetic offline check');
+    assert.equal(savedRequest.machineStatus, '已檢查');
+    assert.equal(savedRequest.cardStatus, '已檢查');
+    assert.equal(savedRequest.status, 'done');
+  } finally { globalThis.fetch = originalFetch; db.close(); sheets.close(); }
+});
