@@ -6,6 +6,7 @@ import { openWorksheets } from './worksheets.mjs';
 import { createRepository } from '../worker/src/repository.mjs';
 import { handleRequest } from '../worker/src/api.mjs';
 import { COMPANIES } from '../worker/src/config.mjs';
+import { initializeWorkbooks } from './initialize.mjs';
 
 export function openRuntime(directory) {
   mkdirSync(directory, { recursive: true });
@@ -14,6 +15,7 @@ export function openRuntime(directory) {
   catch (error) { if (error.code !== 'EEXIST') throw error; }
   const db = openDatabase(join(directory, 'system.sqlite'));
   const sheets = openWorksheets(join(directory, 'worksheets.sqlite'));
+  initializeWorkbooks(sheets);
   const config = {
     sheets: Object.fromEntries(COMPANIES.map(company => [company, company])),
     partsSheetId: 'parts', scheduleSheetId: 'schedule', cvcsSheetId: 'cvcs',

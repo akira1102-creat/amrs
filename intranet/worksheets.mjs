@@ -114,6 +114,7 @@ export function openWorksheets(filename) {
   };
   return {
     ...client,
+    exists(id) { return !!db.prepare('SELECT id FROM workbooks WHERE id=?').get(String(id)); },
     initialize(id, sheets) {
       if (db.prepare('SELECT id FROM workbooks WHERE id=?').get(String(id))) throw new Error('Workbook already exists');
       write(id, { sheets: Object.entries(sheets).map(([title, values], index) => ({ properties: { title, sheetId: index + 1, index, gridProperties: { rowCount: Math.max(1000, values.length), columnCount: 200 } }, values })) });
