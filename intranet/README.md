@@ -56,6 +56,20 @@ node intranet/cli.mjs setup ./restored-data
 
 ## 已有自動測試
 
+## 建立 Windows 開發測試包
+
+在 Windows 使用 Node.js 24，並準備相同版本的官方 Node.js LICENSE 檔案：
+
+```powershell
+node intranet/build.mjs ./new-test-package ./node-LICENSE.txt
+```
+
+只會複製指定程式檔、執行環境及授權文字，不會複製資料庫或登入 Token。
+輸出目錄必須不存在。包內 `Setup.cmd` 作首次設定，`Start.cmd` 啟動主機；資料放在包內 `data` 目錄。
+此為開發測試包，尚未完成可交付版本的介面及隔離環境驗證。
+
+## 自動測試
+
 ```powershell
 node --test intranet/*.test.mjs
 ```
