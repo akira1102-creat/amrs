@@ -7,7 +7,7 @@ import { openRuntime } from './runtime.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Set(['index.html', 'cloud-api.js', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
 const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', png: 'image/png' };
-export const INTRANET_VERSION = 'intranet-0.2.2';
+export const INTRANET_VERSION = 'intranet-0.2.3';
 
 export function localAsset(name, content) {
   if (name === 'index.html') {
@@ -26,7 +26,8 @@ export function localAsset(name, content) {
   }
   if (name === 'cloud-api.js') return content.replace(/function deployIdToGasUrl\(value\) \{[\s\S]*?\n  \}/, 'function deployIdToGasUrl(value) { return ""; }');
   if (['galaxy-log.js', 'mgm-check-request.js', 'worksheet-editor.js'].includes(name)) return content.replace(/雲端/g, '內網主機');
-  if (name === 'sw.js') return content.replace(/const CACHE = '[^']*';/, `const CACHE = '${INTRANET_VERSION}';`);
+  if (name === 'sw.js') return content.replace(/const CACHE = '[^']*';/, `const CACHE = '${INTRANET_VERSION}';`)
+    .replace("if (e.request.url.includes('script.google.com')) return;", "if (/^\\/(?:api|session|health|operations|submissions)(?:\\/|$)/.test(new URL(e.request.url).pathname)) return;");
   return content;
 }
 
