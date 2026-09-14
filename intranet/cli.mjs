@@ -4,7 +4,7 @@ import { createIntranetServer } from './server.mjs';
 import { createAccessToken, listAccessTokens } from '../worker/src/access-tokens.mjs';
 import { saveWorksheetBackup } from './backup.mjs';
 import { openWorksheets } from './worksheets.mjs';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const [command = 'start', folder = './intranet-data'] = process.argv.slice(2);
 const directory = resolve(folder);
@@ -24,6 +24,16 @@ if (command === 'setup') {
     const result = saveWorksheetBackup(sheets, resolve(destination));
     process.stdout.write(`已備份 ${result.workbooks} 個資料簿（不包含登入憑證）。\n`);
   } finally { sheets.close(); }
+} else if (command === 'restore') {
+  const source = process.argv[4];
+  const database = resolve(directory, 'worksheets.sqlite');
+  if (!source || existsSync(directory)) throw new Error('還原請使用全新資料目錄：restore <新資料目錄> <備份.json>；不會覆蓋現有資料。');
+  const snapshot = JSON.parse(readFileSync(resolve(source), 'utf8'));
+  const sheets = openWorksheets(database);
+  try {
+    sheets.restoreEmpty(snapshot);
+    process.stdout.write('工作表已還原至新目錄。請執行 setup 建立此主機的登入憑證。\n');
+  } finally { sheets.close(); }
 } else if (command === 'start') {
   const app = createIntranetServer({ directory });
   const port = Number(process.env.AMRS_PORT || 8080);
@@ -33,5 +43,5 @@ if (command === 'setup') {
   const stop = () => app.close().then(() => process.exit(0));
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
 } else {
-  throw new Error('支援指令：setup、start、backup');
+  throw new Error('支援指令：setup、start、backup、restore');
 }

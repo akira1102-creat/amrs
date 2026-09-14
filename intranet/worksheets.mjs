@@ -124,6 +124,28 @@ export function openWorksheets(filename) {
       return { format: 'amrs-local-worksheets', version: 1, createdAt: new Date().toISOString(), workbooks:
         db.prepare('SELECT id, data FROM workbooks ORDER BY id').all().map(row => ({ id: row.id, ...JSON.parse(row.data) })) };
     },
+    restoreEmpty(snapshot) {
+      if (snapshot?.format !== 'amrs-local-worksheets' || snapshot.version !== 1 || !Array.isArray(snapshot.workbooks) || !snapshot.workbooks.length) throw new Error('Invalid worksheet backup');
+      const ids = new Set();
+      for (const workbook of snapshot.workbooks) {
+        if (typeof workbook.id !== 'string' || !workbook.id || ids.has(workbook.id) || !Array.isArray(workbook.sheets) || !workbook.sheets.length) throw new Error('Invalid backup workbook');
+        ids.add(workbook.id);
+        const titles = new Set(), sheetIds = new Set();
+        for (const sheet of workbook.sheets) {
+          const p = sheet.properties;
+          if (!p || typeof p.title !== 'string' || !p.title || titles.has(p.title) || !Number.isInteger(p.sheetId) || sheetIds.has(p.sheetId)) throw new Error('Invalid backup worksheet');
+          titles.add(p.title); sheetIds.add(p.sheetId);
+          if (!Number.isInteger(p.gridProperties?.rowCount) || p.gridProperties.rowCount < 0 || !Number.isInteger(p.gridProperties?.columnCount) || p.gridProperties.columnCount < 0) throw new Error('Invalid backup dimensions');
+          if (!Array.isArray(sheet.values) || sheet.values.some(row => row !== null && (!Array.isArray(row) || row.some(value => value !== null && !['string', 'number', 'boolean'].includes(typeof value))))) throw new Error('Invalid backup cells');
+        }
+      }
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        if (db.prepare('SELECT COUNT(*) AS total FROM workbooks').get().total) throw new Error('Restore requires an empty database');
+        for (const workbook of snapshot.workbooks) write(workbook.id, { sheets: workbook.sheets });
+        db.exec('COMMIT');
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    },
     exists(id) { return !!db.prepare('SELECT id FROM workbooks WHERE id=?').get(String(id)); },
     initialize(id, sheets) {
       if (db.prepare('SELECT id FROM workbooks WHERE id=?').get(String(id))) throw new Error('Workbook already exists');

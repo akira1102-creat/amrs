@@ -21,5 +21,17 @@ test('data backup preserves all worksheets and never overwrites an existing file
     assert.deepEqual(snapshot.workbooks[0].sheets[1].values, [['Total', 0]]);
     assert.throws(() => saveWorksheetBackup(sheets, destination), { code: 'EEXIST' });
     assert.equal(readFileSync(destination, 'utf8'), content);
+    const restored = openWorksheets(':memory:');
+    try {
+      const invalid = structuredClone(snapshot);
+      invalid.workbooks.push({ id: 'broken', sheets: [{ properties: {} }] });
+      assert.throws(() => restored.restoreEmpty(invalid));
+      assert.equal(restored.snapshot().workbooks.length, 0);
+      restored.restoreEmpty(snapshot);
+      assert.deepEqual(restored.snapshot().workbooks, snapshot.workbooks);
+      assert.deepEqual((await restored.valuesGet({ spreadsheetId: 'example', range: 'Worksheet!A1:B3' })).values, [['SN', 'Date'], [], ['synthetic']]);
+      assert.throws(() => restored.restoreEmpty(snapshot), /empty database/);
+      assert.deepEqual(restored.snapshot().workbooks, snapshot.workbooks);
+    } finally { restored.close(); }
   } finally { sheets.close(); rmSync(directory, { recursive: true, force: true }); }
 });
