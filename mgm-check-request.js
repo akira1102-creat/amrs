@@ -467,13 +467,15 @@
         pendingBadge.setAttribute("aria-label", pendingCount ? `開啟待儲存變更清單，共 ${pendingCount} 筆` : "沒有待儲存變更");
       }
       const connection = documentRef.getElementById("mgmCheckConnection");
-      if (connection) connection.textContent = !online() ? "暫時離線" : state.lastCloudError ? "雲端讀取失敗" : state.requests.length ? "雲端最新資料" : "正在連接雲端";
+      if (connection) connection.textContent = !online() ? "暫時離線" : state.lastCloudError ? "雲端讀取失敗" : state.lastDownloadedAt ? "雲端資料已載入" : state.requests.length ? "雲端最新資料" : "正在連接雲端";
       const sync = documentRef.getElementById("mgmCheckSyncBtn");
       if (sync) { sync.disabled = busy || !online() || !transportAvailable() || !state.outbox.length; sync.textContent = busy ? "處理中…" : state.outbox.length ? `儲存資料（${state.outbox.length}）` : "儲存資料"; }
       const download = documentRef.getElementById("mgmCheckDownloadBtn");
       if (download) { download.disabled = busy || !online() || !transport || typeof transport.get !== "function"; download.textContent = busy ? "載入中…" : "重新載入"; }
       const list = documentRef.getElementById("mgmCheckList");
-      if (list) list.innerHTML = filtered.length ? filtered.slice(0, visibleLimit).map(requestMarkup).join("") : `<div class="mgm-check-empty"><strong>${state.requests.length ? "找不到符合條件的記錄" : "正在載入 MGM Check Request 清單"}</strong><span>${state.requests.length ? "請檢查 SN／AA Tag 或改為查看全部。" : "每次進入頁面都會自動載入最新雲端資料。"}</span></div>`;
+      const emptyTitle = state.requests.length ? "找不到符合條件的記錄" : state.lastCloudError ? "未能載入 MGM Check Request 清單" : state.lastDownloadedAt ? "目前沒有 MGM Check Request 記錄" : "正在載入 MGM Check Request 清單";
+      const emptyDescription = state.requests.length ? "請檢查 SN／AA Tag 或改為查看全部。" : state.lastCloudError ? "請確認連線後按「重新載入」。" : state.lastDownloadedAt ? "清單已成功載入，目前沒有檢查請求。" : "每次進入頁面都會自動載入最新雲端資料。";
+      if (list) list.innerHTML = filtered.length ? filtered.slice(0, visibleLimit).map(requestMarkup).join("") : `<div class="mgm-check-empty"><strong>${emptyTitle}</strong><span>${emptyDescription}</span></div>`;
       const more = documentRef.getElementById("mgmCheckMoreBtn");
       if (more) { more.hidden = filtered.length <= visibleLimit; more.textContent = `顯示更多（${Math.min(visibleLimit, filtered.length)} / ${filtered.length}）`; }
       const conflicts = documentRef.getElementById("mgmCheckConflicts");

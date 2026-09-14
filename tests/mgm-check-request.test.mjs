@@ -365,6 +365,24 @@ test("every page mount downloads the latest cloud request list even when local d
   assert.equal(readStoredState(cached).requests.length, 1);
 });
 
+test("shows an empty-state message after a successful download with no MGM requests", async () => {
+  const document = fakeDocument();
+  const app = createApplication({
+    document,
+    storage: new MemoryStorage(),
+    transport: { get: async () => ({ success: true, requests: [], aaTags: [] }), post: async () => ({ success: true }) },
+    isOnline: () => true,
+  });
+
+  app.mount();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const list = document.getElementById("mgmCheckList").innerHTML;
+  assert.match(list, /目前沒有.*(?:記錄|資料)/);
+  assert.doesNotMatch(list, /正在載入 MGM Check Request 清單/);
+  assert.match(document.getElementById("mgmCheckConnection").textContent, /已連接|已載入/);
+});
+
 test("renders the operational search, cloud actions and editable E-H J-L fields", () => {
   const document = fakeDocument();
   createApplication({ document, storage: new MemoryStorage(), transport: null, isOnline: () => false }).mount();

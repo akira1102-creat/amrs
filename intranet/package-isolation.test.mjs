@@ -60,13 +60,14 @@ test('built intranet package contains no public network clients or endpoints and
     const page = await fetch(base);
     assert.equal(page.status, 200);
     const html = await page.text();
-    assert.match(html, /script src="\.\/intranet-transport\.js\?v=intranet-0\.2\.12"/);
+    assert.match(html, /script src="\.\/intranet-transport\.js\?v=intranet-0\.2\.14"/);
     assert.doesNotMatch(html, /cloud-api\.js|google\.com|workers\.dev/);
+    assert.match(packagedServiceWorker, /const CACHE = 'intranet-0\.2\.14';/);
     for (const asset of [
       'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css',
       'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css',
       'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png',
-    ]) assert.equal((await fetch(`${base}/${asset}?v=intranet-0.2.12`)).status, 200, `${asset} is part of the local AMRS app`);
+    ]) assert.equal((await fetch(`${base}/${asset}?v=intranet-0.2.14`)).status, 200, `${asset} is part of the local AMRS app`);
     assert.equal((await fetch(`${base}/health`)).status, 200);
   } finally {
     if (app) await app.close();

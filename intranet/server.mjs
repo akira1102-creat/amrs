@@ -7,7 +7,7 @@ import { openRuntime } from './runtime.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Set(['index.html', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
 const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', png: 'image/png' };
-export const INTRANET_VERSION = 'intranet-0.2.12';
+export const INTRANET_VERSION = 'intranet-0.2.14';
 
 export function localAsset(name, content) {
   if (name === 'index.html') {
@@ -31,7 +31,6 @@ export function localAsset(name, content) {
       .replace(/function extractDeployId\(value\)\{[\s\S]*?\n\}/, "function extractDeployId(value){return '';}")
       .replace(/function getDeployId\(company\)\{[\s\S]*?\n\}/, "function getDeployId(company){return '';}")
       .replace(/function hasCredentialForCompany\(company\)\{[^\n]*\}/, 'function hasCredentialForCompany(company){return hasPersonalToken();}')
-      .replace(/function getScriptUrl\(\)\{[\s\S]*?\n\}/, "function getScriptUrl(){return location.origin+'/api';}")
       .replace(/async function transportFetch\(url,options=\{\}\)\{[\s\S]*?\n\}/, "async function transportFetch(url,options={}){const target=new URL(String(url),location.origin);if(target.origin!==location.origin)throw new Error('只允許連接目前的內網主機');return fetch(target.href,{...options,redirect:'error',credentials:'same-origin'});}")
       .replace(/const _dualTransport=[\s\S]*?\n\}\):null;/, "const _dualTransport=typeof window.createDualTransport==='function'?window.createDualTransport({baseUrl:location.origin,fetchImpl:transportFetch,getAccessToken:()=>getAccessToken()}):null;")
       .replace(/function isGasApiUrl\(url\)\{[\s\S]*?\n\}/, 'function isGasApiUrl(url){return false;}')
