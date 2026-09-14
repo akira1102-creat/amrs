@@ -5,15 +5,16 @@ import { join } from 'node:path';
 import { openRuntime } from './runtime.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const assets = new Set(['index.html', 'cloud-api.js', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
+const assets = new Set(['index.html', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
 const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', png: 'image/png' };
-export const INTRANET_VERSION = 'intranet-0.2.11';
+export const INTRANET_VERSION = 'intranet-0.2.12';
 
 export function localAsset(name, content) {
   if (name === 'index.html') {
     let html = content
       .replace(/const _CLOUDFLARE_API_URL='[^']*';/, 'const _CLOUDFLARE_API_URL=location.origin;')
-      .replace(/const _APP_VERSION='[^']*';/, `const _APP_VERSION='${INTRANET_VERSION}';`);
+      .replace(/const _APP_VERSION='[^']*';/, `const _APP_VERSION='${INTRANET_VERSION}';`)
+      .replace(/<script src="\.\/cloud-api\.js\?v=[^"]*"><\/script>/, `<script src="./intranet-transport.js?v=${INTRANET_VERSION}"></script>`);
     // The shared cloud PIN is replaced by the local server's per-user tokens.
     if (!html.includes("const _PH='intranet-token-login';localStorage.setItem('_ml_auth',_PH);")) {
       html = html.replace(/const _PH='[^']*';/, "const _PH='intranet-token-login';localStorage.setItem('_ml_auth',_PH);");
@@ -27,8 +28,21 @@ export function localAsset(name, content) {
       html = html.replace(/function normalizeCredentialInput\(value\)\{[\s\S]*?\n\}/, localNormalizeCredential);
     }
     html = html
-      .replace("function normalizeDeployInput(id){const deployId=extractDeployId(id);return deployId?'https://script.google.com/macros/s/'+deployId+'/exec':'';}", "function normalizeDeployInput(id){return '';}")
+      .replace(/function extractDeployId\(value\)\{[\s\S]*?\n\}/, "function extractDeployId(value){return '';}")
+      .replace(/function getDeployId\(company\)\{[\s\S]*?\n\}/, "function getDeployId(company){return '';}")
+      .replace(/function hasCredentialForCompany\(company\)\{[^\n]*\}/, 'function hasCredentialForCompany(company){return hasPersonalToken();}')
+      .replace(/function getScriptUrl\(\)\{[\s\S]*?\n\}/, "function getScriptUrl(){return location.origin+'/api';}")
+      .replace(/async function transportFetch\(url,options=\{\}\)\{[\s\S]*?\n\}/, "async function transportFetch(url,options={}){const target=new URL(String(url),location.origin);if(target.origin!==location.origin)throw new Error('只允許連接目前的內網主機');return fetch(target.href,{...options,redirect:'error',credentials:'same-origin'});}")
+      .replace(/const _dualTransport=[\s\S]*?\n\}\):null;/, "const _dualTransport=typeof window.createDualTransport==='function'?window.createDualTransport({baseUrl:location.origin,fetchImpl:transportFetch,getAccessToken:()=>getAccessToken()}):null;")
+      .replace(/function isGasApiUrl\(url\)\{[\s\S]*?\n\}/, 'function isGasApiUrl(url){return false;}')
+      .replace(/function isCloudApiUrl\(url\)\{[\s\S]*?\n\}/, "function isCloudApiUrl(url){try{const parsed=new URL(String(url),location.origin);return parsed.origin===location.origin&&parsed.pathname==='/api';}catch(e){return false;}}")
+      .replace('const response=await fetch(url,{...options,signal:controller.signal});', 'const response=await transportFetch(url,{...options,signal:controller.signal});')
+      .replace(/const legacyId=kind==='legacy'\?extractDeployId\(input\):'';\s*/, '')
+      .replace(/const tester=window\.createDualTransport\(\{cloudflareBaseUrl:_CLOUDFLARE_API_URL,fetchImpl:transportFetch,storage:null,accessToken:kind==='personal'\?input:'',deployId:legacyId,gasUrl:legacyId\?'https:\/\/script\.google\.com\/macros\/s\/'.*?\}\);/, "const tester=window.createDualTransport({baseUrl:location.origin,fetchImpl:transportFetch,storage:null,accessToken:kind==='personal'?input:''});")
+      .replace(/if\(saved\.kind==='legacy'\)COMPANIES\.forEach\(c=>localStorage\.setItem\(_companyKey\(c\),saved\.value\)\);\r?\n  else COMPANIES\.forEach\(c=>localStorage\.removeItem\(_companyKey\(c\)\)\);/, 'COMPANIES.forEach(c=>localStorage.removeItem(_companyKey(c)));')
+      .replace(/function normalizeDeployInput\(id\)\{[^\n]*\}/, "function normalizeDeployInput(id){return '';}")
       .replace(/function hasAnyDeployId\(\)\{[^\n]*\}/, 'function hasAnyDeployId(){return hasPersonalToken();}')
+      .replace(/function firstConfiguredCompany\(\)\{[^\n]*\}/, "function firstConfiguredCompany(){return hasPersonalToken()?(activeCompany||'SCL'):'';}")
       .replace('請輸入管理員提供的個人 Token。過渡期間亦可繼續使用原有 Deploy ID；資料只會儲存在本機。', '請輸入內網管理員提供的個人 Token。資料會儲存在公司內網主機。')
       .replace('貼上個人 Token 或原有 Deploy ID', '貼上內網管理員提供的 Token')
       .replaceAll('🔗 測試連線', '連接內網主機')
@@ -45,13 +59,6 @@ export function localAsset(name, content) {
       .replace(/雲端/g, '內網主機');
     return html;
   }
-  if (name === 'cloud-api.js') {
-    const offlineContent = content
-      .replace(/const DEFAULT_CLOUDFLARE_BASE_URL = "[^"]*";/, 'const DEFAULT_CLOUDFLARE_BASE_URL = "";');
-    const disabledDeployIdHelper = 'function deployIdToGasUrl(value) { return ""; }';
-    if (offlineContent.includes(disabledDeployIdHelper)) return offlineContent;
-    return offlineContent.replace(/function deployIdToGasUrl\(value\) \{[\s\S]*?\n  \}/, disabledDeployIdHelper);
-  }
   if (name === 'galaxy-log.js') return content.replace(/雲端/g, '內網主機')
     .replace('內網主機清單 · 現場離線使用，返公司同步', '內網共用清單 · 連接辦公室網絡即時使用')
     .replaceAll('同步至內網主機', '儲存至內網主機')
@@ -64,7 +71,9 @@ export function localAsset(name, content) {
   if (name === 'mgm-check-request.js') return content.replace(/雲端/g, '內網主機')
     .replace('() => root?.navigator?.onLine !== false', '() => true');
   if (name === 'worksheet-editor.js') return content.replace(/雲端/g, '內網主機');
-  if (name === 'sw.js') return content.replace(/const CACHE = '[^']*';/, `const CACHE = '${INTRANET_VERSION}';`)
+  if (name === 'sw.js') return content
+    .replace(/const CACHE = '[^']*';/, `const CACHE = '${INTRANET_VERSION}';`)
+    .replace(/const ASSETS = \[[^\]]*\];/, `const ASSETS = ['./', './index.html', './intranet-transport.js?v=${INTRANET_VERSION}', './access-control.js?v=${INTRANET_VERSION}', './cvcs.js?v=${INTRANET_VERSION}', './cvcs.css?v=${INTRANET_VERSION}', './token-admin.js?v=${INTRANET_VERSION}', './xlsx.mini.min.js?v=${INTRANET_VERSION}', './galaxy-log.js?v=${INTRANET_VERSION}', './galaxy-log.css?v=${INTRANET_VERSION}', './mgm-check-request.js?v=${INTRANET_VERSION}', './mgm-check-request.css?v=${INTRANET_VERSION}', './worksheet-editor.js?v=${INTRANET_VERSION}', './worksheet-editor.css?v=${INTRANET_VERSION}', './manifest.json?v=${INTRANET_VERSION}', './sw.js'];`)
     .replace("if (e.request.url.includes('script.google.com')) return;", "if (/^\\/(?:api|session|health|operations|submissions)(?:\\/|$)/.test(new URL(e.request.url).pathname)) return;");
   return content;
 }
@@ -98,7 +107,8 @@ export function createIntranetServer({ directory, runtime = openRuntime(director
       const name = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
       if (!assets.has(name) || !['GET', 'HEAD'].includes(incoming.method)) { outgoing.writeHead(404, headers); outgoing.end('Not found'); return; }
       const extension = name.split('.').at(-1);
-      const raw = await readFile(join(root, name));
+      const source = name === 'intranet-transport.js' ? join(root, 'intranet', 'transport.browser.js') : join(root, name);
+      const raw = await readFile(source);
       const content = ['html', 'js'].includes(extension) ? localAsset(name, raw.toString('utf8')) : raw;
       outgoing.writeHead(200, { ...headers, 'content-type': types[extension] || 'application/octet-stream' });
       outgoing.end(incoming.method === 'HEAD' ? undefined : content);

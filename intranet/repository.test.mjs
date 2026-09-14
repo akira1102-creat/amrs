@@ -29,7 +29,6 @@ test('CVCS records submit and query through local worksheets without public netw
   const sheets = openWorksheets(':memory:');
   const db = openDatabase(':memory:');
   initializeWorkbooks(sheets);
-  let publicFetchCalls = 0;
   try {
     const config = {
       sheets: Object.fromEntries(COMPANIES.map(company => [company, company])),
@@ -41,7 +40,6 @@ test('CVCS records submit and query through local worksheets without public netw
       db,
       config,
       sheetsClient: sheets,
-      publicFetch: async () => { publicFetchCalls++; throw new Error('External network forbidden'); },
     });
     const serialNo = 'QAOFFLINECVCS0915';
     const submitted = await repository.postAction({ action: 'submitCvcsRecords', records: [{
@@ -52,7 +50,6 @@ test('CVCS records submit and query through local worksheets without public netw
     assert.equal(submitted.inserted, 1);
     assert.equal(listed.total, 1);
     assert.equal(listed.records[0].serialNo, serialNo);
-    assert.equal(publicFetchCalls, 0);
   } finally { db.close(); sheets.close(); }
 });
 
@@ -60,7 +57,6 @@ test('whole AMRS read pages use local workbooks without public network access', 
   const sheets = openWorksheets(':memory:');
   const db = openDatabase(':memory:');
   initializeWorkbooks(sheets);
-  let publicFetchCalls = 0;
   try {
     const config = {
       sheets: Object.fromEntries(COMPANIES.map(company => [company, company])),
@@ -72,7 +68,6 @@ test('whole AMRS read pages use local workbooks without public network access', 
       db,
       config,
       sheetsClient: sheets,
-      publicFetch: async () => { publicFetchCalls++; throw new Error('External network forbidden'); },
     });
     for (const company of COMPANIES) {
       const grid = await repository.getAction({ action: 'worksheetGrid', company, page: 'last' });
@@ -94,6 +89,5 @@ test('whole AMRS read pages use local workbooks without public network access', 
     assert.equal(mgm.success, true);
     assert.ok(Array.isArray(mgm.requests));
     assert.equal(cvcs.success, true);
-    assert.equal(publicFetchCalls, 0);
   } finally { db.close(); sheets.close(); }
 });

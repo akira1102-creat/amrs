@@ -25,7 +25,6 @@ export function openRuntime(directory) {
   const env = { DB: db, AMRS_TOKEN_SECRET: readFileSync(secretFile, 'utf8') };
   const repository = createRepository(env, {
     config, sheetsClient: sheets,
-    publicFetch: async () => { throw new Error('External services are unavailable in the intranet edition'); },
   });
   return {
     db, sheets, config,

@@ -1,4 +1,4 @@
-import { mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { localAsset, INTRANET_VERSION } from './server.mjs';
@@ -12,19 +12,22 @@ if (!licenseText.includes('Permission is hereby granted') || !licenseText.includ
 const target = resolve(destination);
 // Fail on existing destinations. Never recursively copy a workspace or data directory.
 mkdirSync(target);
-const assets = ['index.html', 'cloud-api.js', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png'];
-const modules = ['database.mjs', 'worksheets.mjs', 'runtime.mjs', 'initialize.mjs', 'server.mjs', 'cli.mjs', 'backup.mjs', 'import-workbooks.mjs', 'README.md'];
+const assets = ['index.html', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png'];
+const modules = ['database.mjs', 'worksheets.mjs', 'runtime.mjs', 'initialize.mjs', 'cli.mjs', 'backup.mjs', 'import-workbooks.mjs', 'README.md'];
+const localWorkerModules = ['access-tokens.mjs', 'api.mjs', 'auth.mjs', 'config.mjs', 'cvcs-domain.mjs', 'cvcs-repository.mjs', 'crypto.mjs', 'domain.mjs', 'http.mjs', 'repository.mjs', 'sheet-utils.mjs', 'state.mjs'];
 function copy(name, transform = false) {
   const output = join(target, name);
   mkdirSync(dirname(output), { recursive: true });
-  if (transform) writeFileSync(output, localAsset(name, readFileSync(join(root, name), 'utf8')));
-  else copyFileSync(join(root, name), output);
+  const source = name === 'intranet-transport.js' ? join(root, 'intranet', 'transport.browser.js') : join(root, name);
+  if (transform) writeFileSync(output, localAsset(name, readFileSync(source, 'utf8')));
+  else copyFileSync(source, output);
 }
 for (const asset of assets) copy(asset, /\.(html|js)$/.test(asset));
 for (const name of modules) copy(`intranet/${name}`);
-for (const directory of ['worker/src', 'worker/migrations']) {
-  for (const name of readdirSync(join(root, directory))) if (/\.(mjs|sql)$/.test(name)) copy(`${directory}/${name}`);
-}
+mkdirSync(join(target, 'intranet'), { recursive: true });
+copyFileSync(join(root, 'intranet/package-server.mjs'), join(target, 'intranet/server.mjs'));
+for (const name of localWorkerModules) copy(`worker/src/${name}`);
+for (const name of ['0001_submission_state.sql', '0002_cache_operations.sql', '0003_access_tokens.sql']) copy(`worker/migrations/${name}`);
 copyFileSync(process.execPath, join(target, 'node.exe'));
 writeFileSync(join(target, 'NODE-LICENSE.txt'), licenseText);
 writeFileSync(join(target, 'VERSION.txt'), `${INTRANET_VERSION}\nDevelopment test build - not approved for production\n`);

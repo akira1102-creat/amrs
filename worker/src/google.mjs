@@ -1,4 +1,4 @@
-import { signGoogleJwt } from "./crypto.mjs";
+import { signGoogleJwt } from "./google-crypto.mjs";
 
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";

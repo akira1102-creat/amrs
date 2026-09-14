@@ -57,14 +57,11 @@ import {
   validateHoldDates,
   validateIncomingRecord,
 } from "./domain.mjs";
-import { createGoogleAccessTokenProvider } from "./google.mjs";
 import { createCvcsRepository } from "./cvcs-repository.mjs";
 import {
-  a1Range,
   columnNumberToA1,
-  createSheetsClient,
   quoteSheetName,
-} from "./sheets.mjs";
+} from "./sheet-utils.mjs";
 
 const DEFAULT_CACHE_TTL_MS = 15_000;
 const LONG_CACHE_TTL_MS = 5 * 60_000;
@@ -202,61 +199,10 @@ function galaxyHeaderRow(row = []) {
   return hasSerial && hasTarget && hasCompleted;
 }
 
-function parseCsvRows(value) {
-  const source = String(value || "").replace(/^\ufeff/, "");
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let quoted = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    const next = source[index + 1];
-    if (character === '"' && quoted && next === '"') {
-      cell += '"';
-      index += 1;
-      continue;
-    }
-    if (character === '"') {
-      quoted = !quoted;
-      continue;
-    }
-    if (character === "," && !quoted) {
-      row.push(cell);
-      cell = "";
-      continue;
-    }
-    if ((character === "\n" || character === "\r") && !quoted) {
-      if (character === "\r" && next === "\n") index += 1;
-      row.push(cell);
-      cell = "";
-      if (row.some((item) => text(item) !== "")) rows.push(row);
-      row = [];
-      continue;
-    }
-    cell += character;
-  }
-  if (cell || row.length) {
-    row.push(cell);
-    if (row.some((item) => text(item) !== "")) rows.push(row);
-  }
-  return rows;
-}
-
 function isOfficeSpreadsheetError(error) {
   const status = Number(error?.status || error?.httpStatus || 0);
   const message = text(error?.details?.error?.message || error?.message);
   return status === 400 && /office file|not supported for this document|native google sheet/i.test(message);
-}
-
-async function readPublicGalaxyCsv(spreadsheetId, fetchImpl = globalThis.fetch) {
-  if (typeof fetchImpl !== "function") throw Object.assign(new Error("公開清單暫時未能讀取"), { status: 503, retryable: true });
-  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv`;
-  const response = await fetchImpl(url, { method: "GET", headers: { accept: "text/csv" } });
-  const status = Number(response?.status || 0);
-  const body = typeof response?.text === "function" ? await response.text() : "";
-  const ok = response?.ok ?? (status >= 200 && status < 300);
-  if (!ok) throw Object.assign(new Error("公開清單暫時未能讀取"), { status: status || 502, retryable: status >= 500 });
-  return parseCsvRows(body);
 }
 
 function galaxyColumnBases(matrix, startRow, timeZone) {
@@ -422,25 +368,6 @@ async function adapterInvalidate(adapter, scope) {
   } catch { /* cache only */ }
 }
 
-export function createCloudflareCacheAdapter(cache = globalThis.caches?.default) {
-  if (!cache || typeof cache.match !== "function" || typeof cache.put !== "function") return null;
-  const requestFor = (key) => new Request(`https://amrs-cache.invalid/v1/${encodeURIComponent(String(key))}`);
-  return {
-    async get(key) {
-      return cache.match(requestFor(key));
-    },
-    async put(key, value, ttlMs) {
-      const maxAge = Math.max(1, Math.ceil((Number(ttlMs) || DEFAULT_CACHE_TTL_MS) / 1000));
-      await cache.put(requestFor(key), new Response(JSON.stringify(value), {
-        headers: {
-          "content-type": "application/json; charset=utf-8",
-          "cache-control": `public, max-age=${maxAge}`,
-        },
-      }));
-    },
-  };
-}
-
 async function readCache(db, memory, adapter, scope, key, now) {
   const current = nowMs(now);
   const generation = await cacheGeneration(db, scope);
@@ -545,20 +472,13 @@ export function createRepository(env = {}, dependencies = {}) {
   const db = dependencies.db ?? env.DB;
   const now = dependencies.now || (() => Date.now());
   const uuid = getIdGenerator(dependencies);
-  let tokenProvider = dependencies.tokenProvider;
-  if (!tokenProvider && env.GOOGLE_SERVICE_ACCOUNT) {
-    tokenProvider = createGoogleAccessTokenProvider(env.GOOGLE_SERVICE_ACCOUNT);
-  }
-  const sheets = dependencies.sheetsClient || createSheetsClient({
-    tokenProvider,
-    credentials: env.GOOGLE_SERVICE_ACCOUNT,
-    maxAttempts: 5,
-    retryBaseMs: 750,
-    retryMaxMs: 8_000,
+  const sheets = dependencies.sheetsClient;
+  if (!sheets) throw new TypeError("A worksheet client is required");
+  const readPublicGalaxyCsv = dependencies.readPublicGalaxyCsv || (async () => {
+    throw Object.assign(new Error("Galaxy 清單格式不支援；請先匯入至內網工作表"), { status: 503, retryable: false });
   });
-  const publicFetch = dependencies.publicFetch || globalThis.fetch;
   const memory = dependencies.memoryCache || new Map();
-  const cacheAdapter = dependencies.cacheAdapter || dependencies.responseCache || createCloudflareCacheAdapter();
+  const cacheAdapter = dependencies.cacheAdapter || dependencies.responseCache || null;
   const metadataMemory = new Map();
   let cvcsRepository;
 
@@ -873,7 +793,7 @@ export function createRepository(env = {}, dependencies = {}) {
       return await readNativeGalaxyTable(spreadsheetId, options);
     } catch (error) {
       if (!isOfficeSpreadsheetError(error)) throw error;
-      const values = await readPublicGalaxyCsv(spreadsheetId, publicFetch);
+      const values = await readPublicGalaxyCsv(spreadsheetId);
       const width = Math.max(3, values.reduce((max, row) => Math.max(max, Array.isArray(row) ? row.length : 0), 0));
       const parsed = parseGalaxyValues(values, config.timeZone);
       return {

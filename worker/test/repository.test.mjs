@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCloudflareCacheAdapter, createRepository } from "../src/repository.mjs";
+import { createCloudflareCacheAdapter } from "../src/cloudflare-cache.mjs";
+import { createRepository } from "../src/repository.mjs";
 import { getDuplicateFaultsFromRows } from "../src/domain.mjs";
 
 test("Cloudflare cache adapter keeps short-lived Sheet payloads outside D1", async () => {
@@ -972,10 +973,7 @@ test("reads a public CSV export when the configured Galaxy workbook is still an 
   const repository = createRepository({}, {
     config,
     sheetsClient,
-    publicFetch: async () => new Response("A02-001190,2026/5/17,,A02-002086,2026/6/18,2026/8/31\r\n", {
-      status: 200,
-      headers: { "content-type": "text/csv" },
-    }),
+    readPublicGalaxyCsv: async () => [["A02-001190", "2026/5/17", "", "A02-002086", "2026/6/18", "2026/8/31"]],
   });
 
   const result = await repository.getAction({ action: "galaxyLogOverview", refresh: "1" });
@@ -996,12 +994,11 @@ test("refuses Galaxy Log writes while the source is an Office file", async () =>
   const repository = createRepository({}, {
     config,
     sheetsClient: { async request() { throw officeError; }, async valuesGet() { throw officeError; } },
-    publicFetch: async () => new Response("1190,2026/5/17,\r\n", { status: 200 }),
   });
 
   await assert.rejects(
     repository.postAction({ action: "syncGalaxyLog", mutations: [{ taskId: "gx-office", patch: { completedDate: "2026-09-01" } }] }),
-    /原生 Google 試算表/,
+    /Galaxy 清單格式不支援；請先匯入至內網工作表/,
   );
 });
 
