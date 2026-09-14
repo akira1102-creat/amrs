@@ -7,7 +7,7 @@ import { openRuntime } from './runtime.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Set(['index.html', 'cloud-api.js', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
 const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', png: 'image/png' };
-export const INTRANET_VERSION = 'intranet-0.2.1';
+export const INTRANET_VERSION = 'intranet-0.2.2';
 
 export function localAsset(name, content) {
   if (name === 'index.html') {
@@ -17,6 +17,11 @@ export function localAsset(name, content) {
       .replace(/const _PH='[^']*';/, "const _PH='intranet-token-login';localStorage.setItem('_ml_auth',_PH);")
       .replace(/function getScriptUrl\(\)\{[\s\S]*?\n\}/, "function getScriptUrl(){return hasPersonalToken()?location.origin+'/api':'';}")
       .replace(/function hasAnyDeployId\(\)\{[^\n]*\}/, 'function hasAnyDeployId(){return hasPersonalToken();}')
+      // The browser's internet status does not determine LAN reachability.
+      // Let the existing timed API request and retry backoff establish success.
+      .replaceAll('||!navigator.onLine', '')
+      .replaceAll('&&navigator.onLine', '')
+      .replace("navigator.onLine?'正在驗證連線及使用權限…':'目前離線，正在檢查連線…'", "'正在驗證內網主機連線及使用權限…'")
       .replace(/雲端/g, '內網主機');
   }
   if (name === 'cloud-api.js') return content.replace(/function deployIdToGasUrl\(value\) \{[\s\S]*?\n  \}/, 'function deployIdToGasUrl(value) { return ""; }');

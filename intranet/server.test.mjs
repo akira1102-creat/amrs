@@ -15,6 +15,9 @@ test('intranet HTTP server serves the app and denies private files and external 
     assert.equal(response.status, 200);
     const html = await response.text();
     assert.match(html, /const _CLOUDFLARE_API_URL=location.origin/);
+    assert.doesNotMatch(html, /navigator\.onLine/);
+    assert.match(html, /if\(!_retryQueue.length\)return/);
+    assert.match(html, /Math.min\(60000,5000\*Math.pow/);
     assert.match(response.headers.get('content-security-policy'), /connect-src 'self'/);
     assert.equal((await fetch(`${base}/intranet/session-secret`)).status, 404);
     assert.equal((await fetch(`${base}/worker/src/config.mjs`)).status, 404);
