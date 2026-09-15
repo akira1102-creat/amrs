@@ -13,7 +13,7 @@ const target = resolve(destination);
 // Fail on existing destinations. Never recursively copy a workspace or data directory.
 mkdirSync(target);
 const assets = ['index.html', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png'];
-const modules = ['database.mjs', 'worksheets.mjs', 'runtime.mjs', 'initialize.mjs', 'cli.mjs', 'backup.mjs', 'import-workbooks.mjs', 'README.md'];
+const modules = ['database.mjs', 'worksheets.mjs', 'runtime.mjs', 'network-policy.mjs', 'initialize.mjs', 'cli.mjs', 'backup.mjs', 'import-workbooks.mjs', 'README.md'];
 const localWorkerModules = ['access-tokens.mjs', 'api.mjs', 'auth.mjs', 'config.mjs', 'cvcs-domain.mjs', 'cvcs-repository.mjs', 'crypto.mjs', 'domain.mjs', 'http.mjs', 'repository.mjs', 'sheet-utils.mjs', 'state.mjs'];
 function copy(name, transform = false) {
   const output = join(target, name);

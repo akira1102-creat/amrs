@@ -54,20 +54,39 @@ test('built intranet package contains no public network clients or endpoints and
     assert.doesNotMatch(packagedServiceWorker, /cloud-api\.js|script\.google\.com/);
 
     const packagedServer = await import(pathToFileURL(join(packageDirectory, 'intranet', 'server.mjs')).href);
+    const packagedVersion = packagedServer.INTRANET_VERSION;
     app = packagedServer.createIntranetServer({ directory: join(temporaryRoot, 'runtime-data') });
     await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${app.server.address().port}`;
     const page = await fetch(base);
     assert.equal(page.status, 200);
     const html = await page.text();
-    assert.match(html, /script src="\.\/intranet-transport\.js\?v=intranet-0\.2\.14"/);
+    const [handlePackagedRequest] = app.server.listeners('request');
+    async function packagedRequestFrom(remoteAddress, url = '/') {
+      const incoming = {
+        socket: { remoteAddress }, method: 'GET', url, headers: {},
+        async *[Symbol.asyncIterator]() {},
+      };
+      const outgoing = {
+        headersSent: false,
+        writeHead(statusCode, headers) { this.statusCode = statusCode; this.headers = headers; this.headersSent = true; },
+        end(body) { this.body = body; },
+      };
+      await handlePackagedRequest(incoming, outgoing);
+      return outgoing;
+    }
+    assert.equal((await packagedRequestFrom('203.0.113.9')).statusCode, 403, 'the packaged server must deny public sources');
+    assert.equal((await packagedRequestFrom('203.0.113.9', '/api?action=ping')).statusCode, 403, 'public sources must not reach AMRS data APIs');
+    assert.equal((await packagedRequestFrom('192.168.10.20')).statusCode, 200, 'office private-network sources must still load the app');
+    assert.equal((await packagedRequestFrom('192.168.10.20', '/api?action=ping')).statusCode, 401, 'office clients must reach normal Token authentication');
+    assert.ok(html.includes(`script src="./intranet-transport.js?v=${packagedVersion}"`));
     assert.doesNotMatch(html, /cloud-api\.js|google\.com|workers\.dev/);
-    assert.match(packagedServiceWorker, /const CACHE = 'intranet-0\.2\.14';/);
+    assert.ok(packagedServiceWorker.includes(`const CACHE = '${packagedVersion}';`));
     for (const asset of [
       'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css',
       'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css',
       'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png',
-    ]) assert.equal((await fetch(`${base}/${asset}?v=intranet-0.2.14`)).status, 200, `${asset} is part of the local AMRS app`);
+    ]) assert.equal((await fetch(`${base}/${asset}?v=${packagedVersion}`)).status, 200, `${asset} is part of the local AMRS app`);
     assert.equal((await fetch(`${base}/health`)).status, 200);
   } finally {
     if (app) await app.close();

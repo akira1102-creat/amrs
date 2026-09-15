@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { openRuntime } from './runtime.mjs';
+import { isAllowedIntranetClient } from './network-policy.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const assets = new Set(['index.html', 'access-control.js', 'cvcs.js', 'cvcs.css', 'token-admin.js', 'galaxy-log.js', 'galaxy-log.css', 'mgm-check-request.js', 'mgm-check-request.css', 'worksheet-editor.js', 'worksheet-editor.css', 'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png']);
 const types = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', json: 'application/json', png: 'image/png' };
-export const INTRANET_VERSION = 'intranet-0.2.14';
+export const INTRANET_VERSION = 'intranet-0.2.15';
 
 export function createIntranetServer({ directory, runtime = openRuntime(directory) }) {
   const server = http.createServer(async (incoming, outgoing) => {
@@ -18,6 +19,9 @@ export function createIntranetServer({ directory, runtime = openRuntime(director
       'cache-control': 'no-store',
     };
     try {
+      if (!isAllowedIntranetClient(incoming.socket?.remoteAddress)) {
+        outgoing.writeHead(403, headers); outgoing.end('Intranet clients only'); return;
+      }
       const url = new URL(incoming.url, 'http://localhost');
       if (/^\/(?:session|api|health|operations(?:\/|$)|submissions(?:\/|$))/.test(url.pathname)) {
         if (incoming.headers.origin && new URL(incoming.headers.origin).host !== incoming.headers.host) {

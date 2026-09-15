@@ -21,10 +21,10 @@ test('intranet HTTP server serves the app and denies private files and external 
       if (script.trim()) new vm.Script(script, { filename: 'intranet-index-inline.js' });
     }
     assert.match(html, /const _CLOUDFLARE_API_URL=location.origin/);
-    assert.match(html, /script src="\.\/intranet-transport\.js\?v=intranet-0\.2\.14"/);
-    assert.match(html, /const _APP_VERSION='intranet-0\.2\.14';/);
+    assert.ok(html.includes(`script src="./intranet-transport.js?v=${INTRANET_VERSION}"`));
+    assert.ok(html.includes(`const _APP_VERSION='${INTRANET_VERSION}';`));
     const workerSource = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
-    assert.match(localAsset('sw.js', workerSource), /const CACHE = 'intranet-0\.2\.14';/);
+    assert.ok(localAsset('sw.js', workerSource).includes(`const CACHE = '${INTRANET_VERSION}';`));
     assert.doesNotMatch(html, /cloud-api\.js|google\.com|workers\.dev|Google Sheet|saved\.kind==='legacy'/);
     assert.match(html, /const _PH='intranet-token-login';localStorage\.setItem\('_ml_auth',_PH\);/);
     assert.match(html, /資料會儲存在公司內網主機/);
@@ -54,10 +54,41 @@ test('intranet HTTP server serves the app and denies private files and external 
   } finally { await app.close(); rmSync(directory, { recursive: true, force: true }); }
 });
 
+test('intranet server rejects public client addresses while accepting private office addresses', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'amrs-network-test-'));
+  const app = createIntranetServer({ directory });
+  try {
+    await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
+    const [handleRequest] = app.server.listeners('request');
+    async function requestFrom(remoteAddress, url = '/') {
+      const incoming = {
+        socket: { remoteAddress }, method: 'GET', url, headers: {},
+        async *[Symbol.asyncIterator]() {},
+      };
+      const outgoing = {
+        headersSent: false,
+        writeHead(statusCode, headers) { this.statusCode = statusCode; this.headers = headers; this.headersSent = true; },
+        end(body) { this.body = body; },
+      };
+      await handleRequest(incoming, outgoing);
+      return outgoing;
+    }
+
+    for (const address of ['8.8.8.8', '::ffff:8.8.8.8', '2001:4860:4860::8888']) {
+      for (const path of ['/', '/api?action=ping']) {
+        assert.equal((await requestFrom(address, path)).statusCode, 403, `${address} must not access ${path}`);
+      }
+    }
+    for (const address of ['127.0.0.1', '10.12.0.5', '172.31.2.3', '192.168.10.12', '::ffff:192.168.10.12', 'fc00::12', 'fe80::1']) {
+      assert.equal((await requestFrom(address)).statusCode, 200, `${address} is a local or private-network client`);
+    }
+    assert.equal((await requestFrom('192.168.10.12', '/api?action=ping')).statusCode, 401, 'private-network clients reach the normal Token authentication path');
+  } finally { await app.close(); rmSync(directory, { recursive: true, force: true }); }
+});
+
 test('local Galaxy and MGM pages use host reachability, not public internet state', async () => {
   const galaxy = localAsset('galaxy-log.js', await readFile(new URL('../galaxy-log.js', import.meta.url), 'utf8'));
   const mgm = localAsset('mgm-check-request.js', await readFile(new URL('../mgm-check-request.js', import.meta.url), 'utf8'));
-  assert.ok(INTRANET_VERSION.endsWith('0.2.14'));
   assert.match(galaxy, /function isOnline\(\) \{ return true; \}/);
   assert.doesNotMatch(galaxy, /Google Sheet|返公司同步|帶 Surface/);
   assert.match(mgm, /: \(\) => true/);
