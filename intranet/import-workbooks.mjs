@@ -30,9 +30,14 @@ export function workbookFromBytes(id, bytes) {
 export function readWorkbookManifest(filename) {
   const manifest = JSON.parse(readFileSync(filename, 'utf8'));
   if (!manifest || Array.isArray(manifest) || typeof manifest !== 'object' || !Object.keys(manifest).length) throw new Error('Expected workbook ID to local file mapping');
+  const entries = Object.entries(manifest);
+  const unknown = entries.map(([id]) => id).filter(id => !allowed.has(id));
+  if (unknown.length) throw new Error(`Unknown AMRS workbook mappings: ${unknown.join(', ')}`);
+  const missing = [...allowed].filter(id => !Object.hasOwn(manifest, id));
+  if (missing.length) throw new Error(`Missing workbook mappings: ${missing.join(', ')}`);
+  if (entries.some(([, file]) => typeof file !== 'string' || !file)) throw new Error('Invalid workbook filename');
   return { format: 'amrs-local-worksheets', version: 1, createdAt: new Date().toISOString(),
-    workbooks: Object.entries(manifest).map(([id, file]) => {
-      if (typeof file !== 'string' || !file) throw new Error('Invalid workbook filename');
+    workbooks: entries.map(([id, file]) => {
       return workbookFromBytes(id, readFileSync(resolve(dirname(filename), file)));
     }),
   };

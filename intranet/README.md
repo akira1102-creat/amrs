@@ -26,9 +26,17 @@ HTTP 內網頁面不等於已支援可安裝 PWA；HTTPS 及安裝流程仍待�
 
 ```json
 {
-  "SCL": "maintenance.xlsx",
+  "Melco": "melco.xlsx",
+  "MGM": "mgm.xlsx",
+  "SJM": "sjm.xlsx",
+  "SCL": "scl.xlsx",
+  "GEG": "geg.xlsx",
+  "Wynn": "wynn.xlsx",
+  "parts": "parts.xlsx",
   "schedule": "schedule.xlsx",
-  "galaxy-log": "log-list.xlsx"
+  "cvcs": "cvcs.xlsx",
+  "galaxy-log": "galaxy-log.xlsx",
+  "mgm-check-request": "mgm-check-request.xlsx"
 }
 ```
 
@@ -41,7 +49,7 @@ node intranet/cli.mjs start ./new-local-data
 目標目錄必須不存在，避免覆蓋原有資料。原始檔案不會修改。
 保留工作表名稱及欄位順序；合併格會展開為相同內容。
 讀入的是 Excel 已儲存的顯示值，不會運算 Excel 公式；搬入前應先在 Excel 重算並儲存。
-未提供的資料簿會在首次啟動時建立空白結構。
+匯入對照檔必須列出以上全部 11 個資料簿；缺少或拼錯時會在讀取 Excel 前拒絕匯入，避免首次啟動以空白工作簿補齊而誤以為搬遷完成。即使某個資料簿目前沒有紀錄，也請提供該資料簿的 Excel 檔及工作表。
 
 ## 備份及還原工作表
 
