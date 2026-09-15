@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { openRuntime } from './runtime.mjs';
 import { createIntranetServer } from './server.mjs';
+import { intranetStartupMessage } from './network-policy.mjs';
 import { createAccessToken, listAccessTokens } from '../worker/src/access-tokens.mjs';
 import { saveWorksheetBackup } from './backup.mjs';
 import { openWorksheets } from './worksheets.mjs';
@@ -39,7 +40,7 @@ if (command === 'setup') {
   const app = createIntranetServer({ directory });
   const port = Number(process.env.AMRS_PORT || 8080);
   app.server.listen(port, process.env.AMRS_HOST || '0.0.0.0', () => {
-    process.stdout.write(`AMRS 內網版已啟動。本機請開啟 http://localhost:${port}\n其他電腦請使用此主機的內網 IP 及相同連接埠。\n`);
+    process.stdout.write(intranetStartupMessage(port));
   });
   const stop = () => app.close().then(() => process.exit(0));
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
