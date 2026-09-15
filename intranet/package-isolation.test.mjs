@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const XLSX = createRequire(import.meta.url)('../xlsx.mini.min.js');
 
 function filesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -35,10 +37,36 @@ test('built intranet package contains no public network clients or endpoints and
     ].filter(path => existsSync(join(packageDirectory, path)));
     assert.deepEqual(forbidden, [], 'the package must not include cloud/GAS or Google API clients');
     assert.ok(existsSync(join(packageDirectory, 'intranet-transport.js')), 'the package should include its local-only transport');
+    assert.ok(existsSync(join(packageDirectory, 'Import.cmd')), 'the package should offer a guided Excel import before setup');
     const packagedNode = join(packageDirectory, 'node.exe');
     assert.equal(execFileSync(packagedNode, ['--version'], { encoding: 'utf8' }).trim(), process.version);
-    const setupDirectory = join(temporaryRoot, 'setup-data');
-    const setupOutput = execFileSync(packagedNode, [join(packageDirectory, 'intranet', 'cli.mjs'), 'setup', setupDirectory], { encoding: 'utf8' });
+    const workbookIds = ['Melco', 'MGM', 'SJM', 'SCL', 'GEG', 'Wynn', 'parts', 'schedule', 'cvcs', 'galaxy-log', 'mgm-check-request'];
+    const sourceDirectory = join(temporaryRoot, 'source-workbooks');
+    mkdirSync(sourceDirectory);
+    const sourceBook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(sourceBook, XLSX.utils.aoa_to_sheet([['Synthetic fixture']] ), 'Data');
+    const sourceBytes = XLSX.write(sourceBook, { type: 'buffer', bookType: 'xlsx' });
+    const mapping = Object.fromEntries(workbookIds.map(id => {
+      const filename = join(sourceDirectory, `${id}.xlsx`);
+      writeFileSync(filename, sourceBytes);
+      return [id, filename];
+    }));
+    const mappingFile = join(sourceDirectory, 'mapping.json');
+    writeFileSync(mappingFile, JSON.stringify(mapping));
+    const importCommand = join(packageDirectory, 'Import.cmd');
+    const dataDirectory = join(packageDirectory, 'data');
+    if (process.platform === 'win32') {
+      const asPowerShellLiteral = value => `'${String(value).replaceAll("'", "''")}'`;
+      const script = `& ${asPowerShellLiteral(importCommand)} ${asPowerShellLiteral(mappingFile)}; exit $LASTEXITCODE`;
+      execFileSync('powershell.exe', ['-NoProfile', '-Command', script], { encoding: 'utf8', input: '\r\n' });
+    } else {
+      execFileSync(packagedNode, [join(packageDirectory, 'intranet', 'cli.mjs'), 'import', dataDirectory, mappingFile], { encoding: 'utf8' });
+    }
+    const localWorksheets = await import(pathToFileURL(join(packageDirectory, 'intranet', 'worksheets.mjs')).href);
+    const imported = localWorksheets.openWorksheets(join(dataDirectory, 'worksheets.sqlite'));
+    try { assert.deepEqual(imported.snapshot().workbooks.map(workbook => workbook.id).sort(), workbookIds.slice().sort()); }
+    finally { imported.close(); }
+    const setupOutput = execFileSync(packagedNode, [join(packageDirectory, 'intranet', 'cli.mjs'), 'setup', dataDirectory], { encoding: 'utf8' });
     assert.match(setupOutput, /首次設定完成/);
 
     const publicEndpoints = [];

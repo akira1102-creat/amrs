@@ -64,7 +64,7 @@ node intranet/cli.mjs setup ./restored-data
 
 ## 已有自動測試
 
-## 建立 Windows 開發測試包
+## 建立 Windows 內網測試包
 
 在 Windows 使用 Node.js 24，並準備相同版本的官方 Node.js LICENSE 檔案：
 
@@ -73,7 +73,7 @@ node intranet/build.mjs ./new-test-package ./node-LICENSE.txt
 ```
 
 只會複製指定程式檔、執行環境及授權文字，不會複製資料庫或登入 Token。
-輸出目錄必須不存在。包內 `Setup.cmd` 作首次設定，`Start.cmd` 啟動主機；資料放在包內 `data` 目錄。
+輸出目錄必須不存在。需要沿用現有公司資料時，先將全部 11 個 Excel 工作簿列入 mapping JSON，在首次設定前執行 `Import.cmd mapping.json`；成功後才執行 `Setup.cmd` 建立管理員 Token，再以 `Start.cmd` 啟動主機。全新空白測試環境則直接執行 `Setup.cmd`，再執行 `Start.cmd`。資料放在包內 `data` 目錄。
 此為開發測試包，包含整個 AMRS 介面並移除公網服務客戶端；未經公司 IT 批准及四台實機驗收，不可當作正式部署。
 
 ## 自動測試

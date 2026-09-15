@@ -34,4 +34,35 @@ writeFileSync(join(target, 'VERSION.txt'), `${INTRANET_VERSION}\nDevelopment tes
 for (const [name, command] of [['Setup', 'setup'], ['Start', 'start']]) {
   writeFileSync(join(target, `${name}.cmd`), `@echo off\r\ncd /d "%~dp0"\r\n"%~dp0node.exe" "%~dp0intranet\\cli.mjs" ${command} "%~dp0data"\r\npause\r\n`);
 }
+writeFileSync(join(target, 'Import.cmd'), [
+  '@echo off',
+  'setlocal',
+  'cd /d "%~dp0"',
+  'if "%~1"=="" goto usage',
+  'if exist "%~dp0data" goto dataExists',
+  'if not exist "%~f1" goto mappingMissing',
+  '"%~dp0node.exe" "%~dp0intranet\\cli.mjs" import "%~dp0data" "%~f1"',
+  'if errorlevel 1 goto importFailed',
+  'echo.',
+  'echo Excel 資料已搬入。請再執行 Setup.cmd 建立管理員 Token，然後執行 Start.cmd。',
+  'pause',
+  'exit /b 0',
+  ':usage',
+  'echo 用法：Import.cmd "mapping.json"',
+  'echo 請先列出 11 個 AMRS 工作簿的 Excel 檔案映射，並在首次 Setup.cmd 前執行。',
+  'exit /b 2',
+  ':dataExists',
+  'echo 已有 data 資料夾。為免覆蓋資料，匯入已停止；請聯絡管理員。',
+  'pause',
+  'exit /b 2',
+  ':mappingMissing',
+  'echo 找不到指定 mapping.json，請確認路徑。',
+  'pause',
+  'exit /b 2',
+  ':importFailed',
+  'echo Excel 匯入失敗。原 Excel 檔案不會被修改；請按畫面錯誤修正後再試。',
+  'pause',
+  'exit /b 1',
+  '',
+].join('\r\n'));
 process.stdout.write(`Built ${INTRANET_VERSION}. No database or credentials included.\n`);
