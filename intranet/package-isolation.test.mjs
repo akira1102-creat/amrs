@@ -9,6 +9,32 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const XLSX = createRequire(import.meta.url)('../xlsx.mini.min.js');
+const companyWidths = { Melco: 10, MGM: 11, SJM: 10, SCL: 10, GEG: 12, Wynn: 10 };
+
+function syntheticWorkbookBytes(id) {
+  const headers = ['CASINO', 'Date', 'PO Number', 'Model', 'Serial No.', 'Reason', 'Action', 'Error', 'Box ID', 'Inspector', 'Location', 'Extra'];
+  const companySheets = [
+    ['Worksheet', [headers.slice(0, companyWidths[id])]],
+    ['Broken Parts List', [['CASINO', 'Model', 'Serial No.', 'Parts No.', 'Required Parts(JP)', 'Required Parts(EN)', 'Qty', 'Repair Day', 'Found Day', 'Remark', 'UOD Activation Date', 'UOD Unlock Date', 'Hold Date', 'Hold Release Date']]],
+    ['Template', [['Reason', 'Action']]], ['AA TAG', [['Serial No.', 'AA Tag']]], ['Monthly', []],
+  ];
+  const mgmHeaders = ['事發日期', '事發時間', '結束時間', 'Table', 'Serial NO.', 'AA Tag', 'BOX ID', 'Vault ID', '事件詳情', '機台跟進狀況', '實牌跟進狀況', '備注', '欄1'];
+  const tabs = companyWidths[id] ? companySheets : {
+    parts: [['Parts Code', [['Parts No.', 'Required Parts(JP)', 'Required Parts(EN)']]]],
+    schedule: [['Setup', [['Setting', 'Value']]]],
+    cvcs: [
+      ['CVCS Records', [['Property', 'Date', 'Location', 'Sub Location', 'Quarter', 'Model', 'S/N', 'Antenna Size', 'Antenna Status', 'Version', 'Reason', 'Action Taken & Notes', 'Parts Change']]],
+      ['CVCS Broken Parts', [['Property', 'Model', 'S/N', 'Parts No.', 'Required Parts (EN)', 'Qty', 'Repair Day', 'Found Day', 'Remark', 'Request Follow-up Date', 'Follow-up Completed Date']]],
+      ['CVCS Parts List', [['Parts No.', 'Required Parts (EN)']]],
+      ...['Sub Location', 'Antenna Size', 'Antenna Status', 'Version', 'Reason Action Mapping', 'Parts Change'].map(title => [title, [[title]]]),
+    ],
+    'galaxy-log': [['Galaxy Log', [['SN', '指定 Log 日期', '取 Log 日期']]]],
+    'mgm-check-request': [['MGM Macau', [mgmHeaders]], ['MGM Cotai', [mgmHeaders]]],
+  }[id];
+  const book = XLSX.utils.book_new();
+  for (const [title, values] of tabs) XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(values), title);
+  return XLSX.write(book, { type: 'buffer', bookType: 'xlsx' });
+}
 
 function filesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -43,12 +69,9 @@ test('built intranet package contains no public network clients or endpoints and
     const workbookIds = ['Melco', 'MGM', 'SJM', 'SCL', 'GEG', 'Wynn', 'parts', 'schedule', 'cvcs', 'galaxy-log', 'mgm-check-request'];
     const sourceDirectory = join(temporaryRoot, 'source-workbooks');
     mkdirSync(sourceDirectory);
-    const sourceBook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(sourceBook, XLSX.utils.aoa_to_sheet([['Synthetic fixture']] ), 'Data');
-    const sourceBytes = XLSX.write(sourceBook, { type: 'buffer', bookType: 'xlsx' });
     const mapping = Object.fromEntries(workbookIds.map(id => {
       const filename = join(sourceDirectory, `${id}.xlsx`);
-      writeFileSync(filename, sourceBytes);
+      writeFileSync(filename, syntheticWorkbookBytes(id));
       return [id, filename];
     }));
     const mappingFile = join(sourceDirectory, 'mapping.json');
