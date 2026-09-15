@@ -1,1 +1,21 @@
 /intranet-data/
+
+# Local company records, imports, exports, backups, and runtime credentials.
+# Keep business data out of the source repository and GitHub.
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.bak
+*.backup
+*.log
+*.jsonl
+*backup*.json
+**/session-secret
+/intranet-backups/
