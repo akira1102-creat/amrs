@@ -72,7 +72,7 @@ test('built intranet package contains no public network clients or endpoints and
     const publicEndpoints = [];
     for (const path of filesUnder(packageDirectory).filter(path => /\.(?:html|js|mjs)$/.test(path))) {
       const content = readFileSync(path, 'utf8');
-      if (/https?:\/\/(?:[^/\s"'`]+\.)?(?:googleapis\.com|google\.com|workers\.dev)\b|https?:\/\/amrs-cache\.invalid\b/i.test(content)) {
+      if (/https?:\/\/(?:[^/\s"'`]+\.)?(?:googleapis\.com|google\.com|workers\.dev)\b|https?:\/\/amrs-cache\.invalid\b|(?:googleapis\.com|google\.com|workers\.dev|script\.google\.com)/i.test(content)) {
         publicEndpoints.push(relative(packageDirectory, path));
       }
     }
