@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, posix, resolve } from 'node:path';
 import {
   AA_TAG_SHEET,
   BROKEN_PARTS_SHEET,
@@ -96,10 +96,64 @@ function validateWorkbook(id, sheets) {
   }
 }
 
+function xmlAttributes(tag) {
+  return new Map([...tag.matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)]
+    .map(([, name, doubleQuoted, singleQuoted]) => [name, doubleQuoted ?? singleQuoted]));
+}
+
+function validateFormulaResults(id, bytes, source) {
+  // The lightweight XLSX parser drops formula cells completely when their cached result is absent.
+  // Inspect OOXML directly before converting cells so those formulas cannot silently become blanks.
+  const archive = XLSX.CFB.read(bytes, { type: 'buffer' });
+  const workbookXml = XLSX.CFB.find(archive, '/xl/workbook.xml')?.content;
+  const relationshipsXml = XLSX.CFB.find(archive, '/xl/_rels/workbook.xml.rels')?.content;
+
+  if (workbookXml && relationshipsXml) {
+    const workbook = Buffer.from(workbookXml).toString('utf8');
+    const relationships = Buffer.from(relationshipsXml).toString('utf8');
+    const targets = new Map([...relationships.matchAll(/<Relationship\b[^>]*\/?\s*>/g)]
+      .map(([tag]) => {
+        const attributes = xmlAttributes(tag);
+        return [attributes.get('Id'), attributes.get('Target')];
+      })
+      .filter(([id, target]) => id && target));
+    const sheetTags = [...workbook.matchAll(/<sheet\b[^>]*\/?\s*>/g)];
+
+    for (let index = 0; index < sheetTags.length; index++) {
+      const relationshipId = xmlAttributes(sheetTags[index][0]).get('r:id');
+      const target = targets.get(relationshipId);
+      if (!target) continue;
+      const sheetPath = target.startsWith('/') ? posix.normalize(target) : posix.normalize(posix.join('/xl', target));
+      if (!sheetPath.startsWith('/xl/worksheets/')) continue;
+      const sheetXmlBytes = XLSX.CFB.find(archive, sheetPath)?.content;
+      if (!sheetXmlBytes) continue;
+
+      const title = source.SheetNames[index] || `worksheet ${index + 1}`;
+      const sheetXml = Buffer.from(sheetXmlBytes).toString('utf8');
+      for (const [, attributesText, cellBody] of sheetXml.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c\s*>/g)) {
+        if (!/<f(?:\s[^>]*)?(?:\/>|>[\s\S]*?<\/f\s*>)/.test(cellBody)) continue;
+        if (/<v(?:\s[^>]*)?(?:\/>|>[\s\S]*?<\/v\s*>)/.test(cellBody)) continue;
+        const address = xmlAttributes(`<c ${attributesText}>`).get('r') || 'unknown cell';
+        throw new Error(`AMRS workbook ${id} has a formula without a saved result in worksheet "${title}" cell ${address}`);
+      }
+    }
+  }
+
+  // Also catch legacy Excel formats if the parser exposes a formula without a cached value.
+  for (const title of source.SheetNames) {
+    for (const [address, cell] of Object.entries(source.Sheets[title] || {})) {
+      if (!address.startsWith('!') && cell?.f && cell.v == null) {
+        throw new Error(`AMRS workbook ${id} has a formula without a saved result in worksheet "${title}" cell ${address}`);
+      }
+    }
+  }
+}
+
 export function workbookFromBytes(id, bytes) {
   if (!allowed.has(id)) throw new Error('Unknown AMRS workbook');
   const source = XLSX.read(bytes, { type: 'buffer', cellDates: false });
   if (!source.SheetNames.length) throw new Error('Workbook has no worksheets');
+  validateFormulaResults(id, bytes, source);
   const sheets = source.SheetNames.map((title, index) => {
     const sheet = source.Sheets[title];
     // Formatted values preserve date strings and leading zero identifiers.
