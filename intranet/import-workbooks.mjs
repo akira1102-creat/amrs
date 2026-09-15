@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import {
@@ -19,13 +20,44 @@ import {
 import { MGM_CHECK_REQUEST_SHEETS } from '../worker/src/domain.mjs';
 
 const XLSX = createRequire(import.meta.url)('../xlsx.mini.min.js');
-const allowed = new Set([...COMPANIES, 'parts', 'schedule', 'cvcs', 'galaxy-log', 'mgm-check-request']);
+export const IMPORT_WORKBOOKS = Object.freeze([
+  ...COMPANIES.map(id => ({ id, label: `${id} 維護資料` })),
+  { id: 'parts', label: '零件資料' },
+  { id: 'schedule', label: '工作安排' },
+  { id: 'cvcs', label: 'CVCS' },
+  { id: 'galaxy-log', label: 'Galaxy 取 Log' },
+  { id: 'mgm-check-request', label: 'MGM Check Request' },
+]);
+const allowed = new Set(IMPORT_WORKBOOKS.map(({ id }) => id));
 const supportingCompanySheets = [BROKEN_PARTS_SHEET, TEMPLATE_SHEET, AA_TAG_SHEET, MONTHLY_SHEET];
 const requiredSheets = {
   schedule: ['Setup'],
   cvcs: [CVCS_RECORDS_SHEET, CVCS_BROKEN_PARTS_SHEET, CVCS_PARTS_LIST_SHEET, ...Object.values(CVCS_OPTION_SHEETS)],
   'mgm-check-request': MGM_CHECK_REQUEST_SHEETS,
 };
+
+const WINDOWS_PICKER_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  'Add-Type -AssemblyName System.Windows.Forms',
+  '$items = ConvertFrom-Json -InputObject $env:AMRS_IMPORT_WORKBOOKS',
+  '$selected = @()',
+  "$initialDirectory = ''",
+  'foreach ($item in $items) {',
+  '  $dialog = New-Object System.Windows.Forms.OpenFileDialog',
+  '  $dialog.Title = "請選擇 $($item.label) 的 Excel 檔案"',
+  "  $dialog.Filter = 'Excel 工作簿 (*.xlsx;*.xlsm;*.xls)|*.xlsx;*.xlsm;*.xls|所有檔案 (*.*)|*.*'",
+  '  $dialog.Multiselect = $false',
+  '  $dialog.CheckFileExists = $true',
+  '  $dialog.RestoreDirectory = $true',
+  '  if ($initialDirectory) { $dialog.InitialDirectory = $initialDirectory }',
+  '  if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { $dialog.Dispose(); exit 2 }',
+  '  $selected += [PSCustomObject]@{ id = [string]$item.id; file = [string]$dialog.FileName }',
+  '  $initialDirectory = [System.IO.Path]::GetDirectoryName($dialog.FileName)',
+  '  $dialog.Dispose()',
+  '}',
+  '$json = ConvertTo-Json -InputObject @($selected) -Depth 3 -Compress',
+  '[Console]::WriteLine([Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($json)))',
+].join('\n');
 
 function matchingSheet(sheets, title) {
   const expected = title.toLowerCase();
@@ -100,5 +132,50 @@ export function readWorkbookManifest(filename) {
     workbooks: entries.map(([id, file]) => {
       return workbookFromBytes(id, readFileSync(resolve(dirname(filename), file)));
     }),
+  };
+}
+
+export function selectWorkbookFiles({ platform = process.platform, spawn = spawnSync } = {}) {
+  if (platform !== 'win32') throw new Error('Excel 檔案選擇器只支援 Windows；可改用 mapping JSON 匯入。');
+  const result = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-STA', '-Command', WINDOWS_PICKER_SCRIPT], {
+    encoding: 'utf8',
+    env: { ...process.env, AMRS_IMPORT_WORKBOOKS: JSON.stringify(IMPORT_WORKBOOKS) },
+  });
+  if (result.error) throw new Error(`無法開啟本機 Excel 檔案選擇器：${result.error.message}`);
+  if (result.status === 2) return null;
+  if (result.status !== 0) {
+    const detail = String(result.stderr || '').trim();
+    throw new Error(`Excel 檔案選擇器失敗${detail ? `：${detail}` : `（代碼 ${result.status ?? '未知'}）`}`);
+  }
+
+  const output = Buffer.isBuffer(result.stdout) ? result.stdout.toString('ascii') : String(result.stdout ?? '');
+  const encoded = output.trim();
+  if (!encoded) throw new Error('Excel 檔案選擇器沒有回傳所選檔案。');
+  try {
+    return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+  } catch {
+    throw new Error('Excel 檔案選擇器回傳資料無效。');
+  }
+}
+
+export function readSelectedWorkbooks(selections) {
+  if (!Array.isArray(selections)) throw new Error('Expected AMRS workbook file selections');
+  const files = new Map();
+  for (const selection of selections) {
+    if (!selection || typeof selection !== 'object' || Array.isArray(selection)
+      || typeof selection.id !== 'string' || typeof selection.file !== 'string' || !selection.file.trim()) {
+      throw new Error('Invalid AMRS workbook file selection');
+    }
+    if (!allowed.has(selection.id)) throw new Error(`Unknown workbook selection: ${selection.id}`);
+    if (files.has(selection.id)) throw new Error(`Duplicate workbook selection: ${selection.id}`);
+    files.set(selection.id, resolve(selection.file));
+  }
+  const missing = IMPORT_WORKBOOKS.map(({ id }) => id).filter(id => !files.has(id));
+  if (missing.length) throw new Error(`Missing workbook selections: ${missing.join(', ')}`);
+  return {
+    format: 'amrs-local-worksheets',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    workbooks: IMPORT_WORKBOOKS.map(({ id }) => workbookFromBytes(id, readFileSync(files.get(id)))),
   };
 }

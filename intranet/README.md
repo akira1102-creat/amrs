@@ -20,7 +20,9 @@ HTTP 內網頁面不等於已支援可安裝 PWA；HTTPS 及安裝流程仍待�
 
 ## 搬入原有 Excel 資料
 
-準備本機 Excel 檔案及 JSON 對照檔。鍵名只接受以下資料簿：
+Windows 封裝版可直接雙擊 `Import.cmd`，程式會依次彈出 11 個本機檔案選擇視窗。每個視窗標示要選的 AMRS 資料簿；請按提示選取相應 Excel 檔案。中途按取消會安全退出，不會匯入或建立資料庫。全部選好後會先驗證所有工作簿，再一次過搬入；若有工作表或欄位不符合，請修正後重新執行。原始 Excel 不會修改。
+
+亦可使用命令列及 JSON 對照檔。鍵名只接受以下資料簿：
 `Melco`、`MGM`、`SJM`、`SCL`、`GEG`、`Wynn`、`parts`、`schedule`、`cvcs`、`galaxy-log`、`mgm-check-request`。
 檔案路徑相對於對照檔位置，例子：
 
@@ -73,7 +75,7 @@ node intranet/build.mjs ./new-test-package ./node-LICENSE.txt
 ```
 
 只會複製指定程式檔、執行環境及授權文字，不會複製資料庫或登入 Token。
-輸出目錄必須不存在。需要沿用現有公司資料時，先將全部 11 個 Excel 工作簿列入 mapping JSON，在首次設定前執行 `Import.cmd mapping.json`；成功後才執行 `Setup.cmd` 建立管理員 Token，再以 `Start.cmd` 啟動主機。全新空白測試環境則直接執行 `Setup.cmd`，再執行 `Start.cmd`。資料放在包內 `data` 目錄。
+輸出目錄必須不存在。需要沿用現有公司資料時，先雙擊 `Import.cmd` 並逐一選取全部 11 個 Excel 工作簿；亦可選擇使用 `Import.cmd mapping.json`。成功後才執行 `Setup.cmd` 建立管理員 Token，再以 `Start.cmd` 啟動主機。全新空白測試環境則直接執行 `Setup.cmd`，再執行 `Start.cmd`。資料放在包內 `data` 目錄。
 此為開發測試包，包含整個 AMRS 介面並移除公網服務客戶端；未經公司 IT 批准及四台實機驗收，不可當作正式部署。
 
 ## 自動測試

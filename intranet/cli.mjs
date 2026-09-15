@@ -6,7 +6,7 @@ import { createAccessToken, listAccessTokens } from '../worker/src/access-tokens
 import { saveWorksheetBackup } from './backup.mjs';
 import { openWorksheets } from './worksheets.mjs';
 import { existsSync, readFileSync } from 'node:fs';
-import { readWorkbookManifest } from './import-workbooks.mjs';
+import { IMPORT_WORKBOOKS, readSelectedWorkbooks, readWorkbookManifest, selectWorkbookFiles } from './import-workbooks.mjs';
 
 const [command = 'start', folder = './intranet-data'] = process.argv.slice(2);
 const directory = resolve(folder);
@@ -36,6 +36,22 @@ if (command === 'setup') {
     sheets.restoreEmpty(snapshot);
     process.stdout.write('工作表已還原至新目錄。請執行 setup 建立此主機的登入憑證。\n');
   } finally { sheets.close(); }
+} else if (command === 'import-selected') {
+  if (existsSync(directory)) throw new Error('匯入請使用全新資料目錄；為免覆蓋資料，已停止。');
+  process.stdout.write(`請依次選擇 ${IMPORT_WORKBOOKS.length} 個 Excel 資料簿：${IMPORT_WORKBOOKS.map(({ label }) => label).join('、')}。\n`);
+  process.stdout.write('按取消會安全退出，不會匯入任何資料。\n');
+  const selections = selectWorkbookFiles();
+  if (selections === null) {
+    process.stdout.write('已取消選擇，沒有匯入資料。\n');
+    process.exitCode = 2;
+  } else {
+    const snapshot = readSelectedWorkbooks(selections);
+    const sheets = openWorksheets(resolve(directory, 'worksheets.sqlite'));
+    try {
+      sheets.restoreEmpty(snapshot);
+      process.stdout.write(`已搬入 ${snapshot.workbooks.length} 個 AMRS 資料簿。請執行 Setup.cmd 建立管理員 Token，再執行 Start.cmd。\n`);
+    } finally { sheets.close(); }
+  }
 } else if (command === 'start') {
   const app = createIntranetServer({ directory });
   const port = Number(process.env.AMRS_PORT || 8080);
@@ -45,5 +61,5 @@ if (command === 'setup') {
   const stop = () => app.close().then(() => process.exit(0));
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
 } else {
-  throw new Error('支援指令：setup、start、backup、restore、import');
+  throw new Error('支援指令：setup、start、backup、restore、import、import-selected');
 }

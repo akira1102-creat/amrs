@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import * as importWorkbooks from './import-workbooks.mjs';
 import { readWorkbookManifest, workbookFromBytes } from './import-workbooks.mjs';
 import { openWorksheets } from './worksheets.mjs';
 const XLSX = createRequire(import.meta.url)('../xlsx.mini.min.js');
@@ -51,6 +52,14 @@ function writeCompleteManifest(directory, overrides = {}) {
   const filename = join(directory, 'manifest.json');
   writeFileSync(filename, JSON.stringify(manifest));
   return filename;
+}
+
+function writeCompleteSelection(directory, overrides = {}) {
+  return workbookIds.map(id => {
+    const filename = join(directory, `${id}.xlsx`);
+    writeFileSync(filename, overrides[id] || syntheticWorkbookBytes(id));
+    return { id, file: filename };
+  });
 }
 
 test('local Excel conversion preserves tabs, formatted identifiers and merged rows', async () => {
@@ -120,4 +129,69 @@ test('imports a complete mapping with AMRS worksheet structures for every workbo
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('imports selected Excel files directly without requiring a mapping manifest', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'amrs-import-selected-'));
+  try {
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([
+      ['SN', '指定 Log 日期', '取 Log 日期'],
+      ['SYNTHETIC-LOG-0001', '2026/05/17', ''],
+    ]), 'Galaxy Log');
+    const selections = writeCompleteSelection(directory, {
+      'galaxy-log': XLSX.write(book, { type: 'buffer', bookType: 'xlsx' }),
+    });
+
+    assert.equal(typeof importWorkbooks.readSelectedWorkbooks, 'function');
+    const snapshot = importWorkbooks.readSelectedWorkbooks(selections);
+    assert.deepEqual(snapshot.workbooks.map(workbook => workbook.id), workbookIds);
+    assert.deepEqual(snapshot.workbooks.find(workbook => workbook.id === 'galaxy-log').sheets[0].values[1],
+      ['SYNTHETIC-LOG-0001', '2026/05/17', '']);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('rejects duplicate selections instead of silently replacing one workbook role', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'amrs-import-selected-'));
+  try {
+    const selections = writeCompleteSelection(directory);
+    selections[selections.length - 1] = { id: 'SCL', file: selections[selections.length - 1].file };
+    assert.equal(typeof importWorkbooks.readSelectedWorkbooks, 'function');
+    assert.throws(() => importWorkbooks.readSelectedWorkbooks(selections), /Duplicate workbook selection.*SCL/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('rejects a partial file-picker selection before attempting to read any workbook', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'amrs-import-selected-'));
+  try {
+    const selections = writeCompleteSelection(directory).slice(1);
+    assert.equal(typeof importWorkbooks.readSelectedWorkbooks, 'function');
+    assert.throws(() => importWorkbooks.readSelectedWorkbooks(selections), /Missing workbook selections: Melco/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('treats a cancelled Windows workbook picker as a safe no-op', () => {
+  assert.equal(typeof importWorkbooks.selectWorkbookFiles, 'function');
+  const selected = importWorkbooks.selectWorkbookFiles({
+    platform: 'win32',
+    spawn: () => ({ status: 2, stdout: '', stderr: '' }),
+  });
+  assert.equal(selected, null);
+});
+
+test('decodes selected workbook paths without corrupting Unicode filenames', () => {
+  const expected = [{ id: 'SCL', file: 'C:\\Synthetic\\AMRS 維護記錄.xlsx' }];
+  const stdout = Buffer.from(JSON.stringify(expected), 'utf8').toString('base64');
+  assert.equal(typeof importWorkbooks.selectWorkbookFiles, 'function');
+  const selected = importWorkbooks.selectWorkbookFiles({
+    platform: 'win32',
+    spawn: () => ({ status: 0, stdout: `${stdout}\r\n`, stderr: '' }),
+  });
+  assert.deepEqual(selected, expected);
 });
