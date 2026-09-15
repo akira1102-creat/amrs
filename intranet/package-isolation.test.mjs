@@ -14,7 +14,7 @@ const companyWidths = { Melco: 10, MGM: 11, SJM: 10, SCL: 10, GEG: 12, Wynn: 10 
 function syntheticWorkbookBytes(id) {
   const headers = ['CASINO', 'Date', 'PO Number', 'Model', 'Serial No.', 'Reason', 'Action', 'Error', 'Box ID', 'Inspector', 'Location', 'Extra'];
   const companySheets = [
-    ['Worksheet', [headers.slice(0, companyWidths[id])]],
+    ['Worksheet', [headers.slice(0, companyWidths[id]), ...(id === 'SCL' ? [['Venetian', '2026/09/14', 'SYNTHETIC-PO', 'SAE', '9001', 'PM', 'Preventive Maintenance', '', '', 'Synthetic QA']] : [])]],
     ['Broken Parts List', [['CASINO', 'Model', 'Serial No.', 'Parts No.', 'Required Parts(JP)', 'Required Parts(EN)', 'Qty', 'Repair Day', 'Found Day', 'Remark', 'UOD Activation Date', 'UOD Unlock Date', 'Hold Date', 'Hold Release Date']]],
     ['Template', [['Reason', 'Action']]], ['AA TAG', [['Serial No.', 'AA Tag']]], ['Monthly', []],
   ];
@@ -91,6 +91,8 @@ test('built intranet package contains no public network clients or endpoints and
     finally { imported.close(); }
     const setupOutput = execFileSync(packagedNode, [join(packageDirectory, 'intranet', 'cli.mjs'), 'setup', dataDirectory], { encoding: 'utf8' });
     assert.match(setupOutput, /首次設定完成/);
+    const administratorToken = setupOutput.trim().split(/\r?\n/).at(-1);
+    assert.match(administratorToken, /^amrs_[a-f0-9]{48}$/i, 'setup should issue one local administrator token');
 
     const publicEndpoints = [];
     for (const path of filesUnder(packageDirectory).filter(path => /\.(?:html|js|mjs)$/.test(path))) {
@@ -106,7 +108,7 @@ test('built intranet package contains no public network clients or endpoints and
 
     const packagedServer = await import(pathToFileURL(join(packageDirectory, 'intranet', 'server.mjs')).href);
     const packagedVersion = packagedServer.INTRANET_VERSION;
-    app = packagedServer.createIntranetServer({ directory: join(temporaryRoot, 'runtime-data') });
+    app = packagedServer.createIntranetServer({ directory: dataDirectory });
     await new Promise(resolve => app.server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${app.server.address().port}`;
     const page = await fetch(base);
@@ -139,6 +141,59 @@ test('built intranet package contains no public network clients or endpoints and
       'intranet-transport.js', 'xlsx.mini.min.js', 'manifest.json', 'sw.js', 'icon.png', 'apple-touch-icon.png',
     ]) assert.equal((await fetch(`${base}/${asset}?v=${packagedVersion}`)).status, 200, `${asset} is part of the local AMRS app`);
     assert.equal((await fetch(`${base}/health`)).status, 200);
+
+    const login = await fetch(`${base}/session`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: administratorToken }),
+    });
+    assert.equal(login.status, 200, 'a setup token should authenticate against the imported offline database');
+    const session = await login.json();
+    const authHeaders = { authorization: `Bearer ${session.token}` };
+    const importedReads = [
+      { action: 'dashboard', company: 'SCL', includeParts: '0' },
+      { action: 'parts' },
+      { action: 'template', company: 'SCL' },
+      { action: 'aaTags', company: 'MGM' },
+      { action: 'brokenPartsList', company: 'SCL' },
+      { action: 'monthlyStats', month: '2609' },
+      { action: 'monthlySettings', company: 'GEG' },
+      { action: 'scheduleOverview', from: '2026/09/14', days: '1' },
+      { action: 'galaxyLogOverview' },
+      { action: 'mgmCheckRequests' },
+      { action: 'worksheetGrid', company: 'SCL', page: 'last' },
+      { action: 'cvcsOptions' },
+      { action: 'cvcsRecords', pageSize: '10' },
+      { action: 'cvcsBrokenParts', pageSize: '10' },
+      ...workbookIds.slice(0, 6).map(company => ({ action: 'dashboard', company, includeParts: '0' })),
+    ];
+    const importedResults = [];
+    for (const params of importedReads) {
+      const response = await fetch(`${base}/api?${new URLSearchParams(params)}`, { headers: authHeaders });
+      assert.equal(response.status, 200, `imported workbook data should serve ${params.action} for ${params.company || 'shared AMRS data'}`);
+      const result = await response.json();
+      assert.notEqual(result.error, 'unknown action', `${params.action} must remain part of the offline API`);
+      importedResults.push({ params, result });
+    }
+    const importedSclDashboard = importedResults.find(item => item.params.company === 'SCL' && item.params.action === 'dashboard')?.result;
+    assert.ok(importedSclDashboard.records.some(record => record.serialNo === '9001'), 'the imported SCL record should be readable through the packaged API');
+
+    const submitted = await fetch(`${base}/api`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'submitRecords', requestId: 'synthetic-package-write', batchId: 'synthetic-package-write',
+        records: [{
+          company: 'SCL', casino: 'Venetian', date: '2026/09/15', poNumber: 'SYNTHETIC-PO-2',
+          model: 'SAE', serialNo: '9002', reason: 'PM', actionTaken: 'Preventive Maintenance',
+          inspector: 'Synthetic QA', submissionId: 'synthetic-package-record-0002',
+        }],
+      }),
+    });
+    assert.equal(submitted.status, 200, 'maintenance records should write to the local imported workbook');
+    assert.equal((await submitted.json()).inserted, 1);
+    const savedRead = await fetch(`${base}/api?${new URLSearchParams({ action: 'dashboard', company: 'SCL', serialNo: '9002', includeParts: '0' })}`, { headers: authHeaders });
+    assert.equal(savedRead.status, 200);
+    assert.equal((await savedRead.json()).records[0].serialNo, '9002', 'the new record should be readable after saving');
   } finally {
     if (app) await app.close();
     if (temporaryRoot.startsWith(tmpdir())) rmSync(temporaryRoot, { recursive: true, force: true });
