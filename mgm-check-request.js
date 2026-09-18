@@ -31,9 +31,37 @@
     const digits = text(value).toUpperCase().replace(/^TAE/, "").replace(/\D/g, "").slice(-4);
     return digits ? `TAE${digits.padStart(4, "0")}` : "";
   }
+  const FOLLOWUP_OPTIONS = {
+    machineStatus: [
+      { key: "pending", label: "待跟進", value: "未CHECK" },
+      { key: "done", label: "已檢查", value: "已CHECK" },
+      { key: "no-machine-data", label: "無機台資料", value: "無機台資料" },
+    ],
+    cardStatus: [
+      { key: "pending", label: "待跟進", value: "未CHECK" },
+      { key: "done", label: "已檢查", value: "已CHECK" },
+      { key: "broken-card", label: "已碎牌", value: "已碎牌" },
+    ],
+  };
   function isFollowupChecked(value) { return /^已\s*(?:check|檢查)$/i.test(text(value)); }
-  function followupLabel(value) { return isFollowupChecked(value) ? "已檢查" : "待跟進"; }
-  function requestStatus(request) { return isFollowupChecked(request?.machineStatus) && isFollowupChecked(request?.cardStatus) ? "done" : "pending"; }
+  function followupChoice(field, value) {
+    if (isFollowupChecked(value)) return "done";
+    const normalized = text(value);
+    if (field === "machineStatus" && normalized === "無機台資料") return "no-machine-data";
+    if (field === "cardStatus" && normalized === "已碎牌") return "broken-card";
+    return "pending";
+  }
+  function followupOption(field, choice) { return (FOLLOWUP_OPTIONS[field] || []).find((option) => option.key === choice) || null; }
+  function followupLabel(value) {
+    if (isFollowupChecked(value)) return "已檢查";
+    if (text(value) === "無機台資料") return "無機台資料";
+    if (text(value) === "已碎牌") return "已碎牌";
+    return "待跟進";
+  }
+  function requestStatus(request) {
+    return followupChoice("machineStatus", request?.machineStatus) !== "pending"
+      && followupChoice("cardStatus", request?.cardStatus) !== "pending" ? "done" : "pending";
+  }
   function requestEventStamp(request = {}) {
     const dateMatch = text(request.eventDate).match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
     if (!dateMatch) return Number.NEGATIVE_INFINITY;
@@ -242,8 +270,8 @@
     const serialQuery = /^\d{1,4}$/.test(query) ? normalizeSerial(query) : "";
     const freeQuery = !aaQuery && !serialQuery ? query.toLowerCase() : "";
     return (Array.isArray(requests) ? requests : []).filter((request) => {
-      const machineChecked = isFollowupChecked(request.machineStatus);
-      const cardChecked = isFollowupChecked(request.cardStatus);
+      const machineChecked = followupChoice("machineStatus", request.machineStatus) !== "pending";
+      const cardChecked = followupChoice("cardStatus", request.cardStatus) !== "pending";
       const statusMatches = status === "all"
         || (status === "pending" && (!machineChecked || !cardChecked))
         || (status === "done" && machineChecked && cardChecked)
@@ -371,9 +399,9 @@
       const resolved = [request.serialResolved ? "SN 由 AA Tag 對照" : "", request.aaTagResolved ? "AA Tag 由 SN 對照" : ""].filter(Boolean).join(" · ");
       const eventDateTime = [request.eventDate, request.eventTime].filter(Boolean).join(" ") || "未有日期及時間";
       const followup = (field, label, value) => {
-        const selected = isFollowupChecked(value) ? "done" : "pending";
-        const option = (choice, optionLabel) => `<button type="button" class="mgm-check-followup-option ${choice}${selected === choice ? " selected" : ""}" data-mgm-check-followup-field="${field}" data-mgm-check-followup-value="${choice}" aria-pressed="${selected === choice}">${optionLabel}</button>`;
-        return `<div class="mgm-check-followup-control"><span>${label}</span><div class="mgm-check-followup-options">${option("pending", "待跟進")}${option("done", "已檢查")}</div></div>`;
+        const selected = followupChoice(field, value);
+        const option = ({ key, label: optionLabel }) => `<button type="button" class="mgm-check-followup-option ${key}${selected === key ? " selected" : ""}" data-mgm-check-followup-field="${field}" data-mgm-check-followup-value="${key}" aria-pressed="${selected === key}">${optionLabel}</button>`;
+        return `<div class="mgm-check-followup-control"><span>${label}</span><div class="mgm-check-followup-options">${(FOLLOWUP_OPTIONS[field] || []).map(option).join("")}</div></div>`;
       };
       return `<article class="mgm-check-card ${request.status}${pending ? " local-change" : ""}" data-mgm-check-id="${escapeHtml(request.id)}">
         <div class="mgm-check-card-top"><div class="mgm-check-identifiers"><strong>${escapeHtml(request.serialNo || "未有 SN")}</strong><span>↔</span><strong>${escapeHtml(request.aaTag || "未有 AA Tag")}</strong>${resolved ? `<small>${escapeHtml(resolved)}</small>` : ""}</div><span class="mgm-check-site">${escapeHtml(request.sheetName)}</span></div>
@@ -569,13 +597,15 @@
           const field = text(followupButton.dataset?.mgmCheckFollowupField);
           const choice = text(followupButton.dataset?.mgmCheckFollowupValue);
           const request = state.requests.find((item) => item.id === requestId);
-          const nextValue = choice === "done" ? "已CHECK" : choice === "pending" ? "未CHECK" : "";
-          if (!request || !["machineStatus", "cardStatus"].includes(field) || !nextValue || (isFollowupChecked(request[field]) ? "done" : "pending") === choice) return;
+          const selected = followupChoice(field, request?.[field]);
+          const option = followupOption(field, choice);
+          const nextValue = option?.value || "";
+          if (!request || !option || !nextValue || selected === choice) return;
           const next = applyDraft(state, requestId, { [field]: nextValue }, Date.now());
           if (JSON.stringify(next.outbox) === JSON.stringify(state.outbox)) return;
           persist(next); pendingPanelOpen = state.outbox.length > 0; pendingSelectedIds.clear();
           const fieldLabel = field === "machineStatus" ? "機台檢查狀況" : "實牌檢查狀況";
-          const choiceLabel = choice === "done" ? "已檢查" : "待跟進";
+          const choiceLabel = option.label;
           setMessage(`${fieldLabel}已設為${choiceLabel}，請按「儲存資料」`, "ok");
           notify(`✓ ${fieldLabel}已設為${choiceLabel}`);
           render();

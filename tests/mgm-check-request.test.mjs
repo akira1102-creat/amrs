@@ -146,6 +146,24 @@ test("filters MGM requests by overall, machine and card inspection completion", 
   assert.deepEqual(serials("card-done"), ["400", "300"]);
 });
 
+test("treats machine-without-data and broken-card choices as completed checks", () => {
+  const requests = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers,
+      ["2026/06/10", "08:00", "", "21BB01", "100", "TAE0100", "BOX-1", "", "No machine data", "無機台資料", "已CHECK", ""],
+      ["2026/06/10", "09:00", "", "21BB02", "200", "TAE0200", "BOX-2", "", "Broken card", "已CHECK", "已碎牌", ""],
+      ["2026/06/10", "10:00", "", "21BB03", "300", "TAE0300", "BOX-3", "", "Both alternate outcomes", "無機台資料", "已碎牌", ""],
+    ],
+  });
+  const serials = (status) => filterRequests(requests, { query: "", status, site: "all" }).map((row) => row.serialNo);
+
+  assert.deepEqual(serials("done"), ["300", "200", "100"]);
+  assert.deepEqual(serials("machine-done"), ["300", "200", "100"]);
+  assert.deepEqual(serials("card-done"), ["300", "200", "100"]);
+  assert.deepEqual(serials("machine-pending"), []);
+  assert.deepEqual(serials("card-pending"), []);
+});
+
 test("defaults MGM Check Request to show every completion status", () => {
   const requests = parseRequestRows({
     sheetName: "MGM Macau",
@@ -182,11 +200,13 @@ test("renders card follow-up controls with the stored choice highlighted", () =>
   app.setFilter({ status: "all" });
 
   const html = document.getElementById("mgmCheckList").innerHTML;
-  assert.equal((html.match(/data-mgm-check-followup-field=/g) || []).length, 8);
+  assert.equal((html.match(/data-mgm-check-followup-field=/g) || []).length, 12);
   assert.match(html, /機台檢查狀況/);
   assert.match(html, /實牌檢查狀況/);
   assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="pending"[^>]*aria-pressed="true"/);
   assert.match(html, /data-mgm-check-followup-field="cardStatus" data-mgm-check-followup-value="done"[^>]*aria-pressed="true"/);
+  assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"/);
+  assert.match(html, /data-mgm-check-followup-field="cardStatus" data-mgm-check-followup-value="broken-card"/);
   assert.equal((html.match(/class="mgm-check-state done">已完成/g) || []).length, 1);
   assert.doesNotMatch(html, /待檢查/);
 });
@@ -213,6 +233,29 @@ test("tapping a card follow-up choice updates only that check and queues it for 
   assert.equal(app.getState().requests[0].cardStatus, "已CHECK");
   assert.equal(app.getState().requests[0].status, "done");
   assert.deepEqual(app.getState().outbox[0].patch, { machineStatus: "已CHECK", cardStatus: "已CHECK" });
+});
+
+test("tapping alternate machine and card outcomes stores their exact status values", () => {
+  const request = parseRequestRows({
+    sheetName: "MGM Macau",
+    rows: [headers, ["2026/06/10", "08:00", "", "21BB02", "100", "TAE0100", "BOX-1", "", "Waiting", "未CHECK", "未CHECK", ""]],
+  })[0];
+  const document = fakeDocument();
+  const storage = new MemoryStorage();
+  writeStoredState(storage, { requests: [request], cloudRequests: [request], outbox: [] });
+  const app = createApplication({ document, storage, transport: null, isOnline: () => false });
+  app.mount();
+  const click = document.getElementById("mgmCheckList").listeners.get("click");
+
+  click({ target: followupToggleTarget(request.id, "machineStatus", "no-machine-data") });
+  assert.equal(app.getState().requests[0].machineStatus, "無機台資料");
+  assert.equal(app.getState().requests[0].status, "pending");
+  assert.deepEqual(app.getState().outbox[0].patch, { machineStatus: "無機台資料" });
+
+  click({ target: followupToggleTarget(request.id, "cardStatus", "broken-card") });
+  assert.equal(app.getState().requests[0].cardStatus, "已碎牌");
+  assert.equal(app.getState().requests[0].status, "done");
+  assert.deepEqual(app.getState().outbox[0].patch, { machineStatus: "無機台資料", cardStatus: "已碎牌" });
 });
 
 test("lists a pending MGM change above the cards and lets the user discard it back to the cloud value", () => {
