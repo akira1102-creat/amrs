@@ -34,8 +34,8 @@
   const FOLLOWUP_OPTIONS = {
     machineStatus: [
       { key: "pending", label: "待跟進", value: "未CHECK" },
-      { key: "done", label: "已檢查", value: "已CHECK" },
       { key: "no-machine-data", label: "無機台", value: "無機台資料" },
+      { key: "done", label: "已檢查", value: "已CHECK" },
     ],
     cardStatus: [
       { key: "pending", label: "待跟進", value: "未CHECK" },
