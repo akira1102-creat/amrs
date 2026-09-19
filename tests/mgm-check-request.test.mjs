@@ -207,9 +207,9 @@ test("renders card follow-up controls with the stored choice highlighted", () =>
   assert.match(html, /data-mgm-check-followup-field="cardStatus" data-mgm-check-followup-value="done"[^>]*aria-pressed="true"/);
   assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"/);
   assert.match(html, /data-mgm-check-followup-field="cardStatus" data-mgm-check-followup-value="broken-card"/);
-  assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"[^>]*>無機台<\/button>/);
-  assert.doesNotMatch(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"[^>]*>無機台資料<\/button>/);
-  assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="pending"[^>]*>待跟進<\/button><button[^>]*data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"[^>]*>無機台<\/button><button[^>]*data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="done"[^>]*>已檢查<\/button>/);
+  assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"[^>]*>無機台資料<\/button>/);
+  assert.doesNotMatch(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"[^>]*>無機台<\/button>/);
+  assert.match(html, /data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="pending"[^>]*>待跟進<\/button><button[^>]*data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="no-machine-data"[^>]*>無機台資料<\/button><button[^>]*data-mgm-check-followup-field="machineStatus" data-mgm-check-followup-value="done"[^>]*>已檢查<\/button>/);
   assert.equal((html.match(/class="mgm-check-state done">已完成/g) || []).length, 1);
   assert.doesNotMatch(html, /待檢查/);
 });

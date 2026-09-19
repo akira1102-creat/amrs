@@ -34,7 +34,7 @@
   const FOLLOWUP_OPTIONS = {
     machineStatus: [
       { key: "pending", label: "待跟進", value: "未CHECK" },
-      { key: "no-machine-data", label: "無機台", value: "無機台資料" },
+      { key: "no-machine-data", label: "無機台資料", value: "無機台資料" },
       { key: "done", label: "已檢查", value: "已CHECK" },
     ],
     cardStatus: [
@@ -54,7 +54,7 @@
   function followupOption(field, choice) { return (FOLLOWUP_OPTIONS[field] || []).find((option) => option.key === choice) || null; }
   function followupLabel(value) {
     if (isFollowupChecked(value)) return "已檢查";
-    if (text(value) === "無機台資料") return "無機台";
+    if (text(value) === "無機台資料") return "無機台資料";
     if (text(value) === "已碎牌") return "已碎牌";
     return "待跟進";
   }
