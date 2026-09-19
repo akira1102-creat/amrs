@@ -1,5 +1,5 @@
-const CACHE = 'amrs-v1118';
-const ASSETS = ['./', './index.html', './cloud-api.js?v=20260919a', './access-control.js?v=20260919a', './cvcs.js?v=20260919a', './cvcs.css?v=20260919a', './token-admin.js?v=20260919a', './xlsx.mini.min.js?v=20260919a', './galaxy-log.js?v=20260919a', './galaxy-log.css?v=20260919a', './mgm-check-request.js?v=20260919a', './mgm-check-request.css?v=20260919a', './worksheet-editor.js?v=20260919a', './worksheet-editor.css?v=20260919a', './manifest.json?v=20260919a', './sw.js'];
+const CACHE = 'amrs-v1119';
+const ASSETS = ['./', './index.html', './cloud-api.js?v=20260919b', './access-control.js?v=20260919b', './cvcs.js?v=20260919b', './cvcs.css?v=20260919b', './token-admin.js?v=20260919b', './xlsx.mini.min.js?v=20260919b', './galaxy-log.js?v=20260919b', './galaxy-log.css?v=20260919b', './mgm-check-request.js?v=20260919b', './mgm-check-request.css?v=20260919b', './worksheet-editor.js?v=20260919b', './worksheet-editor.css?v=20260919b', './manifest.json?v=20260919b', './sw.js'];
 
 self.addEventListener('message', e => {
   if (e.data?.type === 'SKIP_WAITING') self.skipWaiting();

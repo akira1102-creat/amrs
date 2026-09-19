@@ -654,6 +654,39 @@ test("opens the pending changes panel instead of uploading imported files immedi
   assert.match(documentRef.elements.get("galaxyPendingPanel").innerHTML, /已按好，待同步/);
 });
 
+test("never syncs existing changes while a CSV import is still being read", async () => {
+  const task = { id: "cloud-1190", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-09-01", completedDate: "", status: "pending" };
+  const storage = new MemoryStorage();
+  writeStoredState(storage, {
+    tasks: [task],
+    cloudTasks: [task],
+    outbox: [{ mutationId: "existing-change", taskId: task.id, patch: { status: "done", completedDate: "2026-09-18" }, baseCompletedDate: "" }],
+    importedFileModifiedAt: 1000,
+  });
+  const documentRef = fakeGalaxyDocument();
+  const calls = [];
+  let releaseImport;
+  const importingText = new Promise((resolve) => { releaseImport = resolve; });
+  const app = createApplication({
+    document: documentRef,
+    storage,
+    transport: {
+      get: async () => { calls.push("get"); return { success: true, tasks: [task], issues: [] }; },
+      post: async () => { calls.push("post"); return { success: true, results: [], tasks: [task], issues: [] }; },
+    },
+  });
+  storage.setItem("_amrs_galaxy_auto_download_day", currentLocalDay());
+  app.mount();
+  const importPromise = app.importFile({ name: "Galaxy.csv", lastModified: 2000, text: () => importingText });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(await app.syncCloud(), false);
+  assert.deepEqual(calls, []);
+
+  releaseImport("SN,SN末4位,指定 Log 日期,取 Log 日期,狀態\r\nA02-001190,1190,2026-09-01,,未取\r\n");
+  await importPromise;
+});
+
 test("imports an offline CSV and queues only rows that differ from the cloud snapshot", async () => {
   const cloudTasks = [
     { id: "cloud-1190-17", fullSerial: "A02-001190", serialLast4: "1190", targetDate: "2026-05-17", completedDate: "", status: "pending", groupIndex: 0, rowIndex: 2, duplicateIndex: 0 },

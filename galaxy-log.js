@@ -1138,7 +1138,10 @@
     }
 
     async function syncCloud() {
-      if (cloudBusy) return false;
+      if (cloudBusy || busy) {
+        if (busy && !cloudBusy) notify("CSV 匯入中，完成後請先檢查待同步變更", "warn");
+        return false;
+      }
       if (!isOnline()) { notify("目前離線，返公司有網絡時先同步", "warn"); return false; }
       if (!transportAvailable()) { notify("雲端同步尚未連接，現時只保存本機資料", "warn"); return false; }
       const mutations = pendingMutations(state);
@@ -1305,6 +1308,7 @@
     async function importFile(file) {
       if (busy) return;
       busy = true;
+      render();
       notify("讀取清單中…");
       try {
         const parsed = await parseWorkbookFile(file);
@@ -1410,12 +1414,12 @@
       renderPendingPanel();
       const syncButton = documentRef.getElementById("galaxySyncBtn");
       if (syncButton) {
-        syncButton.disabled = cloudBusy || !isOnline() || !transportAvailable();
+        syncButton.disabled = cloudBusy || busy || !isOnline() || !transportAvailable();
         syncButton.textContent = cloudBusy ? "同步中…" : pendingCount ? `同步至雲端（${pendingCount}）` : "同步至雲端";
       }
       const importButton = documentRef.getElementById("galaxyImportBtn");
       if (importButton) {
-        importButton.disabled = cloudBusy || !isOnline() || !transportAvailable();
+        importButton.disabled = cloudBusy || busy || !isOnline() || !transportAvailable();
         importButton.textContent = cloudBusy ? "讀取中…" : "下載雲端資料";
       }
       const search = documentRef.getElementById("galaxyLogSearch"); if (search && search.value !== filter.query) search.value = filter.query;
