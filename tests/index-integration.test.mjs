@@ -287,4 +287,8 @@ test("MGM Check Request is wired into the AE work tools navigation and cached sh
 test("MGM no-machine-data status stays on one line", () => {
   const css = fs.readFileSync(new URL("../mgm-check-request.css", import.meta.url), "utf8");
   assert.match(css, /\.mgm-check-followup-option\{[^}]*white-space:nowrap/);
+  assert.match(css, /\.mgm-check-followup-option\{[^}]*-webkit-appearance:none/);
+  assert.match(css, /\.mgm-check-followup-option\{[^}]*text-align:center/);
+  assert.match(css, /\.mgm-check-followup-option\{[^}]*align-items:center/);
+  assert.match(css, /\.mgm-check-followup-option\{[^}]*justify-content:center/);
 });
