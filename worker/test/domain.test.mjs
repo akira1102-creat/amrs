@@ -269,9 +269,9 @@ test("filters broken-part pages by SAE or TAE model", () => {
 test("finds current Holding and Waiting Parts states by model and serial", () => {
   const rows = [
     [...BROKEN_PARTS_HEADERS],
-    brokenRow({ model: "SAE", serialNo: "1000", repairDay: "Waiting", hold: "2026/08/01", release: "" }),
-    brokenRow({ model: "TAE", serialNo: "1000", repairDay: "2026/08/02", hold: "2026/08/01", release: "2026/08/03" }),
-    brokenRow({ model: "SAE", serialNo: "2000", repairDay: "Waiting", hold: "", release: "" }),
+    brokenRow({ model: "SAE", serialNo: "1000", repairDay: "Waiting", unlock: "", hold: "2026/08/01", release: "" }),
+    brokenRow({ model: "TAE", serialNo: "1000", repairDay: "2026/08/02", unlock: "", hold: "2026/08/01", release: "2026/08/03" }),
+    brokenRow({ model: "SAE", serialNo: "2000", repairDay: "Waiting", unlock: "", hold: "", release: "" }),
   ];
   const warnings = getSubmissionWarningsFromRows(rows, [
     { casino: "Venetian", model: "SAE", serialNo: "1000" },
@@ -289,17 +289,29 @@ test("finds current Holding and Waiting Parts states by model and serial", () =>
 test("submission warnings follow model and serial across casinos and preserve source rows", () => {
   const rows = [
     [...BROKEN_PARTS_HEADERS],
-    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "Waiting", hold: "", release: "" }),
-    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "2026/08/02", hold: "2026/08/01", release: "" }),
-    brokenRow({ model: "TAE", serialNo: "9001", repairDay: "Waiting", hold: "2026/08/01", release: "" }),
-    brokenRow({ model: "SAE", serialNo: "9002", repairDay: "Waiting", hold: "", release: "" }),
-    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "2026/08/02", hold: "2026/08/01", release: "2026/08/03" }),
+    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "Waiting", unlock: "", hold: "", release: "" }),
+    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "2026/08/02", unlock: "", hold: "2026/08/01", release: "" }),
+    brokenRow({ model: "TAE", serialNo: "9001", repairDay: "Waiting", unlock: "", hold: "2026/08/01", release: "" }),
+    brokenRow({ model: "SAE", serialNo: "9002", repairDay: "Waiting", unlock: "", hold: "", release: "" }),
+    brokenRow({ model: "SAE", serialNo: "9001", repairDay: "2026/08/02", unlock: "", hold: "2026/08/01", release: "2026/08/03" }),
   ];
   const warnings = getSubmissionWarningsFromRows(rows, [{ casino: "Parisian", model: "sae", serialNo: "9001" }]);
   assert.deepEqual(warnings.map(({ rowNumber, casino, holding, waiting }) => ({ rowNumber, casino, holding, waiting })), [
     { rowNumber: 2, casino: "Venetian", holding: false, waiting: true },
     { rowNumber: 3, casino: "Venetian", holding: true, waiting: false },
   ]);
+});
+
+test("submission warning detects Waiting for Unlock and carries its activation date", () => {
+  const rows = [
+    [...BROKEN_PARTS_HEADERS],
+    brokenRow({ serialNo: "3000", partsNo: "", repairDay: "", foundDay: "", activation: "2026/08/10", unlock: "Wait for Unlock", hold: "" }),
+  ];
+  const warnings = getSubmissionWarningsFromRows(rows, [{ model: "SAE", serialNo: "3000" }]);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].uodWaiting, true);
+  assert.equal(warnings[0].bpUodActivationDate, "2026/08/10");
+  assert.equal(warnings[0].rowNumber, 2);
 });
 
 test("filters dashboard rows and computes full-result statistics", () => {
