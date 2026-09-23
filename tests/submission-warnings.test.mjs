@@ -37,8 +37,9 @@ function setup(overrides = {}) {
   return { context, elements };
 }
 
-test('cross-casino PM shows both warnings and selected actions retain original row identity', async () => {
+test('cross-casino PM uses the maintenance date for every selected status update', async () => {
   const { context, elements } = setup();
+  elements.date.value = '2026-09-23';
   const warnings = await context.collectSubmissionWarnings();
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].holding, true);
@@ -53,12 +54,14 @@ test('cross-casino PM shows both warnings and selected actions retain original r
   assert.match(elements.submitWarningList.innerHTML, /Hold Date：2026\/08\/03/);
   assert.match(elements.submitWarningList.innerHTML, /UOD Activation Date：2026\/08\/10/);
   assert.match(elements.submitWarningList.innerHTML, /等待解鎖/);
+  assert.match(elements.submitWarningList.innerHTML, /Hold Release Date 改為 2026\/09\/04/);
+  assert.match(elements.submitWarningList.innerHTML, /Repair Day 改為 2026\/09\/04/);
   const repairs = context.selectedSubmissionRepairs();
   assert.equal(repairs.length, 1);
   assert.equal(repairs[0].record.rowNumber, 2);
   assert.equal(repairs[0].record.serialNo, '9001');
-  assert.equal(repairs[0].record.bpRepairDay, context.todaySheetDate());
-  assert.equal(repairs[0].record.bpHoldReleaseDate, context.todaySheetDate());
+  assert.equal(repairs[0].record.bpRepairDay, '2026/09/04');
+  assert.equal(repairs[0].record.bpHoldReleaseDate, '2026/09/04');
   assert.equal(repairs[0].record.bpUodUnlockDay, '2026/09/04');
   assert.equal(Object.hasOwn(repairs[0].record, 'casino'), false);
 });
@@ -90,6 +93,8 @@ test('final submission confirmation shows all three source dates and selected Un
   assert.match(elements.confirmInfo.innerHTML, /等待零件（Found Day：2026\/08\/02）/);
   assert.match(elements.confirmInfo.innerHTML, /Holding（Hold Date：2026\/08\/03）/);
   assert.match(elements.confirmInfo.innerHTML, /等待解鎖（UOD Activation Date：2026\/08\/10）/);
+  assert.match(elements.confirmInfo.innerHTML, /Hold Release Date 改為 2026\/09\/04/);
+  assert.match(elements.confirmInfo.innerHTML, /Repair Day 改為 2026\/09\/04/);
   assert.match(elements.confirmInfo.innerHTML, /UOD Unlock Date 改為 2026\/09\/04/);
 });
 

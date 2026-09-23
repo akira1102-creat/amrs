@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260923a">
+  <link rel="manifest" href="manifest.json?v=20260923b">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260923a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260923a">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260923a">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20260923a">
+  <link rel="stylesheet" href="./cvcs.css?v=20260923b">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260923b">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260923b">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260923b">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1675,20 +1675,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260923a"></script>
-<script src="./access-control.js?v=20260923a"></script>
-<script src="./cvcs.js?v=20260923a"></script>
-<script src="./token-admin.js?v=20260923a"></script>
-<script src="./xlsx.mini.min.js?v=20260923a"></script>
-<script src="./galaxy-log.js?v=20260923a"></script>
-<script src="./mgm-check-request.js?v=20260923a"></script>
-<script src="./worksheet-editor.js?v=20260923a"></script>
+<script src="./cloud-api.js?v=20260923b"></script>
+<script src="./access-control.js?v=20260923b"></script>
+<script src="./cvcs.js?v=20260923b"></script>
+<script src="./token-admin.js?v=20260923b"></script>
+<script src="./xlsx.mini.min.js?v=20260923b"></script>
+<script src="./galaxy-log.js?v=20260923b"></script>
+<script src="./mgm-check-request.js?v=20260923b"></script>
+<script src="./worksheet-editor.js?v=20260923b"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.23-01';
-const _APP_VERSION='v1.123';
+const _APP_BUMP='2026.09.23-02';
+const _APP_VERSION='v1.124';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -4657,9 +4657,10 @@ async function collectSubmissionWarnings(){
 }
 function submissionWarningActionLabel(item,type,today){
   const machine=`${item.company||activeCompany} · ${item.casino||'未設定場地'} · ${item.model||'SAE'} S/N ${item.serialNo}`;
-  if(type==='hold')return `<strong>${esc(machine)}</strong><br>目前 Holding（Hold Date：${esc(item.bpHoldDate||'未記錄')}），將 Hold Release Date 改為 ${esc(today)}`;
+  const submissionDate=item.submissionDate||today;
+  if(type==='hold')return `<strong>${esc(machine)}</strong><br>目前 Holding（Hold Date：${esc(item.bpHoldDate||'未記錄')}），將 Hold Release Date 改為 ${esc(submissionDate)}`;
   if(type==='unlock')return `<strong>${esc(machine)}</strong><br>目前等待解鎖（UOD Activation Date：${esc(item.bpUodActivationDate||'未記錄')}），將 UOD Unlock Date 改為 ${esc(item.submissionDate||today)}`;
-  return `<strong>${esc(machine)}</strong><br>目前等待零件（Found Day：${esc(item.date||'未記錄')}${item.brokenParts?`；零件：${esc(item.brokenParts)}`:''}），將 Repair Day 改為 ${esc(today)}`;
+  return `<strong>${esc(machine)}</strong><br>目前等待零件（Found Day：${esc(item.date||'未記錄')}${item.brokenParts?`；零件：${esc(item.brokenParts)}`:''}），將 Repair Day 改為 ${esc(submissionDate)}`;
 }
 function openSubmissionWarningModal(warnings){
   _pendingSubmissionWarnings=[];
@@ -4682,8 +4683,8 @@ function selectedSubmissionRepairs(){
     if(!warning)return;
     const key=`${warning.company}\u0000${warning.rowNumber}`;
     const existing=repairs.get(key)||{company:warning.company,queueIndex:warning.queueIndex,record:{rowNumber:warning.rowNumber,model:warning.model,serialNo:warning.serialNo,brokenParts:warning.brokenParts}};
-    if(warning.type==='hold')existing.record.bpHoldReleaseDate=today;
-    if(warning.type==='waiting')existing.record.bpRepairDay=today;
+    if(warning.type==='hold')existing.record.bpHoldReleaseDate=warning.submissionDate||today;
+    if(warning.type==='waiting')existing.record.bpRepairDay=warning.submissionDate||today;
     if(warning.type==='unlock')existing.record.bpUodUnlockDay=warning.submissionDate||today;
     repairs.set(key,existing);
   });
@@ -5804,8 +5805,8 @@ function showSubmitConfirmation(warnings=[],stateWarnings=[]){
   const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
   const selectedUpdates=_pendingSubmissionRepairs.length?`<div style="display:block;color:#56d364;line-height:1.5"><strong>已選狀態更新</strong><br>${_pendingSubmissionRepairs.map(item=>{
     const actions=[];
-    if(item.record.bpHoldReleaseDate)actions.push('解除 Hold');
-    if(item.record.bpRepairDay)actions.push('Repair Day 改為今日');
+    if(item.record.bpHoldReleaseDate)actions.push(`Hold Release Date 改為 ${esc(item.record.bpHoldReleaseDate)}`);
+    if(item.record.bpRepairDay)actions.push(`Repair Day 改為 ${esc(item.record.bpRepairDay)}`);
     if(item.record.bpUodUnlockDay)actions.push(`UOD Unlock Date 改為 ${esc(item.record.bpUodUnlockDay)}`);
     return `${esc(item.record.model||'SAE')} S/N ${esc(item.record.serialNo||'')}：${actions.join('、')}`;
   }).join('<br>')}</div>`:'';
