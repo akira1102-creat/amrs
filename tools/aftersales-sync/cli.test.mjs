@@ -30,20 +30,26 @@ test('CLI defaults to full-history preview and rejects unknown arguments', () =>
   assert.deepEqual(parseOptions([]), {
     command: 'preview', amrsMode: 'worker', amrsUrl: '', aftersalesUrl: 'http://127.0.0.1:5000',
     dbPath: '', venueMapPath: '', companies: ['Melco', 'MGM', 'SJM', 'SCL', 'GEG', 'Wynn'],
-    from: '', intervalMinutes: 60,
+    from: '', intervalMinutes: 60, autoCreateMissing: false, installDateSource: '',
   });
   assert.throws(() => parseOptions(['apply', '--unknown']), /Unknown option/);
   assert.equal(parseOptions(['apply', '--from', '2026-01-01', '--companies', 'SCL,GEG']).from, '2026-01-01');
   assert.throws(() => parseOptions(['preview', '--from', '2026-02-30']), /Invalid from date/);
+  assert.equal(parseOptions(['apply', '--auto-create-missing', '--install-date-source', 'earliest-service']).autoCreateMissing, true);
+  assert.throws(() => parseOptions(['apply', '--auto-create-missing']), /Installation date source/);
 });
 
 test('preview plans historical records without calling the aftersales write API', async () => {
   const db = fixtureDb();
   try {
     const amrs = { async queryDashboard() { return { records: [record], totalPages: 1 }; } };
-    const aftersales = { async createMaintenance() { throw new Error('preview must not write'); } };
+    const aftersales = {
+      async get() { return [{ id: 1, name: 'Sample Customer', branches: [{ id: 10, name: 'Sample Venue' }] }]; },
+      async createMaintenance() { throw new Error('preview must not write'); },
+    };
     const result = await runCycle({ command: 'preview', companies: ['SCL'], from: '' }, { db, amrs, aftersales, venueMap: {} });
     assert.deepEqual(result.counts, { total: 1, ready: 1, already: 0, changed: 0, blocked: 0 });
+    assert.equal(result.provisionableMachines, 0);
     assert.equal(db.prepare('SELECT COUNT(*) AS total FROM maintenance_batches').get().total, 0);
   } finally { db.close(); }
 });
@@ -52,7 +58,8 @@ test('apply writes once and the next historical scan reports the record as alrea
   const db = fixtureDb();
   try {
     const amrs = { async queryDashboard() { return { records: [record], totalPages: 1 }; } };
-    const aftersales = { async createMaintenance(payload) {
+    const aftersales = { async get() { return [{ id: 1, name: 'Sample Customer', branches: [{ id: 10, name: 'Sample Venue' }] }]; },
+      async createMaintenance(payload) {
       db.prepare('INSERT INTO maintenance_batches (MaintenanceDate, Remarks) VALUES (?, ?)')
         .run(payload.maintenanceDate, payload.remarks);
       return { batchId: 1 };
@@ -63,5 +70,20 @@ test('apply writes once and the next historical scan reports the record as alrea
     assert.deepEqual(first.writes, { created: 1, reconciled: 0, failed: 0 });
     assert.deepEqual(second.counts, { total: 1, ready: 0, already: 1, changed: 0, blocked: 0 });
     assert.equal(db.prepare('SELECT COUNT(*) AS total FROM maintenance_batches').get().total, 1);
+  } finally { db.close(); }
+});
+
+test('preview identifies an unregistered SAE machine without creating it', async () => {
+  const db = fixtureDb();
+  try {
+    const amrs = { async queryDashboard() { return { records: [{ ...record, serialNo: 'SN-NEW', model: 'SAE' }], totalPages: 1 }; } };
+    const aftersales = {
+      async get() { return [{ id: 1, name: 'Sample Customer', branches: [{ id: 10, name: 'Sample Venue' }] }]; },
+      async post() { throw new Error('preview must not create master data'); },
+    };
+    const result = await runCycle({ command: 'preview', companies: ['SCL'], from: '' }, { db, amrs, aftersales });
+    assert.equal(result.provisionableMachines, 1);
+    assert.equal(result.counts.blocked, 1);
+    assert.equal(db.prepare('SELECT COUNT(*) AS total FROM product_assets').get().total, 1);
   } finally { db.close(); }
 });

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+export { provisionMachines } from './provision.mjs';
 
 const MARKER = /\[AMRS-SYNC:([a-f0-9]{24}):([a-f0-9]{16})\]/g;
 
@@ -77,9 +78,10 @@ function existingMarkerForKey(db, key) {
   return matches;
 }
 
-function installationsForSerial(db, serial) {
-  return db.prepare(`
+function installationsForSerial(db, serial, directory = null) {
+  const rows = db.prepare(`
     SELECT i.Id AS installationId, i.SystemNo AS systemNo,
+           c.Id AS customerId, b.Id AS branchId,
            c.Name AS customerName, b.Name AS branchName
     FROM product_assets AS asset
     JOIN installation_devices AS device ON device.ProductAssetId = asset.Id
@@ -89,12 +91,18 @@ function installationsForSerial(db, serial) {
     WHERE asset.SerialNumber = ? COLLATE NOCASE
       AND asset.IsDeleted = 0 AND i.IsActive = 1
   `).all(serial);
+  if (!directory) return rows;
+  return rows.map(row => {
+    const customer = directory.find(item => item.id === row.customerId);
+    const branch = customer?.branches?.find(item => item.id === row.branchId);
+    return { ...row, customerName: customer?.name || '', branchName: branch?.name || '' };
+  });
 }
 
-function installationFor(db, record, venueMap) {
+function installationFor(db, record, venueMap, directory) {
   const serial = text(record.serialNo);
   if (!serial) return { reason: 'missing-serial' };
-  const rows = installationsForSerial(db, serial);
+  const rows = installationsForSerial(db, serial, directory);
   if (!rows.length) return { reason: 'serial-not-found' };
 
   const venue = text(record.casino);
@@ -111,13 +119,13 @@ function installationFor(db, record, venueMap) {
   return { installation: matching[0] };
 }
 
-export function suggestVenueMappings(records, db) {
+export function suggestVenueMappings(records, db, directory = null) {
   const venues = new Map();
   for (const record of records) {
     const key = `${text(record.company)}|${text(record.casino)}`;
     if (!venues.has(key)) venues.set(key, { candidates: new Map(), uncertain: false });
     const item = venues.get(key);
-    const matches = installationsForSerial(db, text(record.serialNo));
+    const matches = installationsForSerial(db, text(record.serialNo), directory);
     if (matches.length !== 1) {
       item.uncertain = true;
       continue;
@@ -131,7 +139,51 @@ export function suggestVenueMappings(records, db) {
   ]));
 }
 
-export function planSync(records, db, venueMap = {}) {
+export function planMissingMachines(records, db, venueMap = {}) {
+  const groups = new Map();
+  const blockedReasons = {};
+  const block = reason => { blockedReasons[reason] = (blockedReasons[reason] || 0) + 1; };
+  for (const record of records) {
+    const serialNo = text(record.serialNo);
+    if (!serialNo) { block('missing-serial'); continue; }
+    const key = comparable(serialNo);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(record);
+  }
+  const machines = [];
+  for (const group of groups.values()) {
+    const serialNo = text(group[0].serialNo);
+    const models = new Set(group.map(record => text(record.model).toUpperCase()));
+    if (models.size !== 1) { block('conflicting-model'); continue; }
+    const model = [...models][0];
+    if (!['SAE', 'TAE'].includes(model)) { block('unsupported-model'); continue; }
+    const destinations = group.map(record => {
+      const sourceVenue = text(record.casino);
+      const sourceCompany = text(record.company);
+      const mapped = venueMap[`${sourceCompany}|${sourceVenue}`];
+      return { customer: text(mapped?.customer ?? sourceCompany), branch: text(mapped?.branch ?? sourceVenue) };
+    });
+    if (destinations.some(item => !item.customer || !item.branch)) { block('missing-customer-or-venue'); continue; }
+    if (new Set(destinations.map(item => `${comparable(item.customer)}\0${comparable(item.branch)}`)).size !== 1) {
+      block('conflicting-venue');
+      continue;
+    }
+    const dates = group.map(record => maintenanceDate(record.date));
+    if (dates.some(date => !date)) { block('invalid-date'); continue; }
+    if (db.prepare('SELECT COUNT(*) AS total FROM product_assets WHERE SerialNumber = ? COLLATE NOCASE').get(serialNo).total) {
+      block('asset-already-exists');
+      continue;
+    }
+    if (db.prepare('SELECT COUNT(*) AS total FROM installations WHERE SystemNo = ? COLLATE NOCASE').get(serialNo).total) {
+      block('system-number-exists');
+      continue;
+    }
+    machines.push({ serialNo, model, ...destinations[0], earliestServiceDate: dates.sort()[0] });
+  }
+  return { machines, blockedReasons };
+}
+
+export function planSync(records, db, venueMap = {}, directory = null) {
   const plan = { ready: [], already: [], changed: [], blocked: [] };
   const seen = new Set();
   const destination = existingMarkers(db);
@@ -165,9 +217,9 @@ export function planSync(records, db, venueMap = {}) {
       plan[found[0].digest === content ? 'already' : 'changed'].push({ key });
       continue;
     }
-    const match = installationFor(db, record, venueMap);
+    const match = installationFor(db, record, venueMap, directory);
     if (match.reason) {
-      plan.blocked.push({ reason: match.reason });
+      plan.blocked.push({ reason: match.reason, ...(match.reason === 'serial-not-found' ? { record } : {}) });
       continue;
     }
     plan.ready.push({
@@ -327,10 +379,10 @@ export class AfterSalesClient {
     this.authenticated = true;
   }
 
-  async createMaintenance(payload, refreshed = false) {
+  async post(path, payload, refreshed = false) {
     if (!this.authenticated) await this.login();
     try {
-      return await this.request('/api/maintenance/batches', {
+      return await this.request(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': this.csrf },
         body: JSON.stringify(payload),
@@ -339,7 +391,23 @@ export class AfterSalesClient {
       if (error.status !== 401 || refreshed) throw error;
       this.authenticated = false;
       this.cookies.clear();
-      return this.createMaintenance(payload, true);
+      return this.post(path, payload, true);
     }
+  }
+
+  async get(path, refreshed = false) {
+    if (!this.authenticated) await this.login();
+    try {
+      return await this.request(path);
+    } catch (error) {
+      if (error.status !== 401 || refreshed) throw error;
+      this.authenticated = false;
+      this.cookies.clear();
+      return this.get(path, true);
+    }
+  }
+
+  async createMaintenance(payload) {
+    return this.post('/api/maintenance/batches', payload);
   }
 }

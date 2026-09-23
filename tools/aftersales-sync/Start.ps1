@@ -23,13 +23,11 @@ function Set-EphemeralSecret {
 
 try {
     Set-EphemeralSecret -Name 'AMRS_SYNC_CREDENTIAL' -Prompt 'AMRS 個人 Token 或 Deploy ID'
-    if ($Action -eq 'apply' -or $Action -eq 'watch') {
-        if (-not $env:AFTERSALES_SYNC_USERNAME) {
-            $env:AFTERSALES_SYNC_USERNAME = Read-Host 'aftersales 已啟用帳戶名稱'
-            $addedVariables.Add('AFTERSALES_SYNC_USERNAME')
-        }
-        Set-EphemeralSecret -Name 'AFTERSALES_SYNC_PASSWORD' -Prompt 'aftersales 密碼'
+    if (-not $env:AFTERSALES_SYNC_USERNAME) {
+        $env:AFTERSALES_SYNC_USERNAME = Read-Host 'aftersales 已啟用帳戶名稱'
+        $addedVariables.Add('AFTERSALES_SYNC_USERNAME')
     }
+    Set-EphemeralSecret -Name 'AFTERSALES_SYNC_PASSWORD' -Prompt 'aftersales 密碼'
     & node (Join-Path $PSScriptRoot 'cli.mjs') $Action @ToolOptions
     $toolExitCode = $LASTEXITCODE
 } finally {

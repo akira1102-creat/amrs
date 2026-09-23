@@ -88,6 +88,19 @@ test('explicit venue mapping permits a different AMRS venue label only for the m
   } finally { db.close(); }
 });
 
+test('matches an API-decrypted venue when aftersales encrypts customer and branch names in SQLite', () => {
+  const db = fixtureDb();
+  try {
+    db.exec("UPDATE customers SET Name = 'encrypted-customer'; UPDATE branches SET Name = 'encrypted-branch'");
+    const directory = [{ id: 1, name: 'Sample Customer', branches: [{ id: 10, name: 'Sample Venue' }] }];
+    const plan = planSync([sourceRecord()], db, {}, directory);
+    assert.equal(plan.counts.ready, 1);
+    assert.deepEqual(suggestVenueMappings([sourceRecord()], db, directory), {
+      'SCL|Sample Venue': { customer: 'Sample Customer', branch: 'Sample Venue' },
+    });
+  } finally { db.close(); }
+});
+
 test('suggests a venue mapping only when all matching serials agree on one destination', () => {
   const db = fixtureDb();
   try {
