@@ -635,6 +635,23 @@ test("updates selected Waiting Parts status to today's Repair Day", async () => 
   assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][7], "2026/08/04");
 });
 
+test("updates selected Waiting for Unlock row to the maintenance record date", async () => {
+  const data = structuredClone(companyData);
+  data.scl[1].values[1][3] = "";
+  data.scl[1].values[1][10] = "2026/08/01";
+  data.scl[1].values[1][11] = "Wait for Unlock";
+  const harness = createSheetsHarness(data);
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+  const result = await repository.postAction({
+    action: "submitRecords",
+    brokenPartsRepairs: [{ company: "SCL", record: { rowNumber: 2, model: "SAE", serialNo: "1234", brokenParts: "", bpUodUnlockDay: "2026/08/03" } }],
+    records: [{ submissionId: "unlock-submit", company: "SCL", casino: "Venetian", date: "2026/08/03", poNumber: "2608", model: "SAE", serialNo: "4323", reason: "PM", actionTaken: "Preventive Maintenance" }],
+  });
+  assert.equal(result.success, true);
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][11], "2026/08/03");
+  assert.equal(harness.sheets.get("scl:Broken Parts List").values[1][7], "Waiting");
+});
+
 test("shares monthly statistics for ten minutes across Worker instances", async () => {
   const harness = createSheetsHarness(companyData);
   let nowMs = Date.parse("2026-08-04T04:00:00Z");

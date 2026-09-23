@@ -509,11 +509,12 @@ export function getSubmissionWarningsFromRows(rows = [], machines = [], options 
     const machine = wanted.get(key);
     if (!machine) return;
     const status = brokenPartStatus(row);
-    if (!status.holding && !status.waiting) return;
+    if (!status.holding && !status.waiting && !status.uodWaiting) return;
     result.push({
       ...record,
       holding: status.holding,
       waiting: status.waiting,
+      uodWaiting: status.uodWaiting,
     });
   });
   return result;

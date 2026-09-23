@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260921a">
+  <link rel="manifest" href="manifest.json?v=20260923a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260921a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260921a">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260921a">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20260921a">
+  <link rel="stylesheet" href="./cvcs.css?v=20260923a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260923a">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260923a">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260923a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -967,7 +967,7 @@
       <div class="submit-warning-title">⚠ 提交前狀態提醒</div>
       <button class="confirm-cancel" style="flex:0 0 auto;padding:7px 10px" onclick="skipSubmissionWarnings()" type="button">×</button>
     </div>
-    <div class="submit-warning-note">以下機台目前有 Holding 或等待零件狀態。請自行勾選要同步修改的項目；不勾選亦可繼續提交。</div>
+    <div class="submit-warning-note">以下機台目前有 Holding、等待零件或等待解鎖狀態。請自行勾選要同步修改的項目；不勾選亦可繼續提交。</div>
     <div id="submitWarningList"></div>
     <div class="submit-warning-actions">
       <button class="submit-warning-skip" onclick="skipSubmissionWarnings()" type="button">不修改，繼續提交</button>
@@ -1675,20 +1675,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260921a"></script>
-<script src="./access-control.js?v=20260921a"></script>
-<script src="./cvcs.js?v=20260921a"></script>
-<script src="./token-admin.js?v=20260921a"></script>
-<script src="./xlsx.mini.min.js?v=20260921a"></script>
-<script src="./galaxy-log.js?v=20260921a"></script>
-<script src="./mgm-check-request.js?v=20260921a"></script>
-<script src="./worksheet-editor.js?v=20260921a"></script>
+<script src="./cloud-api.js?v=20260923a"></script>
+<script src="./access-control.js?v=20260923a"></script>
+<script src="./cvcs.js?v=20260923a"></script>
+<script src="./token-admin.js?v=20260923a"></script>
+<script src="./xlsx.mini.min.js?v=20260923a"></script>
+<script src="./galaxy-log.js?v=20260923a"></script>
+<script src="./mgm-check-request.js?v=20260923a"></script>
+<script src="./worksheet-editor.js?v=20260923a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.21-01';
-const _APP_VERSION='v1.122';
+const _APP_BUMP='2026.09.23-01';
+const _APP_VERSION='v1.123';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -4631,6 +4631,7 @@ function submissionWarningMachine(item,index){
     serialNo,
     skipHolding:hasSubmissionFieldValue(item,['bpHoldDate','bpHoldReleaseDate']),
     skipWaiting:hasSubmissionFieldValue(item,['bpRepairDay'])||String(item?.action||'').trim().toLowerCase()==='waiting parts'||!!item?.poRepair?.record,
+    skipUnlock:hasSubmissionFieldValue(item,['bpUodActivationDate','bpUodUnlockDay']),
   };
 }
 async function collectSubmissionWarnings(){
@@ -4649,15 +4650,16 @@ async function collectSubmissionWarnings(){
     const queueIndex=machines.findIndex(machine=>String(machine.company||'').trim().toUpperCase()===warningCompany&&String(machine.model||'').trim().toUpperCase()===warningModel&&String(machine.serialNo||'').trim()===warningSerial);
     const machine=queueIndex>=0?machines[queueIndex]:null;
     if(!machine)return;
-    const item={...warning,queueIndex:machine.queueIndex,holding:warning.holding===true&&!machine.skipHolding,waiting:warning.waiting===true&&!machine.skipWaiting};
-    if(item.holding||item.waiting)result.push(item);
+    const item={...warning,queueIndex:machine.queueIndex,submissionDate:String(queue[machine.queueIndex]?.date||fmtDate(document.getElementById('date').value)).trim(),holding:warning.holding===true&&!machine.skipHolding,waiting:warning.waiting===true&&!machine.skipWaiting,uodWaiting:warning.uodWaiting===true&&!machine.skipUnlock};
+    if(item.holding||item.waiting||item.uodWaiting)result.push(item);
   });
   return result;
 }
 function submissionWarningActionLabel(item,type,today){
   const machine=`${item.company||activeCompany} · ${item.casino||'未設定場地'} · ${item.model||'SAE'} S/N ${item.serialNo}`;
-  if(type==='hold')return `<strong>${esc(machine)}</strong><br>目前 Holding（Hold Date：${esc(item.bpHoldDate||'已設定')}），將 Hold Release Date 改為 ${esc(today)}`;
-  return `<strong>${esc(machine)}</strong><br>目前等待零件${item.brokenParts?`（${esc(item.brokenParts)}）`:''}，將 Repair Day 改為 ${esc(today)}`;
+  if(type==='hold')return `<strong>${esc(machine)}</strong><br>目前 Holding（Hold Date：${esc(item.bpHoldDate||'未記錄')}），將 Hold Release Date 改為 ${esc(today)}`;
+  if(type==='unlock')return `<strong>${esc(machine)}</strong><br>目前等待解鎖（UOD Activation Date：${esc(item.bpUodActivationDate||'未記錄')}），將 UOD Unlock Date 改為 ${esc(item.submissionDate||today)}`;
+  return `<strong>${esc(machine)}</strong><br>目前等待零件（Found Day：${esc(item.date||'未記錄')}${item.brokenParts?`；零件：${esc(item.brokenParts)}`:''}），將 Repair Day 改為 ${esc(today)}`;
 }
 function openSubmissionWarningModal(warnings){
   _pendingSubmissionWarnings=[];
@@ -4665,6 +4667,7 @@ function openSubmissionWarningModal(warnings){
   warnings.forEach(warning=>{
     if(warning.holding)_pendingSubmissionWarnings.push({...warning,type:'hold'});
     if(warning.waiting)_pendingSubmissionWarnings.push({...warning,type:'waiting'});
+    if(warning.uodWaiting)_pendingSubmissionWarnings.push({...warning,type:'unlock'});
   });
   const list=document.getElementById('submitWarningList');
   if(list)list.innerHTML=_pendingSubmissionWarnings.map((item,index)=>`<label class="submit-warning-option"><input type="checkbox" data-warning-index="${index}"><span>${submissionWarningActionLabel(item,item.type,today)}</span></label>`).join('');
@@ -4681,6 +4684,7 @@ function selectedSubmissionRepairs(){
     const existing=repairs.get(key)||{company:warning.company,queueIndex:warning.queueIndex,record:{rowNumber:warning.rowNumber,model:warning.model,serialNo:warning.serialNo,brokenParts:warning.brokenParts}};
     if(warning.type==='hold')existing.record.bpHoldReleaseDate=today;
     if(warning.type==='waiting')existing.record.bpRepairDay=today;
+    if(warning.type==='unlock')existing.record.bpUodUnlockDay=warning.submissionDate||today;
     repairs.set(key,existing);
   });
   return [...repairs.values()];
@@ -5798,8 +5802,20 @@ function showSubmitConfirmation(warnings=[],stateWarnings=[]){
   const queueDates=[...new Set(queue.map(item=>item.date||fmtDate(date)))];
   const queuePoNumbers=[...new Set(queue.map(item=>item.poNumber??poNumber).filter(Boolean))];
   const models=[...new Set(queue.map(q=>q.model||'SAE'))].join(', ');
-  const selectedUpdates=_pendingSubmissionRepairs.length?`<div style="display:block;color:#56d364;line-height:1.5"><strong>已選狀態更新</strong><br>${_pendingSubmissionRepairs.map(item=>`${esc(item.record.model||'SAE')} S/N ${esc(item.record.serialNo||'')}：${item.record.bpHoldReleaseDate?'解除 Hold':''}${item.record.bpHoldReleaseDate&&item.record.bpRepairDay?'、':''}${item.record.bpRepairDay?'Repair Day 改為今日':''}`).join('<br>')}</div>`:'';
-  const stateInfo=stateWarnings.length?`<div style="display:block;color:#f0b45c;line-height:1.5"><strong>狀態提醒</strong><br>${stateWarnings.map(item=>esc(`${item.model||'SAE'} S/N ${item.serialNo||''}：${item.holding?'Holding':''}${item.holding&&item.waiting?'、':''}${item.waiting?'等待零件':''}`)).join('<br>')}</div>`:'';
+  const selectedUpdates=_pendingSubmissionRepairs.length?`<div style="display:block;color:#56d364;line-height:1.5"><strong>已選狀態更新</strong><br>${_pendingSubmissionRepairs.map(item=>{
+    const actions=[];
+    if(item.record.bpHoldReleaseDate)actions.push('解除 Hold');
+    if(item.record.bpRepairDay)actions.push('Repair Day 改為今日');
+    if(item.record.bpUodUnlockDay)actions.push(`UOD Unlock Date 改為 ${esc(item.record.bpUodUnlockDay)}`);
+    return `${esc(item.record.model||'SAE')} S/N ${esc(item.record.serialNo||'')}：${actions.join('、')}`;
+  }).join('<br>')}</div>`:'';
+  const stateInfo=stateWarnings.length?`<div style="display:block;color:#f0b45c;line-height:1.5"><strong>狀態提醒</strong><br>${stateWarnings.map(item=>{
+    const states=[];
+    if(item.holding)states.push(`Holding（Hold Date：${item.bpHoldDate||'未記錄'}）`);
+    if(item.waiting)states.push(`等待零件（Found Day：${item.date||'未記錄'}）`);
+    if(item.uodWaiting)states.push(`等待解鎖（UOD Activation Date：${item.bpUodActivationDate||'未記錄'}）`);
+    return esc(`${item.model||'SAE'} S/N ${item.serialNo||''}：${states.join('、')}`);
+  }).join('<br>')}</div>`:'';
   document.getElementById('confirmInfo').innerHTML=`
     <div><span>場地</span><span>${esc(queueCasinos.join('、'))}</span></div>
     <div><span>日期</span><span>${esc(queueDates.join('、'))}</span></div>
@@ -5807,7 +5823,7 @@ function showSubmitConfirmation(warnings=[],stateWarnings=[]){
     <div><span>機型</span><span>${esc(models)}</span></div>
     ${selectedUpdates}${stateInfo}
     ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(esc).join('<br>')}</div>`:''}`;
-  document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length||_pendingSubmissionRepairs.length?'（有提示，請確認）':''}`;
+  document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length||stateWarnings.length||_pendingSubmissionRepairs.length?'（有提示，請確認）':''}`;
   document.getElementById('confirmOkBtn').disabled=false;
   document.getElementById('confirmOkBtn').textContent='提交';
   document.getElementById('confirmModal').classList.add('show');
@@ -5828,10 +5844,10 @@ async function submitAll(){
   if(_submitCheckBusy)return;
   _submitCheckBusy=true;
   syncSubmitButtonState();
-  const duplicateCheckToken=showLoadingProgress('提交檢查：重複記錄檢查中 · 等件／Holding 檢查中');
+  const duplicateCheckToken=showLoadingProgress('提交檢查：重複記錄檢查中 · 等件／Holding／等待解鎖 檢查中');
   let duplicateDone=false,stateDone=false;
   const updateCheckProgress=()=>{
-    duplicateCheckToken.message=`提交檢查：重複記錄${duplicateDone?'已完成':'檢查中'} · 等件／Holding ${stateDone?'已完成':'檢查中'}`;
+    duplicateCheckToken.message=`提交檢查：重複記錄${duplicateDone?'已完成':'檢查中'} · 等件／Holding／等待解鎖 ${stateDone?'已完成':'檢查中'}`;
     document.getElementById('loadingProgressText').textContent=duplicateCheckToken.message;
   };
   let stateWarnings=[];
@@ -5843,7 +5859,7 @@ async function submitAll(){
     if(duplicates.status==='rejected'){showToast(duplicates.reason?.message||'無法完成重複檢查，請重試','err');return;}
     warnings.push(...duplicates.value);
     if(states.status==='fulfilled')stateWarnings=states.value;
-    else warnings.push(`未能完成 Holding／等待零件檢查：${states.reason?.message||'請稍後再試'}`);
+    else warnings.push(`未能完成 Holding／等待零件／等待解鎖檢查：${states.reason?.message||'請稍後再試'}`);
   }finally{
     hideLoadingProgress(duplicateCheckToken);
     _submitCheckBusy=false;
