@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260923b">
+  <link rel="manifest" href="manifest.json?v=20260924a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260923b">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260923b">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260923b">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20260923b">
+  <link rel="stylesheet" href="./cvcs.css?v=20260924a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260924a">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260924a">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260924a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1675,20 +1675,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260923b"></script>
-<script src="./access-control.js?v=20260923b"></script>
-<script src="./cvcs.js?v=20260923b"></script>
-<script src="./token-admin.js?v=20260923b"></script>
-<script src="./xlsx.mini.min.js?v=20260923b"></script>
-<script src="./galaxy-log.js?v=20260923b"></script>
-<script src="./mgm-check-request.js?v=20260923b"></script>
-<script src="./worksheet-editor.js?v=20260923b"></script>
+<script src="./cloud-api.js?v=20260924a"></script>
+<script src="./access-control.js?v=20260924a"></script>
+<script src="./cvcs.js?v=20260924a"></script>
+<script src="./token-admin.js?v=20260924a"></script>
+<script src="./xlsx.mini.min.js?v=20260924a"></script>
+<script src="./galaxy-log.js?v=20260924a"></script>
+<script src="./mgm-check-request.js?v=20260924a"></script>
+<script src="./worksheet-editor.js?v=20260924a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.23-02';
-const _APP_VERSION='v1.124';
+const _APP_BUMP='2026.09.24-01';
+const _APP_VERSION='v1.125';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2308,6 +2308,10 @@ function scheduleCurrentMonthValue(){const now=new Date();return `${now.getFullY
 function scheduleMonthStart(value){return /^\d{4}-\d{2}$/.test(String(value||''))?`${value}-01`:'';}
 function scheduleMonthCodeFromValue(value){return String(value||'').replace('-','').slice(2,6);}
 function scheduleDayHasContent(day){return !!(day&&(day.items||[]).some(item=>item.am?.length||item.pm?.length)||day.remarks?.am||day.remarks?.pm);}
+function scheduleIsPublicHoliday(day){
+  const isHoliday=value=>/^public\s+holiday$/i.test(String(value||'').trim());
+  return !!(day&&((day.items||[]).some(item=>isHoliday(item.title))||isHoliday(day.remarks?.am)||isHoliday(day.remarks?.pm)));
+}
 function scheduleItemMatches(item){
   if(!item)return false;
   if(_scheduleFilterCompany&&(!item.linked||item.company!==_scheduleFilterCompany))return false;
@@ -2317,7 +2321,7 @@ function scheduleItemMatches(item){
 function scheduleVisibleDays(days){
   return (days||[]).filter(day=>{
     const weekday=scheduleDateObject(day.date).getDay();
-    return weekday!==0&&weekday!==6&&(!_scheduleSelectedMonth||String(day.date).startsWith(_scheduleSelectedMonth));
+    return weekday!==0&&weekday!==6&&!scheduleIsPublicHoliday(day)&&(!_scheduleSelectedMonth||String(day.date).startsWith(_scheduleSelectedMonth));
   }).map(day=>({...day,items:(day.items||[]).filter(item=>!/資料輸入\s*\/\s*緊急任務/.test(String(item.title||''))&&scheduleItemMatches(item))}));
 }
 function syncScheduleVenueFilterOptions(){
@@ -2508,10 +2512,13 @@ function renderScheduleItems(items,date,showMachineCount=false,remarks={}){
   const periods=renderSchedulePeriod('上午','am',items,date,showMachineCount,remarks?.am||'')+renderSchedulePeriod('下午','pm',items,date,showMachineCount,remarks?.pm||'');
   return periods||'<div class="schedule-empty">沒有安排</div>';
 }
+function scheduleFocusDay(now=new Date()){
+  const workday=scheduleWorkdayDate(now),visible=scheduleVisibleDays(_scheduleTodayData?.days),days=_scheduleSelectedMonth?visible:visible.filter(day=>day.date>=workday);
+  return days.find(scheduleDayHasContent);
+}
 function renderScheduleFocus(){
   const label=document.getElementById('scheduleFocusLabel'),dateEl=document.getElementById('scheduleFocusDate'),itemsEl=document.getElementById('scheduleFocusItems');
-  const now=new Date(),today=scheduleLocalIso(now),workday=scheduleWorkdayDate(now),visible=scheduleVisibleDays(_scheduleTodayData?.days),days=_scheduleSelectedMonth?visible:visible.filter(day=>day.date>=workday);
-  const focus=days.find(scheduleDayHasContent);
+  const now=new Date(),today=scheduleLocalIso(now),workday=scheduleWorkdayDate(now),focus=scheduleFocusDay(now);
   if(!focus){label.textContent=_scheduleSelectedMonth?'選定月份安排':'工作安排';dateEl.textContent=_scheduleSelectedMonth?`${_scheduleSelectedMonth} 沒有安排`:`未來 ${SCHEDULE_INITIAL_DAYS-1} 日沒有安排`;itemsEl.innerHTML='';return;}
   const isToday=focus.date===today&&workday===today&&now.getHours()<18;
   label.textContent=_scheduleSelectedMonth?'選定月份安排':(isToday?'今日工作':'下一個工作日');dateEl.textContent=scheduleDateLabel(focus.date);
@@ -2521,7 +2528,7 @@ function renderScheduleFocus(){
   void loadScheduleVisibleMachineCounts([focus,..._scheduleWeekDays]);
 }
 function renderScheduleWeek(){
-  const today=scheduleWorkdayDate(),rawDays=scheduleVisibleDays(_scheduleWeekDays),days=_scheduleSelectedMonth?rawDays:rawDays.filter(day=>day.date!==today);
+  const focusDate=scheduleFocusDay()?.date,rawDays=scheduleVisibleDays(_scheduleWeekDays),days=_scheduleSelectedMonth?rawDays:rawDays.filter(day=>day.date!==focusDate);
   document.querySelector('.schedule-week-title').textContent=_scheduleSelectedMonth?'選定月份安排':'未來七日安排';
   if(days.length){document.getElementById('scheduleWeekRange').textContent=`${scheduleDateLabel(days[0].date)} 至 ${scheduleDateLabel(days[days.length-1].date)}`;}
   else document.getElementById('scheduleWeekRange').textContent='';
