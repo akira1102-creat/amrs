@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260925a">
+  <link rel="manifest" href="manifest.json?v=20260925b">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260925a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260925a">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260925a">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20260925a">
+  <link rel="stylesheet" href="./cvcs.css?v=20260925b">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260925b">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260925b">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260925b">
   <title>AMRS</title>
   <script>
     (function(){
@@ -526,6 +526,9 @@
     .repeat-sn-link{display:inline;padding:0;border:none;background:none;color:#58a6ff;font:inherit;font-weight:800;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
     .repeat-sn-link:hover{color:#79c0ff}
     .dash-history{flex-basis:100%;border-left:3px solid #58a6ff}
+    .dash-history-entry{padding:8px 0;border-top:1px solid #30363d}
+    .dash-history-entry:first-child{border-top:0}
+    .dash-history-line{line-height:1.5}
     .dash-select{width:18px;height:18px;accent-color:#388bfd;flex-shrink:0}
     .dash-table-wrap{display:none}
     .dash-table{width:100%;border-collapse:collapse;min-width:980px}
@@ -1683,20 +1686,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260925a"></script>
-<script src="./access-control.js?v=20260925a"></script>
-<script src="./cvcs.js?v=20260925a"></script>
-<script src="./token-admin.js?v=20260925a"></script>
-<script src="./xlsx.mini.min.js?v=20260925a"></script>
-<script src="./galaxy-log.js?v=20260925a"></script>
-<script src="./mgm-check-request.js?v=20260925a"></script>
-<script src="./worksheet-editor.js?v=20260925a"></script>
+<script src="./cloud-api.js?v=20260925b"></script>
+<script src="./access-control.js?v=20260925b"></script>
+<script src="./cvcs.js?v=20260925b"></script>
+<script src="./token-admin.js?v=20260925b"></script>
+<script src="./xlsx.mini.min.js?v=20260925b"></script>
+<script src="./galaxy-log.js?v=20260925b"></script>
+<script src="./mgm-check-request.js?v=20260925b"></script>
+<script src="./worksheet-editor.js?v=20260925b"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.25-01';
-const _APP_VERSION='v1.126';
+const _APP_BUMP='2026.09.25-02';
+const _APP_VERSION='v1.127';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -5553,8 +5556,21 @@ function renderDashboardInsights(stats,history){
     <div class="dash-insight"><div class="dash-insight-label">場地分佈</div><div class="dash-insight-value">${list(stats.topCasinos)}</div></div>
     <div class="dash-insight"><div class="dash-insight-label">有重複維修 S/N</div><div class="dash-insight-value">${repeatLinks(stats.repeatSerials)}</div></div>`;
   if(history){
-    const parts=history.parts===null?'載入中...':(history.parts||[]).map(p=>`${esc(p.brokenParts||'沒有使用零件')} · ${esc(p.bpRepairDay||'未設定')}${p.bpUodActivationDate?' · UOD Activation '+esc(p.bpUodActivationDate):''}${p.bpUodUnlockDay?' · UOD Unlock '+esc(p.bpUodUnlockDay):''}${p.bpHoldDate?' · Hold '+esc(p.bpHoldDate):''}${p.bpHoldReleaseDate?' · Hold Release '+esc(p.bpHoldReleaseDate):''} · ${esc(p.date||'')}`).join('<br>')||'沒有損壞零件記錄';
-    html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件履歷：<br>${parts}</div></div>`;
+    const parts=history.parts===null?'載入中...':(history.parts||[]).map(p=>{
+      const fields=[];
+      if(String(p.brokenParts||'').trim()){
+        fields.push(['零件',p.brokenParts]);
+        if(String(p.bpRepairDay||'').trim())fields.push(['維修日期',p.bpRepairDay]);
+      }
+      if(String(p.bpUodActivationDate||'').trim())fields.push(['UOD Activation',p.bpUodActivationDate]);
+      if(String(p.bpUodUnlockDay||'').trim())fields.push(['UOD Unlock',p.bpUodUnlockDay]);
+      if(String(p.bpHoldDate||'').trim())fields.push(['Hold',p.bpHoldDate]);
+      if(String(p.bpHoldReleaseDate||'').trim())fields.push(['Hold Release',p.bpHoldReleaseDate]);
+      if(!fields.length)return '';
+      if(String(p.date||'').trim())fields.push(['發現日期',p.date]);
+      return `<div class="dash-history-entry">${fields.map(([label,value])=>`<div class="dash-history-line">${label}：${esc(value)}</div>`).join('')}</div>`;
+    }).filter(Boolean).join('')||'沒有零件或UOD記錄';
+    html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件或UOD履歷：<br>${parts}</div></div>`;
   }
   el.innerHTML=html;el.classList.add('show');
 }
