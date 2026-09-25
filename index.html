@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260925b">
+  <link rel="manifest" href="manifest.json?v=20260925c">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260925b">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260925b">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260925b">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20260925b">
+  <link rel="stylesheet" href="./cvcs.css?v=20260925c">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260925c">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260925c">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260925c">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1686,20 +1686,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260925b"></script>
-<script src="./access-control.js?v=20260925b"></script>
-<script src="./cvcs.js?v=20260925b"></script>
-<script src="./token-admin.js?v=20260925b"></script>
-<script src="./xlsx.mini.min.js?v=20260925b"></script>
-<script src="./galaxy-log.js?v=20260925b"></script>
-<script src="./mgm-check-request.js?v=20260925b"></script>
-<script src="./worksheet-editor.js?v=20260925b"></script>
+<script src="./cloud-api.js?v=20260925c"></script>
+<script src="./access-control.js?v=20260925c"></script>
+<script src="./cvcs.js?v=20260925c"></script>
+<script src="./token-admin.js?v=20260925c"></script>
+<script src="./xlsx.mini.min.js?v=20260925c"></script>
+<script src="./galaxy-log.js?v=20260925c"></script>
+<script src="./mgm-check-request.js?v=20260925c"></script>
+<script src="./worksheet-editor.js?v=20260925c"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.25-02';
-const _APP_VERSION='v1.127';
+const _APP_BUMP='2026.09.25-03';
+const _APP_VERSION='v1.128';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -5562,12 +5562,15 @@ function renderDashboardInsights(stats,history){
         fields.push(['零件',p.brokenParts]);
         if(String(p.bpRepairDay||'').trim())fields.push(['維修日期',p.bpRepairDay]);
       }
-      if(String(p.bpUodActivationDate||'').trim())fields.push(['UOD Activation',p.bpUodActivationDate]);
-      if(String(p.bpUodUnlockDay||'').trim())fields.push(['UOD Unlock',p.bpUodUnlockDay]);
+      const uodActivation=String(p.bpUodActivationDate||'').trim();
+      const uodUnlock=String(p.bpUodUnlockDay||'').trim();
+      if(uodActivation)fields.push(['UOD Activation',p.bpUodActivationDate]);
+      if(uodUnlock)fields.push(['UOD Unlock',p.bpUodUnlockDay]);
       if(String(p.bpHoldDate||'').trim())fields.push(['Hold',p.bpHoldDate]);
       if(String(p.bpHoldReleaseDate||'').trim())fields.push(['Hold Release',p.bpHoldReleaseDate]);
       if(!fields.length)return '';
-      if(String(p.date||'').trim())fields.push(['發現日期',p.date]);
+      const foundDay=String(p.date??'').trim();
+      if(!uodActivation&&!uodUnlock&&foundDay&&foundDay!=='0')fields.push(['發現日期',foundDay]);
       return `<div class="dash-history-entry">${fields.map(([label,value])=>`<div class="dash-history-line">${label}：${esc(value)}</div>`).join('')}</div>`;
     }).filter(Boolean).join('')||'沒有零件或UOD記錄';
     html+=`<div class="dash-insight dash-history"><div class="dash-insight-label">S/N ${esc(history.serialNo)} 完整履歷摘要</div><div class="dash-insight-value">最近維修：${esc(history.latestDate||'沒有')}　場地：${esc((history.casinos||[]).join('、')||'沒有')}<br>維修次數：${Number(history.total||0)}　常見原因：${list(history.topReasons)}<br>零件或UOD履歷：<br>${parts}</div></div>`;

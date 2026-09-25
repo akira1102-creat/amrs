@@ -22,7 +22,7 @@ test('UOD-only history omits empty parts placeholders and shows each field on it
   assert.doesNotMatch(output,/沒有使用零件|未設定/);
   assert.match(output,/UOD Activation[^<]*2026\/09\/22<\/div>/);
   assert.match(output,/UOD Unlock[^<]*Wait for Unlock<\/div>/);
-  assert.match(output,/發現日期[^<]*2026\/09\/23<\/div>/);
+  assert.doesNotMatch(output,/發現日期/);
   assert.doesNotMatch(output,/UOD Activation[^<]*·/);
 });
 
@@ -36,4 +36,20 @@ test('history hides empty records but keeps parts and UOD records in separate bl
   assert.match(output,/零件[^<]*TEST-1<\/div>/);
   assert.match(output,/維修日期[^<]*Waiting<\/div>/);
   assert.doesNotMatch(output,/2026\/09\/20/);
+});
+
+test('UOD fields suppress found day even when the record also contains a part',()=>{
+  const output=render([{brokenParts:'TEST-1',bpRepairDay:'Waiting',bpUodActivationDate:'2026/09/22',date:'2026/09/21'}]);
+  assert.match(output,/零件[^<]*TEST-1<\/div>/);
+  assert.match(output,/UOD Activation[^<]*2026\/09\/22<\/div>/);
+  assert.doesNotMatch(output,/發現日期/);
+});
+
+test('part records omit blank or zero found days but retain a real date',()=>{
+  for(const date of ['',0,'0',' 0 ']){
+    const output=render([{brokenParts:'TEST-1',date}]);
+    assert.doesNotMatch(output,/發現日期/,`found day ${JSON.stringify(date)} must be hidden`);
+  }
+  const dated=render([{brokenParts:'TEST-1',date:'2026/09/21'}]);
+  assert.match(dated,/發現日期[^<]*2026\/09\/21<\/div>/);
 });
