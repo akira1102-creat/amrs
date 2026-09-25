@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20260924a">
+  <link rel="manifest" href="manifest.json?v=20260925a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20260924a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20260924a">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20260924a">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20260924a">
+  <link rel="stylesheet" href="./cvcs.css?v=20260925a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20260925a">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20260925a">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20260925a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -504,6 +504,13 @@
     .dash-btn{width:100%;padding:10px 12px;font-size:13px;font-weight:700;background:#1f6feb;color:#fff;border:none;border-radius:12px;cursor:pointer}
     .dash-btn.secondary{background:#21262d;color:#e6edf3;border:1px solid #30363d}
     .dash-summary{font-size:12px;color:#8b949e;margin:12px 0 10px;min-height:18px}
+    .dash-waiting-parts{margin:0 0 12px;padding:12px;border:1px solid #9e6a03;border-radius:12px;background:#2d220d;color:#f2cc60}
+    .dash-waiting-parts[hidden]{display:none}
+    .dash-waiting-title{font-size:14px;font-weight:900;margin-bottom:8px}
+    .dash-waiting-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px}
+    .dash-waiting-item{padding:9px;border:1px solid #6e4b00;border-radius:9px;background:#161b22;color:#e6edf3;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+    .dash-waiting-item strong{color:#f2cc60;font-size:14px}
+    .dash-waiting-meta{color:#8b949e}
     .dash-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
     .dash-tool-btn{padding:8px 11px;border:1px solid #30363d;border-radius:10px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
     .dash-tool-btn.primary{background:#1f6feb;border-color:#388bfd;color:#fff}
@@ -1480,6 +1487,7 @@
     </div>
   </div>
   <div class="dash-summary" id="dashSummary">毋須打開試算表，可直接搜尋及修改資料。</div>
+  <div class="dash-waiting-parts" id="dashWaitingParts" role="status" aria-live="polite" hidden></div>
   <div class="dash-tools" id="dashTools">
     <button class="dash-tool-btn" onclick="toggleDashboardPageSelection()" type="button">選取本頁</button>
     <button class="dash-tool-btn primary" id="dashBulkEditBtn" onclick="openBulkEdit()" type="button" disabled>批量修改</button>
@@ -1675,20 +1683,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20260924a"></script>
-<script src="./access-control.js?v=20260924a"></script>
-<script src="./cvcs.js?v=20260924a"></script>
-<script src="./token-admin.js?v=20260924a"></script>
-<script src="./xlsx.mini.min.js?v=20260924a"></script>
-<script src="./galaxy-log.js?v=20260924a"></script>
-<script src="./mgm-check-request.js?v=20260924a"></script>
-<script src="./worksheet-editor.js?v=20260924a"></script>
+<script src="./cloud-api.js?v=20260925a"></script>
+<script src="./access-control.js?v=20260925a"></script>
+<script src="./cvcs.js?v=20260925a"></script>
+<script src="./token-admin.js?v=20260925a"></script>
+<script src="./xlsx.mini.min.js?v=20260925a"></script>
+<script src="./galaxy-log.js?v=20260925a"></script>
+<script src="./mgm-check-request.js?v=20260925a"></script>
+<script src="./worksheet-editor.js?v=20260925a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.09.24-01';
-const _APP_VERSION='v1.125';
+const _APP_BUMP='2026.09.25-01';
+const _APP_VERSION='v1.126';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -5094,6 +5102,7 @@ function clearDashboardResults(message='按「搜尋」載入資料。'){
   dashboardEditingIdx=-1;
   dashboardSelectedRecords.clear();
   renderDashboardInsights(null,null);
+  renderDashboardWaitingParts([]);
   updateDashboardSelectionTools();
   const rowsEl=document.getElementById('dashRows');
   if(rowsEl)rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">${esc(message)}</td></tr>`;
@@ -5137,6 +5146,7 @@ async function loadDashboard(page=1){
   const searchText=document.getElementById('dashSearch').value.trim();
   const fuzzy=isDashFuzzy();
   if(!validateDashSearchInput(true))return;
+  renderDashboardWaitingParts([],searchText&&!fuzzy?'loading':'clear');
   const rowsEl=document.getElementById('dashRows');
   const summary=document.getElementById('dashSummary');
   currentDashboardCompany=venueFilter.company;
@@ -5149,6 +5159,7 @@ async function loadDashboard(page=1){
   if(page===1){dashboardSelectedRecords.clear();updateDashboardSelectionTools();}
   dashboardRequest?.abort();
   dashboardRequest=new AbortController();
+  const signal=dashboardRequest.signal;
   const qs=new URLSearchParams({
     action:'dashboard',
     company:venueFilter.company,
@@ -5167,7 +5178,8 @@ async function loadDashboard(page=1){
   dashboardLastQuery=Object.fromEntries(qs.entries());
   const loadingToken=hadResults?null:showLoadingProgress('維修記錄載入中，請稍等...');
   try{
-    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal:dashboardRequest.signal},60000);
+    const data=await fetchJsonWithTimeout(SCRIPT_URL+'?'+qs.toString(),{signal},60000);
+    if(signal.aborted)return;
     if(!data.success){throw new Error(data.message||'載入失敗');}
     dashboardPage=data.page||Math.max(1,page);
     dashboardTotalPages=data.totalPages||1;
@@ -5175,13 +5187,15 @@ async function loadDashboard(page=1){
     const stats=data.stats||null,history=data.history||null;
     renderDashboardRows(data.records||[]);
     renderDashboardInsights(stats,history);
-    if(history&&!fuzzy&&searchText)void loadDashboardPartsHistory(stats,history,dashboardRequest.signal);
+    if(history&&!fuzzy&&searchText)void loadDashboardPartsHistory(stats,history,signal);
+    if(!fuzzy&&searchText)void loadDashboardWaitingParts(venueFilter.company,searchText,document.getElementById('dashModel').value,signal);
     summary.textContent=searchText
       ?`🔍 ${fuzzy?searchText:`Serial No. ${searchText}`} 共找到 ${dashboardTotalMatches} 筆記錄`
       :`共找到 ${dashboardTotalMatches} 筆記錄`;
     summary.textContent+=` · 更新於 ${new Date().toLocaleTimeString('zh-HK',{hour:'2-digit',minute:'2-digit'})}`;
   }catch(e){
     if(e.name==='AbortError')return;
+    renderDashboardWaitingParts([]);
     if(!hadResults){rowsEl.innerHTML=`<tr><td colspan="${dashColspan()}" class="dash-empty">載入記錄失敗。</td></tr>`;
     document.getElementById('dashMobileRows').innerHTML='<div class="dash-mobile-empty">載入記錄失敗。</div>';}
     updateDashboardPager();
@@ -5200,6 +5214,39 @@ async function loadDashboardPartsHistory(stats,history,signal){
   }catch(error){
     if(error.name==='AbortError')return;
     history.parts=[];renderDashboardInsights(stats,history);
+  }
+}
+function renderDashboardWaitingParts(records,state='ready'){
+  const panel=document.getElementById('dashWaitingParts');
+  if(!panel)return;
+  if(state==='loading'){
+    panel.hidden=false;panel.innerHTML='<div class="dash-waiting-title">🔧 正在查詢等件資料...</div>';return;
+  }
+  if(state==='error'){
+    panel.hidden=false;panel.innerHTML='<div class="dash-waiting-title">⚠️ 等件資料暫時未能載入，請稍後重試搜尋。</div>';return;
+  }
+  if(!records?.length){panel.hidden=true;panel.innerHTML='';return;}
+  panel.hidden=false;
+  panel.innerHTML=`<div class="dash-waiting-title">🔧 此機台有 ${records.length} 筆等待零件</div><div class="dash-waiting-grid">${records.map(record=>`<div class="dash-waiting-item"><strong>${esc(record.brokenParts)}</strong>${record.bpDesc?` · ${esc(record.bpDesc)}`:''}${record.bpQty?` × ${esc(record.bpQty)}`:''}<div class="dash-waiting-meta">${esc(record.model||'未記錄機型')} · ${esc(record.casino||'未記錄場地')} · 發現日期：${esc(record.date||'未記錄')}</div></div>`).join('')}</div>`;
+}
+async function loadDashboardWaitingParts(company,serialNo,model,signal){
+  try{
+    const records=[];
+    let totalPages=1;
+    for(let page=1;page<=totalPages;page++){
+      const qs=new URLSearchParams({action:'brokenPartsList',company,serialNo,model,status:'waiting',sort:'newest',page:String(page),pageSize:'100'});
+      const data=await fetchJsonWithTimeout(getScriptUrl()+'?'+qs.toString(),{signal},45000);
+      if(signal?.aborted)return;
+      if(!data.success)throw new Error(data.message||'等件資料載入失敗');
+      totalPages=Math.max(1,Number(data.totalPages)||1);
+      records.push(...(data.records||[]));
+    }
+    if(signal?.aborted)return;
+    const matching=records.filter(record=>String(record.serialNo||'').trim()===serialNo&&(!model||String(record.model||'').trim().toUpperCase()===model.toUpperCase())&&String(record.brokenParts||'').trim()&&(!String(record.bpRepairDay||'').trim()||/^waiting$/i.test(String(record.bpRepairDay).trim())));
+    renderDashboardWaitingParts(matching);
+  }catch(error){
+    if(signal?.aborted||error.name==='AbortError')return;
+    renderDashboardWaitingParts([],'error');
   }
 }
 function renderDashboardRows(records){
