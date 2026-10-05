@@ -311,6 +311,19 @@ test("discarding a pending new MGM request removes the local-only row", () => {
   assert.equal(app.getState().requests.length, 0);
 });
 
+test("stages keyboard-entered 24-hour times and rejects invalid hours or minutes", () => {
+  const draft = { sheetName: "MGM Macau", eventDate: "2026-10-05", eventTime: "13:30", endTime: "23:59", table: "TEST", eventDetails: "Test request" };
+  const staged = stageNewRequest({}, draft, 10000);
+  assert.equal(staged.outbox[0].row.eventTime, "13:30");
+  assert.equal(staged.outbox[0].row.endTime, "23:59");
+  assert.equal(stageNewRequest({}, { ...draft, eventTime: "0:00", endTime: "" }, 10001).outbox[0].row.eventTime, "00:00");
+  for (const field of ["eventTime", "endTime"]) {
+    for (const time of ["24:00", "13:60", "01:30 PM"]) {
+      assert.throws(() => stageNewRequest({}, { ...draft, [field]: time }, 10002), /24小時制/);
+    }
+  }
+});
+
 test("renders MGM event date and time prominently before Table, BOX ID and Vault ID", () => {
   const requests = parseRequestRows({
     sheetName: "MGM Cotai",

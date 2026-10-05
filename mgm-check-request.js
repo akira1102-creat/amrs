@@ -169,6 +169,12 @@
     if (row.aaTag && !row.serialNo) row.serialNo = maps.serialByAa.get(row.aaTag) || "";
     if (!row.eventDate) throw new Error("請填寫事發日期");
     if (!row.eventTime) throw new Error("請填寫事發時間");
+    for (const [field, label] of [["eventTime", "事發時間"], ["endTime", "結束時間"]]) {
+      if (!row[field]) continue;
+      const match = row[field].match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+      if (!match) throw new Error(`${label}請使用24小時制（HH:mm），例如13:30`);
+      row[field] = `${match[1].padStart(2, "0")}:${match[2]}`;
+    }
     if (!row.table) throw new Error("請填寫 Table");
     if (!row.eventDetails) throw new Error("請填寫事件詳情");
     const stamp = Number(updatedAt) || Date.now();
@@ -300,8 +306,8 @@
         <div class="mgm-check-new-grid">
           <label><span>場地 *</span><select id="mgmCheckNewSheet"><option>MGM Macau</option><option>MGM Cotai</option></select></label>
           <label><span>事發日期 *</span><input id="mgmCheckNewDate" type="date" required></label>
-          <label><span>事發時間 *</span><input id="mgmCheckNewTime" type="time" required></label>
-          <label><span>結束時間</span><input id="mgmCheckNewEndTime" type="time"></label>
+          <label><span>事發時間 *（24小時制）</span><input id="mgmCheckNewTime" type="text" inputmode="text" placeholder="HH:mm，例如 13:30" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" title="請輸入24小時制時間（00:00 至 23:59）" required></label>
+          <label><span>結束時間（24小時制）</span><input id="mgmCheckNewEndTime" type="text" inputmode="text" placeholder="HH:mm，例如 14:30" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" maxlength="5" autocomplete="off" title="請輸入24小時制時間（00:00 至 23:59）"></label>
           <label><span>Table *</span><input id="mgmCheckNewTable" autocomplete="off" required></label>
           <label><span>Serial NO.</span><input id="mgmCheckNewSerial" inputmode="numeric" autocomplete="off"></label>
           <label><span>AA Tag</span><input id="mgmCheckNewAaTag" autocomplete="off"></label>
