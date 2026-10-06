@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import test from "node:test";
 
 test("opening Token management does not initialize or load CVCS", () => {
@@ -114,13 +115,24 @@ test("both Broken Parts query builders carry the selected machine model", () => 
   assert.equal(builders.page(3, 80).get("model"), "TAE");
 });
 
-test("CVCS input shows one Property badge below its title", () => {
-  const source = fs.readFileSync(new URL("../cvcs.js", import.meta.url), "utf8");
-  const renderInput = source.match(/renderInput\(\) \{([\s\S]*?)\n    \}\n    comboField/)?.[1] || "";
-  assert.match(renderInput, /<h2>CVCS 資料輸入<\/h2><span class="cvcs-property-badge">/);
-  assert.doesNotMatch(renderInput, /<p>\$\{escapeHtml\(this\.activeProperty\)\}<\/p>/);
-  assert.equal((renderInput.match(/cvcs-property-badge/g) || []).length, 1);
-});
+for (const [lineEndingName, lineEnding] of [["LF", "\n"], ["CRLF", "\r\n"]]) {
+  test(`CVCS input shows one Property badge below its title with ${lineEndingName} source`, () => {
+    const source = fs.readFileSync(new URL("../cvcs.js", import.meta.url), "utf8").replace(/\r?\n/g, lineEnding);
+    const host = { innerHTML: "" };
+    const context = vm.createContext({
+      document: { getElementById: (id) => id === "cvcsInputPage" ? host : null },
+    });
+    vm.runInContext(source, context);
+    const app = context.AmrsCvcs.createApplication({ storage: { getItem: () => null } });
+    app.activeProperty = "Test Property";
+    // Event binding is separate from the real renderer exercised here.
+    app.bindInput = () => {};
+    app.renderInput();
+    assert.match(host.innerHTML, /<h2>CVCS 資料輸入<\/h2><span class="cvcs-property-badge">Test Property<\/span>/);
+    assert.doesNotMatch(host.innerHTML, /<p>Test Property<\/p>/);
+    assert.equal((host.innerHTML.match(/cvcs-property-badge/g) || []).length, 1);
+  });
+}
 
 test("all frontend assets use one release URL so an old worker cannot mix JavaScript versions", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
