@@ -104,3 +104,67 @@ test('same serial in a different company or model does not receive the warning',
     assert.equal((await context.collectSubmissionWarnings()).length, 0);
   }
 });
+
+test('each status reminder and final confirmation offers the corresponding machine history', async () => {
+  const { context, elements } = setup();
+  const warnings = await context.collectSubmissionWarnings();
+  context.openSubmissionWarningModal(warnings);
+  assert.equal((elements.submitWarningList.innerHTML.match(/查看歷史資料/g) || []).length, 3);
+  assert.match(elements.submitWarningList.innerHTML, /data-history-model="SAE"/);
+  assert.match(elements.submitWarningList.innerHTML, /data-history-sn="9001"/);
+  context.showSubmitConfirmation([], warnings);
+  assert.match(elements.confirmInfo.innerHTML, /查看歷史資料/);
+});
+
+test('history opens exact model and serial across venues without altering pending submission', async () => {
+  const { context, elements } = setup();
+  const warnings = await context.collectSubmissionWarnings();
+  context.openSubmissionWarningModal(warnings);
+  const before = JSON.stringify(context.queue);
+  let request;
+  context.openRecordHistoryModal = (...args) => { request = args; };
+  context.openSubmissionHistory({ dataset: { historyCompany: 'SCL', historyModel: 'TAE', historySn: '9001' } });
+  assert.equal(request[0], '9001');
+  assert.equal(request[1], 'SCL');
+  assert.deepEqual(JSON.parse(JSON.stringify(request[2])), {
+    action: 'dashboard', company: 'SCL', from: '', to: '', casino: '', model: 'TAE', q: '',
+    serialNo: '9001', searchMode: 'serial', sort: 'newest',
+  });
+  assert.equal(request[3], 'submission');
+  assert.equal(JSON.stringify(context.queue), before);
+  assert.equal(elements.submitWarningModal.classList.has('show'), true);
+  assert.equal(context._pendingSubmissionWarnings.length, 3);
+});
+
+test('30-day warnings retain distinct company and model identities for history buttons', async () => {
+  const { context, elements } = setup();
+  context.queue = [
+    { company: 'SCL', model: 'SAE', sn: '9001', reason: 'Test Fault', date: '2026/09/04' },
+    { company: 'GEG', model: 'TAE', sn: '9001', reason: 'Test Fault', date: '2026/09/04' },
+  ];
+  context.isDuplicateCheckItem = () => true;
+  context.fetchDuplicateFaults = async () => ({ '9001': 2 });
+  vm.runInContext(html.slice(html.indexOf('function duplicateCount('), html.indexOf('function todaySheetDate()')), context);
+  const warnings = await context.collectRecentDuplicateWarnings();
+  assert.equal(warnings.length, 2);
+  context.showSubmitConfirmation([...warnings, 'Other warning']);
+  assert.equal((elements.confirmInfo.innerHTML.match(/查看歷史資料/g) || []).length, 2);
+  assert.match(elements.confirmInfo.innerHTML, /data-history-company="SCL" data-history-model="SAE"/);
+  assert.match(elements.confirmInfo.innerHTML, /data-history-company="GEG" data-history-model="TAE"/);
+  assert.match(elements.confirmInfo.innerHTML, /最近 30 日已有 2 筆/);
+  assert.match(elements.confirmInfo.innerHTML, /Other warning/);
+});
+
+test('submission history is read-only while existing history keeps its edit controls', () => {
+  const { context } = setup();
+  Object.assign(context, { _repeatRecordsEditingIdx: -1, _repeatRecordsSource: 'submission', currentDashboardCompany: 'SCL',
+    dashFieldRows: () => [['機型', 'TAE'], ['機身號碼', '9001']],
+  });
+  vm.runInContext(html.slice(html.indexOf('function renderRepeatRecord('), html.indexOf('function renderRepeatRecordEdit(')), context);
+  const record = { company: 'SCL', model: 'TAE', serialNo: '9001' };
+  const view = context.renderRepeatRecord(record, 0);
+  assert.match(view, /9001/);
+  assert.doesNotMatch(view, /startRepeatRecordEdit|openSchedulePeople/);
+  context._repeatRecordsSource = 'dashboard';
+  assert.match(context.renderRepeatRecord(record, 0), /startRepeatRecordEdit/);
+});

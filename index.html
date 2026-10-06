@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20261006a">
+  <link rel="manifest" href="manifest.json?v=20261006b">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20261006a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20261006a">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20261006a">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20261006a">
+  <link rel="stylesheet" href="./cvcs.css?v=20261006b">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20261006b">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20261006b">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20261006b">
   <title>AMRS</title>
   <script>
     (function(){
@@ -162,7 +162,7 @@
     .dup-confirm{flex:1;padding:12px;font-size:15px;font-weight:700;background:#da3633;color:#fff;border:none;border-radius:14px;cursor:pointer}
     #confirmModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8888;align-items:center;justify-content:center}
     #confirmModal.show{display:flex}
-    #confirmBox{background:#161b22;border:1px solid #30363d;border-radius:20px;padding:24px;max-width:360px;width:90%}
+    #confirmBox{background:#161b22;border:1px solid #30363d;border-radius:20px;padding:24px;max-width:360px;width:90%;max-height:88vh;overflow:auto}
     #confirmTitle{font-size:17px;font-weight:800;color:#e6edf3;margin-bottom:14px}
     .confirm-info{margin-bottom:12px}
     .confirm-info div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d;font-size:13px}
@@ -184,6 +184,9 @@
     .submit-warning-option:hover{border-color:#58a6ff}
     .submit-warning-option input{width:19px;height:19px;flex:0 0 auto;margin:1px 0 0;accent-color:#238636}
     .submit-warning-option strong{color:#f0b45c}
+    .submit-warning-row{display:flex;flex-direction:column;gap:7px}
+    .submit-history-btn{-webkit-appearance:none;appearance:none;display:inline-flex;align-items:center;justify-content:center;align-self:flex-end;max-width:100%;margin:5px 0;padding:8px 12px;min-height:36px;border:1px solid #388bfd;border-radius:9px;background:#10243d;color:#79c0ff;font:inherit;font-size:13px;font-weight:700;text-align:center;cursor:pointer}
+    .submit-history-btn:focus-visible{outline:2px solid #79c0ff;outline-offset:2px}
     .submit-warning-actions{display:flex;gap:10px}
     .submit-warning-actions button{flex:1;padding:11px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer}
     .submit-warning-skip{background:#21262d;color:#e6edf3;border:1px solid #30363d}
@@ -783,6 +786,7 @@
     .parts-list-empty{padding:18px 2px;color:#484f58;font-size:12px;text-align:center}
     #bulkEditModal,#bpBulkEditModal,#repeatRecordsModal,#exportModal,#schedulePeopleModal,#schedulePeopleEditModal,#scheduleRemarkModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8895;align-items:center;justify-content:center;padding:18px}
     #bulkEditModal.show,#bpBulkEditModal.show,#repeatRecordsModal.show,#exportModal.show,#schedulePeopleModal.show,#schedulePeopleEditModal.show,#scheduleRemarkModal.show{display:flex}
+    #repeatRecordsModal{z-index:8905}
     #schedulePeopleModal{z-index:8910}
     #schedulePeopleEditModal{z-index:8920}
     #scheduleRemarkModal{z-index:8930}
@@ -1686,20 +1690,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20261006a"></script>
-<script src="./access-control.js?v=20261006a"></script>
-<script src="./cvcs.js?v=20261006a"></script>
-<script src="./token-admin.js?v=20261006a"></script>
-<script src="./xlsx.mini.min.js?v=20261006a"></script>
-<script src="./galaxy-log.js?v=20261006a"></script>
-<script src="./mgm-check-request.js?v=20261006a"></script>
-<script src="./worksheet-editor.js?v=20261006a"></script>
+<script src="./cloud-api.js?v=20261006b"></script>
+<script src="./access-control.js?v=20261006b"></script>
+<script src="./cvcs.js?v=20261006b"></script>
+<script src="./token-admin.js?v=20261006b"></script>
+<script src="./xlsx.mini.min.js?v=20261006b"></script>
+<script src="./galaxy-log.js?v=20261006b"></script>
+<script src="./mgm-check-request.js?v=20261006b"></script>
+<script src="./worksheet-editor.js?v=20261006b"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.06-01';
-const _APP_VERSION='v1.130';
+const _APP_BUMP='2026.10.06-02';
+const _APP_VERSION='v1.131';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -4619,18 +4623,29 @@ async function collectRecentDuplicateWarnings(){
       const duplicates=await fetchDuplicateFaults(chunk,group.reason,group.company,group.date,group.model);
       Object.entries(duplicates).forEach(([serialNo,value])=>{
         const count=duplicateCount(value);
-        if(count>0)warnings.push(`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆相同非 PM 記錄（${group.reason}）`);
+        if(count>0)warnings.push({message:`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆相同非 PM 記錄（${group.reason}）`,company:group.company,model:group.model,serialNo});
       });
       });
     }
   }
   for(let offset=0;offset<checks.length;offset+=3)await Promise.all(checks.slice(offset,offset+3).map(check=>check()));
-  return [...new Set(warnings)];
+  return [...new Map(warnings.map(item=>[`${item.company}\u0000${item.message}`,item])).values()];
 }
 
 function todaySheetDate(){
   const now=new Date();
   return `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
+}
+function submissionHistoryButton(item){
+  if(!item?.serialNo)return '';
+  return `<button class="submit-history-btn" data-history-company="${esc(item.company||activeCompany)}" data-history-model="${esc(item.model||'SAE')}" data-history-sn="${esc(item.serialNo)}" onclick="openSubmissionHistory(this)" type="button">查看歷史資料</button>`;
+}
+function openSubmissionHistory(button){
+  const company=button.dataset.historyCompany;
+  const model=button.dataset.historyModel;
+  const sn=button.dataset.historySn;
+  const params={action:'dashboard',company,from:'',to:'',casino:'',model,q:'',serialNo:sn,searchMode:'serial',sort:'newest'};
+  return openRecordHistoryModal(sn,company,params,'submission',`${model} 歷史資料`);
 }
 function hasSubmissionFieldValue(item,fields){
   return fields.some(field=>Object.prototype.hasOwnProperty.call(item||{},field)&&String(item[field]??'').trim()!=='');
@@ -4689,7 +4704,7 @@ function openSubmissionWarningModal(warnings){
     if(warning.uodWaiting)_pendingSubmissionWarnings.push({...warning,type:'unlock'});
   });
   const list=document.getElementById('submitWarningList');
-  if(list)list.innerHTML=_pendingSubmissionWarnings.map((item,index)=>`<label class="submit-warning-option"><input type="checkbox" data-warning-index="${index}"><span>${submissionWarningActionLabel(item,item.type,today)}</span></label>`).join('');
+  if(list)list.innerHTML=_pendingSubmissionWarnings.map((item,index)=>`<div class="submit-warning-row"><label class="submit-warning-option"><input type="checkbox" data-warning-index="${index}"><span>${submissionWarningActionLabel(item,item.type,today)}</span></label>${submissionHistoryButton(item)}</div>`).join('');
   document.getElementById('submitWarningModal').classList.add('show');
 }
 function closeSubmissionWarningModal(){document.getElementById('submitWarningModal').classList.remove('show');}
@@ -5582,7 +5597,8 @@ function renderRepeatRecord(record,index){
   if(index===_repeatRecordsEditingIdx)return renderRepeatRecordEdit(record,index);
   const rowCompany=record.company||currentDashboardCompany||activeCompany;
   const rows=dashFieldRows(record,rowCompany).map(([key,value])=>`<div class="dash-mobile-row"><div class="dash-mobile-key">▸ ${esc(key)}</div><div class="dash-mobile-val">${esc(value)}</div></div>`).join('');
-  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span><div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openSchedulePeople('repeat',${index})" type="button">查看人員</button><button class="dash-card-btn" onclick="startRepeatRecordEdit(${index})" type="button">編輯</button></div></div>${rows}</section>`;
+  const actions=_repeatRecordsSource==='submission'?'':`<div class="dash-card-title-actions"><button class="dash-card-btn people" onclick="openSchedulePeople('repeat',${index})" type="button">查看人員</button><button class="dash-card-btn" onclick="startRepeatRecordEdit(${index})" type="button">編輯</button></div>`;
+  return `<section class="dash-mobile-card"><div class="dash-mobile-title"><span>── 記錄 ${index+1} ──</span>${actions}</div>${rows}</section>`;
 }
 function renderRepeatRecordEdit(record,index){
   return `<section class="dash-mobile-card" id="repeatCardEdit${index}">
@@ -5888,7 +5904,7 @@ function showSubmitConfirmation(warnings=[],stateWarnings=[]){
     if(item.holding)states.push(`Holding（Hold Date：${item.bpHoldDate||'未記錄'}）`);
     if(item.waiting)states.push(`等待零件（Found Day：${item.date||'未記錄'}）`);
     if(item.uodWaiting)states.push(`等待解鎖（UOD Activation Date：${item.bpUodActivationDate||'未記錄'}）`);
-    return esc(`${item.model||'SAE'} S/N ${item.serialNo||''}：${states.join('、')}`);
+    return `${esc(`${item.model||'SAE'} S/N ${item.serialNo||''}：${states.join('、')}`)}<br>${submissionHistoryButton(item)}`;
   }).join('<br>')}</div>`:'';
   document.getElementById('confirmInfo').innerHTML=`
     <div><span>場地</span><span>${esc(queueCasinos.join('、'))}</span></div>
@@ -5896,7 +5912,7 @@ function showSubmitConfirmation(warnings=[],stateWarnings=[]){
     ${queuePoNumbers.length?`<div><span>PO 號碼</span><span>${esc(queuePoNumbers.join('、'))}</span></div>`:''}
     <div><span>機型</span><span>${esc(models)}</span></div>
     ${selectedUpdates}${stateInfo}
-    ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(esc).join('<br>')}</div>`:''}`;
+    ${warnings.length?`<div style="display:block;color:#f0883e;line-height:1.5"><strong>提示</strong><br>${warnings.map(item=>typeof item==='string'?esc(item):`${esc(item.message)}<br>${submissionHistoryButton(item)}`).join('<br>')}</div>`:''}`;
   document.getElementById('confirmCount').textContent=`準備提交 ${queue.length} 筆記錄${warnings.length||stateWarnings.length||_pendingSubmissionRepairs.length?'（有提示，請確認）':''}`;
   document.getElementById('confirmOkBtn').disabled=false;
   document.getElementById('confirmOkBtn').textContent='提交';
