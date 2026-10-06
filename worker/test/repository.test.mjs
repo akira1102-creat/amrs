@@ -583,6 +583,27 @@ test("does not read the Broken Parts List for a normal submission", async () => 
   assert.equal(brokenReads, 0);
 });
 
+test("PO repair accepts legacy full rows without clearing or requiring a UOD unlock date", async () => {
+  for (const unlock of ["", "Wait for Unlock", "2026/08/02"]) {
+    const data = structuredClone(companyData);
+    data.mgm.push(structuredClone(data.scl[1]));
+    const brokenRow = data.mgm.at(-1).values[1];
+    brokenRow[0] = "MGM Macau";
+    brokenRow[11] = unlock;
+    const harness = createSheetsHarness(data);
+    const repository = createRepository({}, { config, sheetsClient: harness.client });
+    const original = (await repository.getAction({ action: "brokenPartsList", company: "MGM" })).records[0];
+    const result = await repository.postAction({
+      action: "submitRecords",
+      records: [{ submissionId: "synthetic-po", company: "MGM", casino: "MGM Macau", date: "2026/10/02", poNumber: "TEST", model: "TAE", serialNo: "1001", aaTag: "", reason: "PO", actionTaken: "Test part repaired", location: "Floor" }],
+      brokenPartsRepairs: [{ company: "MGM", record: { ...original, bpRepairDay: "2026/10/02" } }],
+    });
+    assert.equal(result.inserted, 1);
+    assert.equal(harness.sheets.get("mgm:Broken Parts List").values[1][7], "2026/10/02");
+    assert.equal(harness.sheets.get("mgm:Broken Parts List").values[1][11], unlock);
+  }
+});
+
 test("updates selected Hold release without clearing the existing Repair Day", async () => {
   const data = structuredClone(companyData);
   data.scl[1].values[1][12] = "2026/08/01";

@@ -1951,8 +1951,9 @@ export function createRepository(env = {}, dependencies = {}) {
         const after = { ...current, ...record };
         validateHoldDates(after);
         if (own(record, "bpRepairDay")) data.push({ range: `${quoteSheetName(table.sheet.title)}!H${rowNumber}`, values: [[record.bpRepairDay || ""]] });
-        if (own(record, "bpUodUnlockDay") || own(record, "bpUodUnlockDate")) {
-          const unlockDate = normalizeDateParam(record.bpUodUnlockDay || record.bpUodUnlockDate, config.timeZone);
+        const requestedUnlock = text(record.bpUodUnlockDay || record.bpUodUnlockDate);
+        if (requestedUnlock && requestedUnlock !== text(current.bpUodUnlockDay)) {
+          const unlockDate = normalizeDateParam(requestedUnlock, config.timeZone);
           if (!unlockDate) throw new Error("Invalid UOD unlock date");
           data.push({ range: `${quoteSheetName(table.sheet.title)}!L${rowNumber}`, values: [[unlockDate]] });
         }

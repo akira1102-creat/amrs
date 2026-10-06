@@ -197,6 +197,33 @@ for (const action of ["submitCvcsRecords", "submitCvcsBrokenParts"]) {
   });
 }
 
+test("a failed submission status after a lost response is a known rejection, never a success", async () => {
+  const harness = createHarness((call) => {
+    if (call.url === `${CLOUD}/health`) return jsonResponse({ success: true });
+    if (call.url === `${CLOUD}/session`) return jsonResponse({ success: true, token: "synthetic-session" });
+    if (call.url === `${CLOUD}/api`) throw new TypeError("synthetic lost response");
+    if (call.url === `${CLOUD}/submissions/synthetic-failed`) return jsonResponse({ success: true, status: "failed", result: null, batch: { errorMessage: "Invalid UOD unlock date" } });
+    throw new Error(`unexpected URL: ${call.url}`);
+  });
+  const api = createDualTransport(baseOptions(harness.fetchImpl));
+  await assert.rejects(api.post({ action: "submitRecords", records: [{ submissionId: "synthetic-id" }] }, { batchId: "synthetic-failed" }), error => error.kind === "operation-failed" && !error.unknownOutcome && error.message === "Invalid UOD unlock date");
+  assert.equal(harness.calls.filter(call => call.url === GAS).length, 0);
+});
+
+test("completed submission reconciliation exposes the actual inserted and skipped counts", async () => {
+  const harness = createHarness((call) => {
+    if (call.url === `${CLOUD}/health`) return jsonResponse({ success: true });
+    if (call.url === `${CLOUD}/session`) return jsonResponse({ success: true, token: "synthetic-session" });
+    if (call.url === `${CLOUD}/api`) throw new TypeError("synthetic lost response");
+    if (call.url === `${CLOUD}/submissions/synthetic-completed`) return jsonResponse({ success: true, status: "completed", result: { success: true, inserted: 1, skipped: 1 } });
+    throw new Error(`unexpected URL: ${call.url}`);
+  });
+  const api = createDualTransport(baseOptions(harness.fetchImpl));
+  const result = await api.post({ action: "submitRecords", records: [{ submissionId: "synthetic-1" }, { submissionId: "synthetic-2" }] }, { batchId: "synthetic-completed" });
+  assert.equal(result.inserted, 1);
+  assert.equal(result.skipped, 1);
+});
+
 test("unknown non-submit mutation reconciles through /operations/:requestId", async () => {
   const harness = createHarness((call) => {
     if (call.url === `${CLOUD}/health`) return jsonResponse({ success: true });

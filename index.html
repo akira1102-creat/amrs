@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20261005a">
+  <link rel="manifest" href="manifest.json?v=20261006a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20261005a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20261005a">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20261005a">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20261005a">
+  <link rel="stylesheet" href="./cvcs.css?v=20261006a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20261006a">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20261006a">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20261006a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1686,20 +1686,20 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20261005a"></script>
-<script src="./access-control.js?v=20261005a"></script>
-<script src="./cvcs.js?v=20261005a"></script>
-<script src="./token-admin.js?v=20261005a"></script>
-<script src="./xlsx.mini.min.js?v=20261005a"></script>
-<script src="./galaxy-log.js?v=20261005a"></script>
-<script src="./mgm-check-request.js?v=20261005a"></script>
-<script src="./worksheet-editor.js?v=20261005a"></script>
+<script src="./cloud-api.js?v=20261006a"></script>
+<script src="./access-control.js?v=20261006a"></script>
+<script src="./cvcs.js?v=20261006a"></script>
+<script src="./token-admin.js?v=20261006a"></script>
+<script src="./xlsx.mini.min.js?v=20261006a"></script>
+<script src="./galaxy-log.js?v=20261006a"></script>
+<script src="./mgm-check-request.js?v=20261006a"></script>
+<script src="./worksheet-editor.js?v=20261006a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.05-01';
-const _APP_VERSION='v1.129';
+const _APP_BUMP='2026.10.06-01';
+const _APP_VERSION='v1.130';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -5995,7 +5995,10 @@ async function doSubmit(){
   const chunks=[];
   for(let i=0;i<records.length;i+=CHUNK_SIZE){
     const chunkItems=queue.slice(i,i+CHUNK_SIZE);
-    const poRepairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>({company:item.company||activeCompany,record:{...item.poRepair.record,bpRepairDay:item.date||fmtDate(date)}}));
+    const poRepairs=chunkItems.filter(item=>item.poRepair?.record).map(item=>{
+      const source=item.poRepair.record;
+      return {company:item.company||activeCompany,record:{rowNumber:source.rowNumber,model:source.model,serialNo:source.serialNo,brokenParts:source.brokenParts,bpRepairDay:item.date||fmtDate(date)}};
+    });
     const stateRepairs=selectedRepairs.filter(item=>Number(item.queueIndex)>=i&&Number(item.queueIndex)<i+CHUNK_SIZE).map(({queueIndex,...item})=>item);
     const repairs=mergeSubmissionRepairs([...poRepairs,...stateRepairs]);
     chunks.push({records:records.slice(i,i+CHUNK_SIZE),repairs});
@@ -6034,7 +6037,7 @@ async function doSubmit(){
     showToast(skippedCount?`✓ 已完成：新增 ${savedCount} 筆，略過 ${skippedCount} 筆已提交記錄`:`✓ 已儲存 ${savedCount} 筆記錄`);
     clearQueue();
   }catch(e){
-    if([400,401,403].includes(e.httpStatus)){
+    if([400,401,403].includes(e.httpStatus)||(e.kind==='operation-failed'&&!e.unknownOutcome)){
       renderQueue();
       showToast(e.message||'請檢查 Deploy ID 或提交資料格式','err');
       return;
@@ -6046,6 +6049,7 @@ async function doSubmit(){
     hideSubmitProgress();
     btn.textContent='全部提交';
     isSubmitting=false;
+    syncSubmitButtonState();
   }
 }
 let _toastTimer;

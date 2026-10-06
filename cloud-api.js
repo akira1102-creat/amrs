@@ -902,8 +902,8 @@
               retryable: true,
               details: body,
             });
-          } else if (body?.success === false) {
-            throw new AmrsTransportError(String(body.message || "Cloudflare operation failed"), {
+          } else if (body?.success === false || asString(body?.status || body?.state).toLowerCase() === "failed" || body?.result?.success === false) {
+            throw new AmrsTransportError(String(body.message || body.batch?.errorMessage || body.operation?.errorMessage || body.result?.message || "Cloudflare operation failed"), {
               backend: "cloudflare",
               kind: "operation-failed",
               phase: "reconcile",
@@ -914,7 +914,7 @@
               details: body,
             });
           } else {
-            return body;
+            return body?.result && typeof body.result === "object" ? { ...body, ...body.result } : body;
           }
         } catch (error) {
           if (error.httpStatus === 401 && attempt < this.pollAttempts - 1) {
@@ -970,7 +970,7 @@
       } catch (error) {
         // Once _cloudPost has started /api, errors are returned as-is. In particular,
         // unknownOutcome must never be sent to GAS as a duplicate mutation.
-        if (error?.unknownOutcome || error?.phase === "api" || error?.apiAttempted) throw error;
+        if (error?.unknownOutcome || error?.phase === "api" || error?.phase === "reconcile" || error?.apiAttempted) throw error;
         // Session negotiation failed before /api started, so GAS is a safe fallback.
         this._cloudAvailability = { state: "unavailable", checkedAt: this.now(), error: error?.kind || "session" };
         if (!canUseGas) throw error;
