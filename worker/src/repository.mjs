@@ -59,6 +59,7 @@ import {
 } from "./domain.mjs";
 import { createGoogleAccessTokenProvider } from "./google.mjs";
 import { createCvcsRepository } from "./cvcs-repository.mjs";
+import { createFollowupLogRepository, LOG_ACTIONS } from "./followup-log.mjs";
 import {
   a1Range,
   columnNumberToA1,
@@ -1573,6 +1574,7 @@ export function createRepository(env = {}, dependencies = {}) {
   }
 
   async function getAction(params = {}) {
+    if (params.action === 'followupLog') return createFollowupLogRepository({ config, sheets, now }).get(params);
     const action = text(params.action);
     const cvcsResult = await getCvcsRepository().getAction(params);
     if (cvcsResult) return cvcsResult;
@@ -2036,6 +2038,7 @@ export function createRepository(env = {}, dependencies = {}) {
   }
 
   async function postAction(payload = {}) {
+    if (LOG_ACTIONS.has(payload?.action) && payload.action !== 'followupLog') return createFollowupLogRepository({ config, sheets, now }).post(payload);
     if (!Array.isArray(payload)) {
       const cvcsResult = await getCvcsRepository().postAction(payload);
       if (cvcsResult) return cvcsResult;

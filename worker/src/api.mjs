@@ -14,6 +14,7 @@ import {
   SUBMISSION_ITEM_STATUS,
 } from "./state.mjs";
 import { createRepository } from "./repository.mjs";
+import { LOG_ACTIONS } from "./followup-log.mjs";
 
 const repositoryByEnv = new WeakMap();
 const OPERATION_PROCESSING = "processing";
@@ -26,7 +27,7 @@ const ADMIN_ACTIONS = new Set(["bootstrapAccessToken", "listAccessTokens", "crea
 
 export function permissionForAction(action) {
   const value = String(action || "").trim();
-  if (ADMIN_ACTIONS.has(value)) return "admin";
+  if (ADMIN_ACTIONS.has(value) || LOG_ACTIONS.has(value)) return "admin";
   if (/cvcs/i.test(value)) return "cvcs";
   if (SCHEDULE_ACTIONS.has(value)) return "schedule";
   return "ae";
@@ -283,6 +284,7 @@ function mutationCompanies(payload) {
   const records = Array.isArray(payload) ? payload : payload?.records;
   if (Array.isArray(records)) records.forEach((record) => add(record?.company));
   if (!Array.isArray(payload)) {
+    if (LOG_ACTIONS.has(text(payload.action))) return ['followup-log'];
     if (/cvcs/i.test(text(payload.action))) return ["cvcs"];
     if (text(payload.action) === "syncGalaxyLog") return ["galaxy-log"];
     if (text(payload.action) === "syncMgmCheckRequests") return ["mgm-check-request"];
@@ -302,6 +304,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   const requestId = deriveRequestId(payload, request);
   const action = Array.isArray(payload) ? "insertRecords" : text(payload?.action) || "insertRecords";
   let operation = await getOperation(db, requestId);
+  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env, 'admin');
   if (operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || operation.result?.submissionId || "");
   if (operation?.status === OPERATION_PROCESSING) {
     return {
@@ -315,6 +318,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   }
   const started = await startOperation(db, requestId, action, now);
   operation = started.operation;
+  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env, 'admin');
   if (!started.created && operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || "");
   if (!started.created && operation?.status === OPERATION_PROCESSING) {
     return {
@@ -447,7 +451,7 @@ async function route(request, env, dependencies = {}) {
     const params = Object.fromEntries(url.searchParams.entries());
     const permission = permissionForAction(params.action);
     await requireSession(request, env, permission);
-    if (permission === "admin") return handleAccessTokenAdminAction(env.DB, params, { now });
+    if (ADMIN_ACTIONS.has(params.action)) return handleAccessTokenAdminAction(env.DB, params, { now });
     const repository = getRepository(env, dependencies);
     return repository.getAction(params);
   }
@@ -455,7 +459,7 @@ async function route(request, env, dependencies = {}) {
     const payload = await parseBody(request);
     const permission = permissionForAction(payload?.action);
     await requireSession(request, env, permission);
-    if (permission === "admin") return handleAccessTokenAdminAction(env.DB, payload, { now });
+    if (ADMIN_ACTIONS.has(payload?.action)) return handleAccessTokenAdminAction(env.DB, payload, { now });
     return executeMutation(payload, request, env, dependencies);
   }
   await requireSession(request, env);
@@ -463,6 +467,7 @@ async function route(request, env, dependencies = {}) {
   const operationMatch = pathname.match(/^\/operations\/([^/]+)$/);
   if (operationMatch && request.method === "GET") {
     const operation = await operationStatus(env.DB, repository, decodeURIComponent(operationMatch[1]), now);
+    if (LOG_ACTIONS.has(operation.action)) await requireSession(request, env, 'admin');
     return { success: true, operation, status: operation.status, result: operation.result, retryable: operation.retryable };
   }
   const submissionMatch = pathname.match(/^\/submissions\/([^/]+)$/);

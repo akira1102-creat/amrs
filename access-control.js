@@ -61,7 +61,7 @@
 
   function pagePermission(page) {
     const value = text(page).toLowerCase();
-    if (value.includes("token") || value.includes("admin")) return "admin";
+    if (value.includes("token") || value.includes("admin") || value === 'followuplog') return "admin";
     if (value.startsWith("cvcs")) return "cvcs";
     if (value.includes("schedule") || value.includes("work-arrangement")) return "schedule";
     return "ae";

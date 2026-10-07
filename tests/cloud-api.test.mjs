@@ -210,6 +210,26 @@ test("a failed submission status after a lost response is a known rejection, nev
   assert.equal(harness.calls.filter(call => call.url === GAS).length, 0);
 });
 
+test("follow-up log mutations stay Worker-only even with legacy fallback enabled", async () => {
+  for (const action of ['createFollowupLog', 'updateFollowupLog', 'addFollowupComment']) {
+    const harness = createHarness(call => call.url === `${CLOUD}/health` ? jsonResponse({ success: false }, 503) : jsonResponse({ success: true }));
+    const api = createDualTransport(baseOptions(harness.fetchImpl));
+    await assert.rejects(api.post({ action, id: 'synthetic-entry' }), /Cloudflare/i);
+    assert.equal(harness.calls.some(call => call.url.startsWith(GAS)), false);
+  }
+});
+
+test('follow-up log reads never fall back to an unrelated GAS deployment', async () => {
+  const harness = createHarness(call => {
+    if (call.url === `${CLOUD}/session`) return jsonResponse({ success: true, token: 'synthetic-session' });
+    if (call.url.startsWith(`${CLOUD}/api?`)) throw new TypeError('Synthetic network failure');
+    return jsonResponse({ success: true });
+  });
+  const api = createDualTransport(baseOptions(harness.fetchImpl));
+  await assert.rejects(api.get('action=followupLog'), /network|request/i);
+  assert.equal(harness.calls.some(call => call.url.startsWith(GAS)), false);
+});
+
 test("completed submission reconciliation exposes the actual inserted and skipped counts", async () => {
   const harness = createHarness((call) => {
     if (call.url === `${CLOUD}/health`) return jsonResponse({ success: true });

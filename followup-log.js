@@ -1,0 +1,196 @@
+(function (root, factory) {
+  const api = factory(root);
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.AmrsFollowupLog = api;
+}(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
+  'use strict';
+  const STATUS = { pending: '待跟進', progress: '跟進中', waiting: '等待回覆', completed: '已完成' };
+  const text = value => String(value ?? '').trim();
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const id = () => root.crypto.randomUUID();
+  const time = value => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', hour12: false }) : '';
+  const options = (values, selected) => values.map(([value, label]) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`).join('');
+  const peopleHtml = people => (people || []).map(name => `<span class="fl-person">${esc(name)}</span>`).join('') || '<span class="fl-muted">未填寫</span>';
+  function renderCard(entry) {
+    return `<article class="fl-card ${entry.priority === 'urgent' ? 'fl-urgent' : ''}"><div class="fl-card-top"><span>${esc(entry.venue)}</span><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span></div>
+      <h3>${esc(entry.title)}</h3>${entry.priority === 'urgent' ? '<span class="fl-priority">緊急</span>' : ''}
+      ${entry.content ? `<p class="fl-card-content">${esc(entry.content)}</p>` : ''}
+      <div class="fl-people"><span class="fl-muted">知悉同事</span>${peopleHtml(entry.knownPeople)}</div>
+      ${entry.dueDate ? `<p class="fl-muted">跟進日期：${esc(entry.dueDate)}</p>` : ''}
+      <div class="fl-card-bottom"><small>${esc(time(entry.updatedAt))}</small><button type="button" data-fl-open="${esc(entry.id)}">詳情 · ${Number(entry.commentCount) || 0} 則留言</button></div></article>`;
+  }
+  class Application {
+    constructor(dependencies = {}) {
+      this.document = dependencies.document || root.document;
+      this.transport = dependencies.transport;
+      this.toast = dependencies.toast || (() => {});
+      this.confirm = dependencies.confirm || (message => root.confirm(message));
+      this.venues = dependencies.venues || {};
+      this.people = dependencies.people || (() => []);
+      this.storage = dependencies.storage;
+      this.filters = { company: '', venue: '', status: 'active', search: '' };
+      this.entries = []; this.total = 0; this.page = 1; this.pageSize = 50; this.summary = {};
+      this.loading = false; this.busy = false; this.error = ''; this.seq = 0; this.detailSeq = 0;
+      this.modal = null; this.bound = false; this.pendingPayload = null; this.unknownWrite = false;
+    }
+    host() { return this.document.getElementById('followupLogPage'); }
+    isBusy() { return this.busy || this.unknownWrite || !!(this.modal && this.modalDirty); }
+    async mount() {
+      const host = this.host();
+      if (!host) return;
+      if (!this.bound) {
+        this.bound = true;
+        host.addEventListener('click', event => this.click(event));
+        host.addEventListener('change', event => this.change(event));
+        host.addEventListener('input', event => { if (event.target.closest('.fl-modal')) this.modalDirty = true; });
+        host.addEventListener('keydown', event => { if (event.key === 'Escape' && this.modal) this.closeModal(); if (event.key === 'Enter' && event.target.id === 'flSearch') { event.preventDefault(); this.applyFilters(); } });
+      }
+      this.render();
+      await this.load();
+    }
+    async load(page = this.page) {
+      const seq = ++this.seq;
+      this.loading = true; this.error = ''; this.page = page; this.render();
+      try {
+        const result = await this.transport.get(new URLSearchParams({ action: 'followupLog', ...this.filters, page: String(page) }).toString());
+        if (seq !== this.seq) return;
+        if (!result?.success) throw new Error(result?.message || '日誌載入失敗');
+        this.entries = result.entries || []; this.total = result.total; this.pageSize = result.pageSize || 50; this.summary = result.summary || {};
+      } catch (error) { if (seq === this.seq) this.error = error.message || '日誌載入失敗'; }
+      finally { if (seq === this.seq) { this.loading = false; this.render(); } }
+    }
+    render() {
+      const host = this.host(); if (!host || this.modal) return;
+      host.innerHTML = `<section class="fl-page"><div class="fl-header"><div><h2>跟進日誌</h2><p class="fl-muted">管理員試用 · 場地事項及留言</p></div><div class="fl-actions"><button type="button" data-fl="refresh"${this.loading ? ' disabled' : ''}>${this.loading ? '正在載入…' : '重新載入'}</button><button class="fl-primary" type="button" data-fl="new">新增事項</button></div></div>
+        <div class="fl-summary"><span>未完成 <strong>${this.summary.active || 0}</strong></span><span>緊急 <strong>${this.summary.urgent || 0}</strong></span><span>已完成 <strong>${this.summary.completed || 0}</strong></span></div>
+        <div class="fl-filters"><label>公司篩選<select id="flCompany">${options([['', '全部公司'], ['ALL', '全部場地通知'], ...Object.keys(this.venues).map(v => [v, v])], this.filters.company)}</select></label>
+        <label>場地篩選<input id="flVenue" list="flVenueList" value="${esc(this.filters.venue)}" placeholder="全部場地"><datalist id="flVenueList">${(this.filters.company ? this.venues[this.filters.company] || [] : Object.values(this.venues).flat()).map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
+        <label>狀態篩選<select id="flStatus">${options([['active', '未完成'], ['all', '全部'], ...Object.entries(STATUS)], this.filters.status)}</select></label>
+        <label class="fl-search">搜尋<input id="flSearch" value="${esc(this.filters.search)}" placeholder="標題、內容、場地或知悉同事"></label><button type="button" data-fl="search">搜尋</button></div>
+        <p class="fl-message${this.error ? ' fl-error' : ''}" role="status">${esc(this.error || (this.loading ? '正在讀取雲端資料…' : `共 ${this.total} 項`))}</p>
+        <div class="fl-grid">${this.entries.map(renderCard).join('') || (!this.loading ? '<div class="fl-empty">未有符合條件的事項。按「新增事項」開始記錄。</div>' : '')}</div>
+        <div class="fl-pagination"><button type="button" data-fl="prev"${this.page <= 1 || this.loading ? ' disabled' : ''}>上一頁</button><span>第 ${this.page} 頁</span><button type="button" data-fl="next"${this.page * this.pageSize >= this.total || this.loading ? ' disabled' : ''}>下一頁</button></div></section>`;
+    }
+    value(name) { return text(this.host()?.querySelector(`#${name}`)?.value); }
+    applyFilters() {
+      this.filters = { company: this.value('flCompany'), venue: this.value('flVenue'), status: this.value('flStatus') || 'active', search: this.value('flSearch') };
+      return this.load(1);
+    }
+    async click(event) {
+      const button = event.target.closest('button'); if (!button || button.disabled) return;
+      const action = button.dataset.fl;
+      if (button.dataset.flOpen) return this.openDetail(button.dataset.flOpen);
+      if (button.dataset.flRemove) { this.knownPeople = this.knownPeople.filter(name => name !== button.dataset.flRemove); this.renderPeople(); this.modalDirty = true; return; }
+      if (action === 'refresh') return this.load();
+      if (action === 'search') return this.applyFilters();
+      if (action === 'prev' || action === 'next') return this.load(this.page + (action === 'prev' ? -1 : 1));
+      if (action === 'new') return this.openEditor();
+      if (action === 'close') return this.closeModal();
+      if (action === 'edit') return this.openEditor(this.detail.entry);
+      if (action === 'save') return this.saveEditor();
+      if (action === 'comment') return this.saveComment();
+      if (action === 'add-person') {
+        const name = this.value('flPerson'); if (!name || name.length > 60) return;
+        this.knownPeople = [...new Set([...this.knownPeople, name])]; this.renderPeople(); this.host().querySelector('#flPerson').value = ''; this.modalDirty = true;
+      }
+    }
+    change(event) {
+      if (event.target.id === 'flEditCompany') {
+        const company = this.value('flEditCompany');
+        const input = this.host().querySelector('#flEditVenue'); input.value = company === 'ALL' ? '全部場地' : ''; input.disabled = company === 'ALL';
+        this.host().querySelector('#flEditVenueList').innerHTML = (this.venues[company] || []).map(v => `<option value="${esc(v)}"></option>`).join('');
+      } else if (event.target.id === 'flCompany') { this.host().querySelector('#flVenue').value = ''; this.applyFilters(); }
+      else if (event.target.id === 'flStatus') this.applyFilters();
+    }
+    closeModal(force = false) {
+      if (this.busy || (!force && this.unknownWrite)) { this.toast('正在確認儲存結果，請勿關閉；可重試同一筆儲存', 'err'); return false; }
+      if (!force && this.modalDirty && !this.confirm('尚未儲存的內容會被放棄，確定關閉？')) return false;
+      this.detailSeq++; this.modal = null; this.modalDirty = false; this.pendingPayload = null; this.render();
+      this.lastFocus?.focus?.(); return true;
+    }
+    showModal(title, content, actions) {
+      if (this.modal && !this.closeModal()) return false;
+      this.lastFocus = this.document.activeElement; this.modal = true; this.modalDirty = false; this.unknownWrite = false;
+      const host = this.host();
+      host.insertAdjacentHTML('beforeend', `<div class="fl-overlay"><section class="fl-modal" role="dialog" aria-modal="true" aria-labelledby="flModalTitle"><div class="fl-modal-head"><h3 id="flModalTitle">${esc(title)}</h3><button type="button" data-fl="close" aria-label="關閉">×</button></div><div class="fl-modal-content">${content}</div><p id="flModalMessage" class="fl-message" role="status"></p><div class="fl-actions fl-modal-actions">${actions}<button type="button" data-fl="close">關閉</button></div></section></div>`);
+      setTimeout(() => host.querySelector('.fl-modal input, .fl-modal button')?.focus(), 0);
+      return true;
+    }
+    async openDetail(entryId) {
+      if (this.busy || this.modal) return;
+      const seq = ++this.detailSeq;
+      this.toast('正在載入事項…', 'info');
+      try {
+        const result = await this.transport.get(new URLSearchParams({ action: 'followupLog', id: entryId }).toString());
+        if (seq !== this.detailSeq) return;
+        if (!result?.success) throw new Error(result?.message || '事項載入失敗');
+        this.detail = result;
+        let author = ''; try { author = this.storage?.getItem('_amrs_log_comment_name') || ''; } catch {}
+        this.showModal(result.entry.title, `<p>${esc(result.entry.venue)} · <span class="fl-status fl-${esc(result.entry.status)}">${esc(STATUS[result.entry.status])}</span>${result.entry.priority === 'urgent' ? ' · 緊急' : ''}</p>
+          <p class="fl-full-content">${esc(result.entry.content || '未填寫內容')}</p><div class="fl-people"><span class="fl-muted">知悉同事</span>${peopleHtml(result.entry.knownPeople)}</div>
+          ${result.entry.dueDate ? `<p>跟進日期：${esc(result.entry.dueDate)}</p>` : ''}<p class="fl-muted">建立：${esc(time(result.entry.createdAt))}<br>更新：${esc(time(result.entry.updatedAt))}</p>
+          <h4>留言及進展</h4><div class="fl-comments">${result.comments.map(comment => `<article class="fl-comment"><div><strong>${esc(comment.name)}</strong><small>${esc(time(comment.createdAt))}</small></div><p>${esc(comment.content)}</p></article>`).join('') || '<p class="fl-muted">未有留言</p>'}</div>
+          <div class="fl-comment-form"><label>留言者姓名<input id="flAuthor" list="flNames" value="${esc(author)}" maxlength="60" placeholder="輸入或選擇姓名"></label>${this.namesList()}<label>留言<textarea id="flComment" maxlength="4000" rows="3" placeholder="記錄最新進展或需要留意的事情"></textarea></label><button class="fl-primary" type="button" data-fl="comment">發佈留言</button></div>`, '<button type="button" data-fl="edit">修改事項／狀態</button>');
+        this.commentId = id();
+      } catch (error) { this.toast(error.message || '事項載入失敗', 'err'); }
+    }
+    namesList() {
+      const names = [...new Set([...this.people(), ...this.entries.flatMap(entry => entry.knownPeople || [])])];
+      return `<datalist id="flNames">${names.map(name => `<option value="${esc(name)}"></option>`).join('')}</datalist>`;
+    }
+    openEditor(entry = null) {
+      if (this.busy) return;
+      const company = entry?.company || 'ALL';
+      if (!this.showModal(entry ? '修改事項' : '新增事項', `<div class="fl-edit-grid"><label>公司<select id="flEditCompany">${options([['ALL', '全部場地'], ...Object.keys(this.venues).map(v => [v, v])], company)}</select></label><label>場地<input id="flEditVenue" list="flEditVenueList" value="${esc(entry?.venue || (company === 'ALL' ? '全部場地' : ''))}"${company === 'ALL' ? ' disabled' : ''}><datalist id="flEditVenueList">${(this.venues[company] || []).map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
+        <label class="fl-wide">標題 *<input id="flTitle" value="${esc(entry?.title)}" maxlength="160" placeholder="簡短講述要跟進的事情"></label><label class="fl-wide">內容<textarea id="flContent" maxlength="8000" rows="4">${esc(entry?.content)}</textarea></label>
+        <label>狀態<select id="flEditStatus">${options(Object.entries(STATUS), entry?.status || 'pending')}</select></label><label>優先程度<select id="flPriority">${options([['normal', '一般'], ['urgent', '緊急']], entry?.priority || 'normal')}</select></label><label>跟進日期（選填）<input id="flDueDate" type="date" value="${esc(entry?.dueDate)}"></label>
+        <div class="fl-wide"><label>知悉同事（選填）</label><div id="flPeople" class="fl-people"></div><div class="fl-add-person"><input id="flPerson" list="flNames" maxlength="60" placeholder="輸入或選擇姓名">${this.namesList()}<button type="button" data-fl="add-person">加入</button></div><small class="fl-muted">只表示知道此事，不代表處理責任。</small></div></div>`, '<button class="fl-primary" type="button" data-fl="save">儲存到雲端</button>')) return;
+      this.editing = entry; this.editorId = entry?.id || id(); this.knownPeople = [...(entry?.knownPeople || [])];
+      this.renderPeople();
+    }
+    renderPeople() {
+      this.host().querySelector('#flPeople').innerHTML = this.knownPeople.map(name => `<span class="fl-person">${esc(name)}<button type="button" data-fl-remove="${esc(name)}" aria-label="移除${esc(name)}">×</button></span>`).join('') || '<span class="fl-muted">未選擇同事</span>';
+    }
+    modalMessage(message, error = false) {
+      const el = this.host()?.querySelector('#flModalMessage'); if (el) { el.textContent = message; el.classList.toggle('fl-error', error); }
+    }
+    async write(payload) {
+      if (this.busy) return null;
+      this.busy = true; this.pendingPayload = this.pendingPayload || payload;
+      const modal = this.host()?.querySelector('.fl-modal');
+      modal?.querySelectorAll('button,input,select,textarea').forEach(el => { if (!Object.hasOwn(el.dataset, 'flDisabled')) el.dataset.flDisabled = el.disabled ? '1' : ''; el.disabled = true; });
+      this.modalMessage('正在儲存到雲端…');
+      try {
+        const result = await this.transport.post(this.pendingPayload);
+        if (!result?.success) throw new Error(result?.message || '儲存失敗');
+        this.pendingPayload = null; this.unknownWrite = false; this.modalDirty = false;
+        return result;
+      } catch (error) {
+        this.unknownWrite = !!error.unknownOutcome;
+        if (!this.unknownWrite) this.pendingPayload = null;
+        this.modalMessage(this.unknownWrite ? '尚未確認儲存結果，請重試同一筆儲存；不要修改內容或關閉。' : error.message || '儲存失敗，內容仍然保留', true);
+        this.toast(error.message || '儲存失敗', 'err'); return null;
+      } finally {
+        this.busy = false;
+        modal?.querySelectorAll('button,input,select,textarea').forEach(el => { el.disabled = this.unknownWrite ? !(el.dataset.fl === 'save' || el.dataset.fl === 'comment') : el.dataset.flDisabled === '1'; if (!this.unknownWrite) delete el.dataset.flDisabled; });
+      }
+    }
+    async saveEditor() {
+      const entry = { company: this.value('flEditCompany'), venue: this.value('flEditVenue'), title: this.value('flTitle'), content: this.value('flContent'), status: this.value('flEditStatus'), priority: this.value('flPriority'), dueDate: this.value('flDueDate'), knownPeople: this.knownPeople };
+      if (!entry.title || (!entry.venue && entry.company !== 'ALL')) { this.modalMessage('請填寫標題及場地', true); return; }
+      const result = await this.write({ action: this.editing ? 'updateFollowupLog' : 'createFollowupLog', id: this.editorId, baseVersion: this.editing?.version, entry });
+      if (!result) return;
+      this.closeModal(true); this.toast('事項已儲存', 'ok'); await this.load(); await this.openDetail(result.entry.id);
+    }
+    async saveComment() {
+      const name = this.value('flAuthor'), content = this.value('flComment');
+      if (!name || !content) { this.modalMessage('請填寫留言者姓名及留言內容', true); return; }
+      const entryId = this.detail.entry.id;
+      const result = await this.write({ action: 'addFollowupComment', id: this.commentId, entryId, name, content });
+      if (!result) return;
+      try { this.storage?.setItem('_amrs_log_comment_name', name); } catch {}
+      this.closeModal(true); this.toast('留言已儲存', 'ok'); await this.load(); await this.openDetail(entryId);
+    }
+  }
+  return { STATUS, renderCard, createApplication: dependencies => new Application(dependencies) };
+}));

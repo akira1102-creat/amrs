@@ -20,6 +20,7 @@
   const DEFAULT_POLL_ATTEMPTS = 5;
   const DEFAULT_AVAILABILITY_TTL_MS = 30000;
   const DEFAULT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+  const LOG_ACTIONS = new Set(['followupLog', 'createFollowupLog', 'updateFollowupLog', 'addFollowupComment']);
 
   const PENDING_STATES = new Set([
     "accepted",
@@ -728,13 +729,15 @@
         && optionKeys.some((key) => Object.prototype.hasOwnProperty.call(queryOrOptions, key));
       const options = isOptionsObject ? { ...queryOrOptions } : { ...maybeOptions, query: queryOrOptions };
       const query = options.query ?? "";
+      const workerOnly = LOG_ACTIONS.has(new URLSearchParams(normalizeQuery(query)).get('action'));
       if (!this.cloudflareBaseUrl) {
+        if (workerOnly) throw new AmrsTransportError('Cloudflare is required for the follow-up log', { backend: 'cloudflare', kind: 'cloud-unavailable' });
         return this._gasGet(query, options);
       }
       try {
         return await this._cloudGet(query, options);
       } catch (cloudError) {
-        if (options.signal?.aborted || !this._canUseGasFallback() || !this._shouldFallbackGet(cloudError)) throw cloudError;
+        if (workerOnly || options.signal?.aborted || !this._canUseGasFallback() || !this._shouldFallbackGet(cloudError)) throw cloudError;
         try {
           return await this._gasGet(query, options);
         } catch (gasError) {
@@ -948,7 +951,7 @@
     async post(payload, options = {}) {
       const normalized = this._normalizeMutation(payload, options);
       const forceGas = options.backend === "gas" || options.forceGas === true;
-      const workerOnly = ["bootstrapAccessToken", "listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"].includes(asString(normalized.body?.action));
+      const workerOnly = LOG_ACTIONS.has(asString(normalized.body?.action)) || ["bootstrapAccessToken", "listAccessTokens", "createAccessToken", "updateAccessToken", "deleteAccessToken"].includes(asString(normalized.body?.action));
       const canUseGas = this._canUseGasFallback() && !workerOnly;
       let cloudReady = false;
       if (!forceGas) cloudReady = await this.checkCloudHealth({ force: options.forcePreflight === true, signal: options.signal });
