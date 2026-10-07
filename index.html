@@ -7,14 +7,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20261007c">
+  <link rel="manifest" href="manifest.json?v=20261007d">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20261007c">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20261007c">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20261007c">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20261007c">
-  <link rel="stylesheet" href="./followup-log.css?v=20261007c">
+  <link rel="stylesheet" href="./cvcs.css?v=20261007d">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20261007d">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20261007d">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20261007d">
+  <link rel="stylesheet" href="./followup-log.css?v=20261007d">
   <title>AMRS</title>
   <script>
     (function(){
@@ -51,7 +51,7 @@
     .mob #pinError{font-size:20px;height:24px}
     #setupScreen{position:fixed;inset:0;background:#0d1117;display:none;align-items:center;justify-content:center;z-index:9998}
     #setupScreen.show{display:flex}
-    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked .app-page,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
+    body.auth-locked #menuOverlay,body.auth-locked #sideMenu,body.auth-locked #appTop,body.auth-locked #followupNotice,body.auth-locked .app-page,body.auth-locked #appVersion,body.auth-locked #snPad{display:none !important}
     #setupBox{display:flex;flex-direction:column;gap:20px;padding:40px 32px;background:#161b22;border-radius:24px;border:1px solid #30363d;width:340px}
     #setupTitle{font-size:18px;font-weight:700;color:#e6edf3}
     #setupSub{font-size:13px;color:#8b949e;line-height:1.6}
@@ -1172,6 +1172,7 @@
   <div id="activeCompanyLabel">SCL</div>
 </div>
 
+<aside id="followupNotice" aria-label="未讀跟進事項" hidden></aside>
 <div id="inputPage" class="app-page">
 <div id="mainLayout">
 <div id="mainLeft">
@@ -1693,21 +1694,21 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20261007c"></script>
-<script src="./access-control.js?v=20261007c"></script>
-<script src="./cvcs.js?v=20261007c"></script>
-<script src="./token-admin.js?v=20261007c"></script>
-<script src="./xlsx.mini.min.js?v=20261007c"></script>
-<script src="./galaxy-log.js?v=20261007c"></script>
-<script src="./mgm-check-request.js?v=20261007c"></script>
-<script src="./worksheet-editor.js?v=20261007c"></script>
-<script src="./followup-log.js?v=20261007c"></script>
+<script src="./cloud-api.js?v=20261007d"></script>
+<script src="./access-control.js?v=20261007d"></script>
+<script src="./cvcs.js?v=20261007d"></script>
+<script src="./token-admin.js?v=20261007d"></script>
+<script src="./xlsx.mini.min.js?v=20261007d"></script>
+<script src="./galaxy-log.js?v=20261007d"></script>
+<script src="./mgm-check-request.js?v=20261007d"></script>
+<script src="./worksheet-editor.js?v=20261007d"></script>
+<script src="./followup-log.js?v=20261007d"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.07-03';
-const _APP_VERSION='v1.135';
+const _APP_BUMP='2026.10.07-04';
+const _APP_VERSION='v1.136';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2013,7 +2014,7 @@ async function postSubmissionJson(payload,timeoutMs=90000){
 }
 function hasAnyDeployId(){return hasPersonalToken()||getCompanyOrder().some(c=>!!getDeployId(c));}
 function firstConfiguredCompany(){return hasPersonalToken()?(activeCompany||'SCL'):(getCompanyOrder().find(c=>!!getDeployId(c))||'');}
-function unlockApp(){document.body.classList.remove('auth-locked');}
+function unlockApp(){document.body.classList.remove('auth-locked');startFollowupNotices();}
 function normalizeDeployInput(id){const deployId=extractDeployId(id);return deployId?'https://script.google.com/macros/s/'+deployId+'/exec':'';}
 function companyParam(){return 'company='+encodeURIComponent(activeCompany);}
 function syncCompanySpecificFields(){
@@ -2140,7 +2141,8 @@ function initMobileMenuSwipe(){
   document.addEventListener('touchcancel',()=>{_mobileMenuSwipe=null;},{passive:true});
 }
 initMobileMenuSwipe();
-let _accessPermissions=[];
+let _accessPermissions=[],_accessSessionVerified=false;
+let _followupNotices=null;
 let _cvcsApp=null,_tokenAdminApp=null,_galaxyLogApp=null,_mgmCheckRequestApp=null,_followupLogApp=null,_worksheetEditorApp=null,_worksheetEditorReturnPage='input',_cvcsMenuOpen=false;
 function hasAccess(permission){return window.AmrsAccessControl.hasPermission(_accessPermissions,permission);}
 function ensureFeatureApps(){
@@ -2160,8 +2162,18 @@ function ensureWorksheetEditorApp(){
   return _worksheetEditorApp;
 }
 function ensureFollowupLogApp(){
-  if(!_followupLogApp&&window.AmrsFollowupLog)_followupLogApp=window.AmrsFollowupLog.createApplication({document,storage:localStorage,toast:showToast,transport:_dualTransport,venues:COMPANY_CASINOS,people:()=>scheduleUniquePeople([...(_scheduleTodayData?.days||[]),...(_scheduleWeekDays||[])].flatMap(day=>[...scheduleAvailablePeople(day,'am'),...scheduleAvailablePeople(day,'pm')]))});
+  if(!_followupLogApp&&window.AmrsFollowupLog)_followupLogApp=window.AmrsFollowupLog.createApplication({document,storage:localStorage,toast:showToast,transport:_dualTransport,venues:COMPANY_CASINOS,onRead:entry=>_followupNotices?.markRead(entry),onChange:()=>void _followupNotices?.refresh(),people:()=>scheduleUniquePeople([...(_scheduleTodayData?.days||[]),...(_scheduleWeekDays||[])].flatMap(day=>[...scheduleAvailablePeople(day,'am'),...scheduleAvailablePeople(day,'pm')]))});
   return _followupLogApp;
+}
+function startFollowupNotices(){
+  if(!_accessSessionVerified||document.body.classList.contains('auth-locked')||!window.AmrsFollowupLog)return;
+  if(!_followupNotices)_followupNotices=window.AmrsFollowupLog.createNotifications({document,storage:localStorage,transport:_dualTransport,canRefresh:()=>_accessSessionVerified&&!document.hidden&&!document.body.classList.contains('auth-locked'),onNavigate:async entryId=>{
+    const app=ensureFollowupLogApp();
+    if(!app||app.modal&&!app.closeModal())return;
+    showPage('followupLog');
+    if(activePage==='followupLog')await app.openDetail(entryId);
+  }});
+  _followupNotices.start();
 }
 function openWorksheetEditor(kind,scope){
   const app=ensureWorksheetEditorApp();
@@ -2177,12 +2189,13 @@ async function refreshAccessSession(){
   const token=showLoadingProgress(navigator.onLine?'正在驗證連線及使用權限…':'目前離線，正在檢查連線…');
   try{
     await _dualTransport.ensureSession({forceRefresh:true});
+    _accessSessionVerified=true;
     _accessPermissions=_dualTransport.getState().permissions||[];
     applyAccessPermissions();
     if(hasAccess('ae'))void loadTemplateMappings();
     return true;
   }catch(error){
-    _accessPermissions=[];applyAccessPermissions();
+    _accessSessionVerified=false;_followupNotices?.stop();_accessPermissions=[];applyAccessPermissions();
     document.body.classList.add('auth-locked');
     openGasSettings();
     const result=document.getElementById('setupTestResult');result.className='setupTestResult err';result.textContent='暫時未能驗證，請確認連線後重試；持續失敗先檢查 Token。';result.style.display='block';
@@ -2192,7 +2205,7 @@ async function refreshAccessSession(){
 function applyAccessPermissions(){
   const ae=hasAccess('ae'),cvcs=hasAccess('cvcs'),schedule=hasAccess('schedule'),admin=hasAccess('admin');
   document.getElementById('scheduleMenuBtn').style.display=schedule?'':'none';
-  document.getElementById('followupLogMenuBtn').style.display=admin?'':'none';
+  document.getElementById('followupLogMenuBtn').style.display=_accessSessionVerified?'':'none';
   document.getElementById('companyMenu').style.display=ae?'':'none';
   ['dashMenuBtn','monthlyStatsMenuBtn','partsListMenuBtn','brokenPartsMenuBtn','brokenPartsCompanyMenu','galaxyLogMenuBtn','mgmCheckRequestMenuBtn','toolsMenuSection'].forEach(id=>document.getElementById(id).style.display=ae?'':'none');
   document.getElementById('cvcsInputMenuBtn').style.display=cvcs?'':'none';document.getElementById('cvcsPropertyMenu').style.display=cvcs?'':'none';
@@ -2213,6 +2226,7 @@ function showFirstPermittedPage(){
   else if(hasAccess('ae'))showPage('input');
   else if(hasAccess('cvcs'))selectCvcsProperty(window.AmrsCvcs?.PROPERTIES?.[0]||'Venetian');
   else if(hasAccess('admin'))showPage('tokenAdmin');
+  else if(_accessSessionVerified)showPage('followupLog');
 }
 function autoLoadMissingInputLists(){
   if(activePage!=='input'||!navigator.onLine||!getScriptUrl())return;
@@ -2222,10 +2236,11 @@ function autoLoadMissingInputLists(){
   if(!_partsCodes.length)void fetchPartsCodes(true);
 }
 function showPage(page){
+  if(page==='followupLog'&&!_accessSessionVerified){showToast('請先驗證 Token','err');return;}
   const permission=page==='worksheetEditor'?ensureWorksheetEditorApp()?.permission():window.AmrsAccessControl.pagePermission(page);
   if(!hasAccess(permission)){showToast('此 Token 沒有使用這項功能的權限','err');return;}
-  if(activePage==='followupLog'&&page!=='followupLog'&&_followupLogApp?.isBusy?.()){
-    if(!_followupLogApp.closeModal())return;
+  if(activePage==='followupLog'&&page!=='followupLog'&&_followupLogApp){
+    if(!_followupLogApp.deactivate())return;
   }
   if(activePage==='worksheetEditor'&&page!=='worksheetEditor'&&_worksheetEditorApp?.isBusy?.()){
     if(!confirm('尚有未儲存變更，確定離開？'))return;
@@ -6231,9 +6246,11 @@ if(localStorage.getItem('_ml_auth')===_PH){
 }
 initDashboardFilters();
 document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&_accessSessionVerified){startFollowupNotices();void _followupNotices?.refresh();}
   if(!document.hidden&&activePage==='schedule'&&localStorage.getItem('_ml_auth')===_PH&&hasAnyDeployId()&&scheduleShouldForceDailyRefresh())loadScheduleOverview(true);
 });
 window.addEventListener('online',()=>{if(activePage==='input')autoLoadMissingInputLists();});
+window.addEventListener('online',()=>{if(_accessSessionVerified){startFollowupNotices();void _followupNotices?.refresh();}});
 if(queue.length>0){renderQueue();setTimeout(()=>showToast(`↩ 已還原 ${queue.length} 筆待提交記錄`),700);}
 _renderStats();
 _updateRetryNotice();

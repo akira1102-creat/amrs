@@ -1574,7 +1574,7 @@ export function createRepository(env = {}, dependencies = {}) {
   }
 
   async function getAction(params = {}) {
-    if (params.action === 'followupLog') return createFollowupLogRepository({ config, sheets, now }).get(params);
+    if (params.action === 'followupLog' || params.action === 'followupNotifications') return createFollowupLogRepository({ config, sheets, now }).get(params);
     const action = text(params.action);
     const cvcsResult = await getCvcsRepository().getAction(params);
     if (cvcsResult) return cvcsResult;

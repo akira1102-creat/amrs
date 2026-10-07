@@ -77,3 +77,47 @@ test('unknown write retries the same payload and restores original enabled contr
   assert.equal(app.pendingPayload, null);
   assert.equal(app.isBusy(), false);
 });
+
+test('filters and search are collapsed initially and remain expanded through list refreshes', async () => {
+  const host={innerHTML:'',querySelector:()=>null,addEventListener(){}};
+  const app=log.createApplication({document:{getElementById:()=>host},transport:{get:async()=>({success:true,entries:[],total:0})}});
+  await app.mount();
+  assert.match(host.innerHTML,/<details[^>]*class="fl-filter-panel"[^>]*><summary>篩選或搜尋/);
+  assert.doesNotMatch(host.innerHTML,/<details[^>]*class="fl-filter-panel"[^>]*\bopen\b/);
+  app.filtersOpen=true;await app.load();
+  assert.match(host.innerHTML,/<details[^>]*class="fl-filter-panel"[^>]*\bopen\b/);
+});
+
+test('device unread state is persisted only after reading, and new revisions become unread again', async () => {
+  assert.equal(typeof log.createNotifications,'function');
+  const data=new Map(),storage={getItem:key=>data.get(key),setItem:(key,value)=>data.set(key,value)};
+  const host={innerHTML:'',hidden:true,addEventListener(){}};
+  let feed=[{id:'test-notice',title:'<img src=x>',venue:'Test venue',status:'pending',revision:'one'}];
+  const dependencies={document:{getElementById:()=>host},storage,transport:{get:async()=>({success:true,entries:feed})}};
+  const notices=log.createNotifications(dependencies);
+  await notices.refresh();assert.equal(notices.unread().length,1);assert.equal(host.hidden,false);assert.match(host.innerHTML,/&lt;img src=x&gt;/);
+  notices.markRead(feed[0]);assert.equal(notices.unread().length,0);assert.equal(host.hidden,true);
+  const reloaded=log.createNotifications(dependencies);await reloaded.refresh();assert.equal(reloaded.unread().length,0);
+  feed=[{...feed[0],revision:'two'}];await reloaded.refresh();assert.equal(reloaded.unread().length,1);
+  const otherDevice=log.createNotifications({...dependencies,storage:{getItem:()=>null}});await otherDevice.refresh();assert.equal(otherDevice.unread().length,1);
+  feed=[];await reloaded.refresh();assert.equal(reloaded.unread().length,0);
+});
+
+test('late notification responses cannot reappear after authentication is stopped', async () => {
+  assert.equal(typeof log.createNotifications,'function');
+  let done;const host={innerHTML:'',hidden:true,addEventListener(){}};
+  const notices=log.createNotifications({document:{getElementById:()=>host},transport:{get:()=>new Promise(resolve=>done=resolve)}});
+  const pending=notices.refresh();notices.stop();done({success:true,entries:[{id:'private-test',revision:'one'}]});await pending;
+  assert.equal(host.hidden,true);assert.equal(notices.unread().length,0);
+});
+
+test('leaving the log while details load never marks a hidden entry as read', async () => {
+  let done,reads=0;
+  const app=log.createApplication({document:{getElementById:()=>null},onRead:()=>reads++,transport:{get:()=>new Promise(resolve=>done=resolve)},toast(){}});
+  const pending=app.openDetail('entry-one');
+  assert.equal(typeof app.deactivate,'function');
+  assert.equal(app.deactivate(),true);
+  done({success:true,entry:{id:'entry-one',title:'Test entry',status:'pending',revision:'one'},comments:[]});await pending;
+  assert.equal(reads,0);
+  assert.equal(app.modal,null);
+});

@@ -20,7 +20,7 @@
   const DEFAULT_POLL_ATTEMPTS = 5;
   const DEFAULT_AVAILABILITY_TTL_MS = 30000;
   const DEFAULT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-  const LOG_ACTIONS = new Set(['followupLog', 'createFollowupLog', 'updateFollowupLog', 'addFollowupComment']);
+  const LOG_ACTIONS = new Set(['followupLog', 'followupNotifications', 'createFollowupLog', 'updateFollowupLog', 'deleteFollowupLog', 'addFollowupComment']);
 
   const PENDING_STATES = new Set([
     "accepted",

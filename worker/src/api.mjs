@@ -27,7 +27,8 @@ const ADMIN_ACTIONS = new Set(["bootstrapAccessToken", "listAccessTokens", "crea
 
 export function permissionForAction(action) {
   const value = String(action || "").trim();
-  if (ADMIN_ACTIONS.has(value) || LOG_ACTIONS.has(value)) return "admin";
+  if (LOG_ACTIONS.has(value)) return "";
+  if (ADMIN_ACTIONS.has(value)) return "admin";
   if (/cvcs/i.test(value)) return "cvcs";
   if (SCHEDULE_ACTIONS.has(value)) return "schedule";
   return "ae";
@@ -304,7 +305,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   const requestId = deriveRequestId(payload, request);
   const action = Array.isArray(payload) ? "insertRecords" : text(payload?.action) || "insertRecords";
   let operation = await getOperation(db, requestId);
-  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env, 'admin');
+  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env);
   if (operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || operation.result?.submissionId || "");
   if (operation?.status === OPERATION_PROCESSING) {
     return {
@@ -318,7 +319,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   }
   const started = await startOperation(db, requestId, action, now);
   operation = started.operation;
-  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env, 'admin');
+  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env);
   if (!started.created && operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || "");
   if (!started.created && operation?.status === OPERATION_PROCESSING) {
     return {
@@ -467,7 +468,7 @@ async function route(request, env, dependencies = {}) {
   const operationMatch = pathname.match(/^\/operations\/([^/]+)$/);
   if (operationMatch && request.method === "GET") {
     const operation = await operationStatus(env.DB, repository, decodeURIComponent(operationMatch[1]), now);
-    if (LOG_ACTIONS.has(operation.action)) await requireSession(request, env, 'admin');
+    if (LOG_ACTIONS.has(operation.action)) await requireSession(request, env);
     return { success: true, operation, status: operation.status, result: operation.result, retryable: operation.retryable };
   }
   const submissionMatch = pathname.match(/^\/submissions\/([^/]+)$/);

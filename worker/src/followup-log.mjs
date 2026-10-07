@@ -3,7 +3,7 @@ import { COMPANIES } from './config.mjs';
 
 export const LOG_HEADERS = ['ID', 'Company', 'Venue', 'Title', 'Content', 'Status', 'Priority', 'Due Date', 'Known People', 'Created At', 'Updated At'];
 export const COMMENT_HEADERS = ['ID', 'Entry ID', 'Name', 'Content', 'Created At'];
-export const LOG_ACTIONS = new Set(['followupLog', 'createFollowupLog', 'updateFollowupLog', 'addFollowupComment']);
+export const LOG_ACTIONS = new Set(['followupLog', 'followupNotifications', 'createFollowupLog', 'updateFollowupLog', 'deleteFollowupLog', 'addFollowupComment']);
 const STATUSES = ['pending', 'progress', 'waiting', 'completed'];
 const text = value => String(value ?? '').trim();
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -46,9 +46,9 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
     if (headers.some((header, index) => text(rows[0]?.[index]) !== header)) throw fail('日誌試算表欄位不符，請聯絡管理員', 503);
     return rows;
   }
-  async function entries() {
+  async function entries(includeDeleted = false) {
     const rows = await table('Entries', LOG_HEADERS);
-    return Promise.all(rows.slice(1).map((row, index) => fromRow(row, index + 2))).then(items => items.filter(item => item.id));
+    return Promise.all(rows.slice(1).map((row, index) => fromRow(row, index + 2))).then(items => items.filter(item => item.id && (includeDeleted || item.status !== 'deleted')));
   }
   async function comments() {
     const rows = await table('Comments', COMMENT_HEADERS);
@@ -56,18 +56,21 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
   }
   async function get(params = {}) {
     const all = await entries(), allComments = await comments();
+    const decorated = await Promise.all(all.map(async entry => {
+      const ownComments = allComments.filter(comment => comment.entryId === entry.id);
+      return {...entry, updatedAt: [entry.updatedAt, ...ownComments.map(comment => comment.createdAt)].sort().at(-1), commentCount: ownComments.length,
+        revision: await sha256Base64Url(JSON.stringify([entry.version, ownComments.map(comment => [comment.id, comment.name, comment.content, comment.createdAt])]))};
+    }));
     if (text(params.id)) {
-      const entry = all.find(item => item.id === text(params.id));
+      const entry = decorated.find(item => item.id === text(params.id));
       if (!entry) throw fail('找不到此事項，請重新載入', 404);
       return { success: true, entry, comments: allComments.filter(comment => comment.entryId === entry.id) };
     }
+    if (params.action === 'followupNotifications') return {success:true, entries:decorated.sort((a,b)=>Number(b.priority==='urgent')-Number(a.priority==='urgent')||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id)).map(({id,venue,title,status,priority,updatedAt,revision})=>({id,venue,title,status,priority,updatedAt,revision}))};
     const search = text(params.search).toLowerCase(), status = text(params.status) || 'active';
-    let filtered = all.filter(item => (!params.company || item.company === params.company) && (!params.venue || item.venue === params.venue)
+    let filtered = decorated.filter(item => (!params.company || item.company === params.company) && (!params.venue || item.venue === params.venue)
       && (status === 'all' || (status === 'active' ? item.status !== 'completed' : item.status === status))
       && (!search || [item.title, item.content, item.venue, ...item.knownPeople].some(value => text(value).toLowerCase().includes(search))));
-    const lastComment = new Map(), counts = new Map();
-    allComments.forEach(comment => { counts.set(comment.entryId, (counts.get(comment.entryId) || 0) + 1); if (comment.createdAt > (lastComment.get(comment.entryId) || '')) lastComment.set(comment.entryId, comment.createdAt); });
-    filtered = filtered.map(item => ({ ...item, updatedAt: [item.updatedAt, lastComment.get(item.id) || ''].sort().at(-1), commentCount: counts.get(item.id) || 0 }));
     filtered.sort((a, b) => Number(a.status === 'completed') - Number(b.status === 'completed') || Number(b.priority === 'urgent') - Number(a.priority === 'urgent') || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
     const page = Math.max(1, Number.parseInt(params.page, 10) || 1), pageSize = 50;
     return { success: true, entries: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length, page, pageSize,
@@ -76,10 +79,18 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
   async function post(payload) {
     const id = required(payload.id, '識別碼', 100);
     if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw fail('識別碼無效');
-    const all = await entries(), current = all.find(entry => entry.id === id), timestamp = new Date(typeof now === 'function' ? now() : now).toISOString();
+    const all = await entries(true), current = all.find(entry => entry.id === id), timestamp = new Date(typeof now === 'function' ? now() : now).toISOString();
+    if (payload.action === 'deleteFollowupLog') {
+      if (!current || current.status === 'deleted') return {success:true, deletedId:id};
+      if (!payload.baseVersion || payload.baseVersion !== current.version) throw fail('其他同事已修改此事項，請重新載入後再刪除', 409);
+      const values = [id, ...inputValues({...current, status:'deleted'}), current.createdAt, timestamp];
+      await sheets.valuesUpdate({spreadsheetId:sheetId(),range:`Entries!A${current.rowNumber}:K${current.rowNumber}`,valueInputOption:'RAW',values:[values]});
+      return {success:true, deletedId:id};
+    }
+    if (current?.status === 'deleted') throw fail('此事項已刪除，請重新載入', payload.action === 'createFollowupLog' ? 409 : 404);
     if (payload.action === 'addFollowupComment') {
       const entryId = required(payload.entryId, '事項識別碼', 100);
-      if (!all.some(entry => entry.id === entryId)) throw fail('找不到此事項，請重新載入', 404);
+      if (!all.some(entry => entry.id === entryId && entry.status !== 'deleted')) throw fail('找不到此事項，請重新載入', 404);
       const comment = { id, entryId, name: required(payload.name, '留言者姓名', 60), content: required(payload.content, '留言', 4000), createdAt: timestamp };
       const existing = (await comments()).find(item => item.id === id);
       if (existing) {
