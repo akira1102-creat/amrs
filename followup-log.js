@@ -8,16 +8,17 @@
   const text = value => String(value ?? '').trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const id = () => root.crypto.randomUUID();
-  const time = value => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', hour12: false }) : '';
+  const time = (value, compact = false) => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', hour12: false, ...(compact ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } : {}) }) : '';
   const options = (values, selected) => values.map(([value, label]) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`).join('');
   const peopleHtml = people => (people || []).map(name => `<span class="fl-person">${esc(name)}</span>`).join('') || '<span class="fl-muted">未填寫</span>';
   function renderCard(entry) {
-    return `<article class="fl-card ${entry.priority === 'urgent' ? 'fl-urgent' : ''}"><div class="fl-card-top"><span>${esc(entry.venue)}</span><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span></div>
-      <h3>${esc(entry.title)}</h3>${entry.priority === 'urgent' ? '<span class="fl-priority">緊急</span>' : ''}
-      ${entry.content ? `<p class="fl-card-content">${esc(entry.content)}</p>` : ''}
-      <div class="fl-people"><span class="fl-muted">知悉同事</span>${peopleHtml(entry.knownPeople)}</div>
-      ${entry.dueDate ? `<p class="fl-muted">跟進日期：${esc(entry.dueDate)}</p>` : ''}
-      <div class="fl-card-bottom"><small>${esc(time(entry.updatedAt))}</small><button type="button" data-fl-open="${esc(entry.id)}">詳情 · ${Number(entry.commentCount) || 0} 則留言</button></div></article>`;
+    return `<button type="button" class="fl-row ${entry.priority === 'urgent' && entry.status !== 'completed' ? 'fl-urgent' : ''}" data-fl-open="${esc(entry.id)}" aria-label="查看事項：${esc(entry.title)}">
+      <span class="fl-row-status"><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span>${entry.priority === 'urgent' ? '<span class="fl-priority">緊急</span>' : ''}</span>
+      <span class="fl-row-venue">${esc(entry.venue)}</span>
+      <span class="fl-row-main"><span class="fl-row-title">${esc(entry.title)}</span>${entry.content ? `<span class="fl-row-preview">${esc(entry.content)}</span>` : ''}${entry.dueDate ? `<span class="fl-row-due">跟進日期：${esc(entry.dueDate)}</span>` : ''}</span>
+      <span class="fl-row-people"><span class="fl-row-label">知悉同事：</span><span class="fl-row-names">${esc((entry.knownPeople || []).join('、') || '未填寫')}</span></span>
+      <span class="fl-row-updated"><span class="fl-row-time-full">${esc(time(entry.updatedAt)) || '—'}</span><span class="fl-row-time-short">${esc(time(entry.updatedAt, true)) || '—'}</span></span>
+      <span class="fl-row-comments">${Number(entry.commentCount) || 0} 則留言<span class="fl-row-arrow" aria-hidden="true"> ›</span></span></button>`;
   }
   class Application {
     constructor(dependencies = {}) {
@@ -68,7 +69,7 @@
         <label>狀態篩選<select id="flStatus">${options([['active', '未完成'], ['all', '全部'], ...Object.entries(STATUS)], this.filters.status)}</select></label>
         <label class="fl-search">搜尋<input id="flSearch" value="${esc(this.filters.search)}" placeholder="標題、內容、場地或知悉同事"></label><button type="button" data-fl="search">搜尋</button></div>
         <p class="fl-message${this.error ? ' fl-error' : ''}" role="status">${esc(this.error || (this.loading ? '正在讀取雲端資料…' : `共 ${this.total} 項`))}</p>
-        <div class="fl-grid">${this.entries.map(renderCard).join('') || (!this.loading ? '<div class="fl-empty">未有符合條件的事項。按「新增事項」開始記錄。</div>' : '')}</div>
+        <div class="fl-list"><div class="fl-list-head" aria-hidden="true"><span>狀態</span><span>場地</span><span>事項</span><span>知悉同事</span><span>最後更新</span><span>留言</span></div>${this.entries.map(renderCard).join('') || (!this.loading ? '<div class="fl-empty">未有符合條件的事項。按「新增事項」開始記錄。</div>' : '')}</div>
         <div class="fl-pagination"><button type="button" data-fl="prev"${this.page <= 1 || this.loading ? ' disabled' : ''}>上一頁</button><span>第 ${this.page} 頁</span><button type="button" data-fl="next"${this.page * this.pageSize >= this.total || this.loading ? ' disabled' : ''}>下一頁</button></div></section>`;
     }
     value(name) { return text(this.host()?.querySelector(`#${name}`)?.value); }

@@ -68,7 +68,7 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
     const lastComment = new Map(), counts = new Map();
     allComments.forEach(comment => { counts.set(comment.entryId, (counts.get(comment.entryId) || 0) + 1); if (comment.createdAt > (lastComment.get(comment.entryId) || '')) lastComment.set(comment.entryId, comment.createdAt); });
     filtered = filtered.map(item => ({ ...item, updatedAt: [item.updatedAt, lastComment.get(item.id) || ''].sort().at(-1), commentCount: counts.get(item.id) || 0 }));
-    filtered.sort((a, b) => Number(b.priority === 'urgent') - Number(a.priority === 'urgent') || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
+    filtered.sort((a, b) => Number(a.status === 'completed') - Number(b.status === 'completed') || Number(b.priority === 'urgent') - Number(a.priority === 'urgent') || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
     const page = Math.max(1, Number.parseInt(params.page, 10) || 1), pageSize = 50;
     return { success: true, entries: filtered.slice((page - 1) * pageSize, page * pageSize), total: filtered.length, page, pageSize,
       summary: { active: all.filter(item => item.status !== 'completed').length, urgent: all.filter(item => item.status !== 'completed' && item.priority === 'urgent').length, completed: all.filter(item => item.status === 'completed').length } };

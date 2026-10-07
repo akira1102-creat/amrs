@@ -17,6 +17,13 @@ test('log cards escape content and show known colleagues without responsibility 
   assert.match(card, /2 則留言/);
 });
 
+test('each list entry is one keyboard-accessible detail button containing its summary fields', () => {
+  const row = log.renderCard({ id: 'synthetic-row', title: 'Test follow-up', venue: 'Test Venue', content: 'Summary text', status: 'pending', priority: 'urgent', knownPeople: ['Operator A'], updatedAt: '2026-10-07T02:00:00Z', commentCount: 3 });
+  assert.match(row, /^<button[^>]+data-fl-open="synthetic-row"/);
+  assert.equal((row.match(/<button\b/g) || []).length, 1);
+  for (const field of ['待跟進', '緊急', 'Test Venue', 'Test follow-up', 'Summary text', 'Operator A', '3 則留言']) assert.ok(row.includes(field));
+});
+
 test('mount downloads the active list and a failed refresh preserves visible records', async () => {
   assert.equal(typeof log.createApplication, 'function');
   const host = { innerHTML: '', querySelector: () => null, addEventListener() {} }, calls = [];

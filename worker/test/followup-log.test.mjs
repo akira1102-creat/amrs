@@ -89,6 +89,16 @@ test('creates a cloud log entry once, reads it back and leaves existing sheets u
   assert.ok(list.entries[0].version);
 });
 
+test('all-status log list keeps unfinished entries ahead of completed urgent entries', async () => {
+  const { repo } = harness();
+  for (const [id, status, priority] of [['done', 'completed', 'urgent'], ['pending', 'pending', 'normal'], ['urgent', 'progress', 'urgent']]) {
+    const payload = newEntry(); payload.id = id; payload.entry.status = status; payload.entry.priority = priority;
+    await repo.postAction(payload);
+  }
+  const list = await repo.getAction({ action: 'followupLog', status: 'all' });
+  assert.deepEqual(list.entries.map(entry => entry.id), ['urgent', 'pending', 'done']);
+});
+
 test('rejects stale edits and supports completed and active filters', async () => {
   const { repo } = harness();
   const { entry } = await repo.postAction(newEntry());
