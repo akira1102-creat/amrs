@@ -179,6 +179,41 @@ function resultWithOperation(result, operation, batchId = "") {
   };
 }
 
+async function requireOperationSession(request, env, operation) {
+  if (!operation) return;
+  await requireSession(request, env, permissionForAction(operation.action));
+  if (isSubmissionAction(operation.action)) {
+    const batchId = text(operation.result?.batchId || operation.result?.submissionId) || operation.requestId;
+    if (await getSubmissionBatch(env.DB, batchId)) await requireSubmissionSession(request, env, batchId);
+  }
+}
+
+async function requireSubmissionSession(request, env, batchId) {
+  const items = await listSubmissionItems(env.DB, batchId);
+  const permissions = new Set(items.map((item) => (
+    ["cvcs", "cvcs-broken"].includes(text(item.company).toLowerCase()) ? "cvcs" : "ae"
+  )));
+  if (!permissions.size) {
+    const batch = await getSubmissionBatch(env.DB, batchId);
+    const operationId = text(batch?.result?.operationId || batch?.result?.requestId) || batchId;
+    const operation = await getOperation(env.DB, operationId);
+    if (operation && isSubmissionAction(operation.action)) permissions.add(permissionForAction(operation.action));
+    else { permissions.add("ae"); permissions.add("cvcs"); }
+  }
+  for (const permission of permissions) await requireSession(request, env, permission);
+}
+
+async function requireExistingSubmissionSession(request, env, payload, requestId) {
+  if (!isSubmissionAction(payload?.action)) return;
+  const batchId = text(payload.batchId) || requestId;
+  if (await getSubmissionBatch(env.DB, batchId)) await requireSubmissionSession(request, env, batchId);
+  for (const record of Array.isArray(payload.records) ? payload.records : []) {
+    const id = text(record?.submissionId);
+    const item = id ? await getSubmissionItem(env.DB, id) : null;
+    if (item) await requireSubmissionSession(request, env, item.batchId);
+  }
+}
+
 async function prepareSubmission(db, payload, requestId, now) {
   if (!payload || !isSubmissionAction(payload.action)) return null;
   const records = Array.isArray(payload.records) ? payload.records : [];
@@ -305,7 +340,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   const requestId = deriveRequestId(payload, request);
   const action = Array.isArray(payload) ? "insertRecords" : text(payload?.action) || "insertRecords";
   let operation = await getOperation(db, requestId);
-  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env);
+  await requireOperationSession(request, env, operation);
   if (operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || operation.result?.submissionId || "");
   if (operation?.status === OPERATION_PROCESSING) {
     return {
@@ -317,9 +352,10 @@ async function executeMutation(payload, request, env, dependencies = {}) {
       retryable: true,
     };
   }
+  await requireExistingSubmissionSession(request, env, payload, requestId);
   const started = await startOperation(db, requestId, action, now);
   operation = started.operation;
-  if (LOG_ACTIONS.has(operation?.action)) await requireSession(request, env);
+  await requireOperationSession(request, env, operation);
   if (!started.created && operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || "");
   if (!started.created && operation?.status === OPERATION_PROCESSING) {
     return {
@@ -398,26 +434,29 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   }
 }
 
-async function operationStatus(db, repository, requestId, now) {
+async function operationStatus(db, repository, requestId, now, request, env) {
   let operation = await getOperation(db, requestId);
   if (!operation) throw Object.assign(new Error("Operation not found"), { status: 404 });
+  await requireOperationSession(request, env, operation);
   if (operation.status === OPERATION_PROCESSING && isSubmissionAction(operation.action)) {
-    const reconciled = await reconcileBatch(db, repository, requestId, now);
+    const batchId = text(operation.result?.batchId || operation.result?.submissionId) || requestId;
+    const reconciled = await reconcileBatch(db, repository, batchId, now);
     if (reconciled?.batch?.status === SUBMISSION_BATCH_STATUS.COMPLETED) {
       operation = await updateOperation(db, requestId, {
         status: OPERATION_COMPLETED,
-        result: reconciled.batch.result || { success: true, batchId: requestId },
+        result: reconciled.batch.result || { success: true, batchId },
       }, now);
     }
   }
   return operation;
 }
 
-async function statusResponse(db, repository, id, now) {
+async function statusResponse(db, repository, id, now, request, env) {
   let batch = await getSubmissionBatch(db, id);
   if (!batch) {
     const item = await getSubmissionItem(db, id);
     if (!item) throw Object.assign(new Error("Submission not found"), { status: 404 });
+    await requireSubmissionSession(request, env, item.batchId);
     const reconciled = await reconcileBatch(db, repository, item.batchId, now);
     batch = reconciled?.batch || await getSubmissionBatch(db, item.batchId);
     const items = reconciled?.items || await listSubmissionItems(db, item.batchId);
@@ -430,6 +469,7 @@ async function statusResponse(db, repository, id, now) {
       items,
     };
   }
+  await requireSubmissionSession(request, env, id);
   const result = await reconcileBatch(db, repository, id, now);
   const finalBatch = result?.batch || batch;
   return {
@@ -467,13 +507,12 @@ async function route(request, env, dependencies = {}) {
   const repository = getRepository(env, dependencies);
   const operationMatch = pathname.match(/^\/operations\/([^/]+)$/);
   if (operationMatch && request.method === "GET") {
-    const operation = await operationStatus(env.DB, repository, decodeURIComponent(operationMatch[1]), now);
-    if (LOG_ACTIONS.has(operation.action)) await requireSession(request, env);
+    const operation = await operationStatus(env.DB, repository, decodeURIComponent(operationMatch[1]), now, request, env);
     return { success: true, operation, status: operation.status, result: operation.result, retryable: operation.retryable };
   }
   const submissionMatch = pathname.match(/^\/submissions\/([^/]+)$/);
   if (submissionMatch && request.method === "GET") {
-    return statusResponse(env.DB, repository, decodeURIComponent(submissionMatch[1]), now);
+    return statusResponse(env.DB, repository, decodeURIComponent(submissionMatch[1]), now, request, env);
   }
   throw Object.assign(new Error("Not found"), { status: 404 });
 }
