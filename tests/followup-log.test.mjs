@@ -121,3 +121,81 @@ test('leaving the log while details load never marks a hidden entry as read', as
   assert.equal(reads,0);
   assert.equal(app.modal,null);
 });
+
+function notificationClock() {
+  let time = 0, timerId = 0;
+  const timers = new Map(), listeners = new Map(), queries = [];
+  const document = {
+    hidden: false, getElementById: () => null,
+    addEventListener(type, listener) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(listener); },
+    removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+  };
+  const runtime = vm.createContext({ module: { exports: {} }, URLSearchParams,
+    setInterval(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay, due: time + delay }); return id; },
+    clearInterval(id) { timers.delete(id); },
+  });
+  vm.runInContext(source, runtime);
+  const notices = runtime.module.exports.createNotifications({ document, now: () => time,
+    canRefresh: () => !document.hidden,
+    transport: { async get(query) { queries.push(query); return { success: true, entries: [] }; } },
+  });
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+  return { notices, document, queries, settle,
+    activity(type) { for (const listener of listeners.get(type) || []) listener({ type }); },
+    async advance(target) {
+      while (true) {
+        const next = [...timers.values()].filter(timer => timer.due <= target).sort((a, b) => a.due - b.due)[0];
+        if (!next) break;
+        time = next.due; next.due += next.delay; next.callback(); await settle();
+      }
+      time = target; await settle();
+    },
+  };
+}
+
+test('notification polling checks on open and every three minutes, not every minute', async () => {
+  const clock = notificationClock();
+  clock.notices.start(); await clock.settle();
+  assert.equal(clock.queries.length, 1);
+  assert.equal(new URLSearchParams(clock.queries[0]).get('notificationPoll'), 'idle-v1');
+  await clock.advance(179999); assert.equal(clock.queries.length, 1);
+  await clock.advance(180000); assert.equal(clock.queries.length, 2);
+  clock.notices.start();
+  await clock.advance(360000); assert.equal(clock.queries.length, 3);
+});
+
+test('ten minutes without interaction pauses polling and visibility refresh until user activity resumes', async () => {
+  const clock = notificationClock();
+  clock.notices.start(); await clock.settle(); await clock.advance(599999);
+  assert.equal(clock.queries.length, 4);
+  await clock.advance(600000);
+  await clock.notices.refresh(); assert.equal(clock.queries.length, 4);
+  await clock.advance(900000); assert.equal(clock.queries.length, 4);
+  clock.activity('pointerdown'); await clock.settle(); assert.equal(clock.queries.length, 5);
+  clock.activity('pointermove'); clock.activity('input'); await clock.settle();
+  assert.equal(clock.queries.length, 5);
+  await clock.advance(1080000); assert.equal(clock.queries.length, 6);
+});
+
+test('keyboard, touch and scrolling reset idle time without issuing a request per interaction', async () => {
+  for (const type of ['keydown', 'touchstart', 'wheel', 'scroll', 'input', 'pointermove']) {
+    const clock = notificationClock();
+    clock.notices.start(); await clock.settle(); await clock.advance(540000);
+    clock.activity(type); await clock.settle(); assert.equal(clock.queries.length, 4);
+    await clock.advance(720000); assert.equal(clock.queries.length, 5, type);
+    await clock.advance(1140000); await clock.notices.refresh();
+    assert.equal(clock.queries.length, 7, type);
+  }
+});
+
+test('hidden pages cannot poll or reset idle time, and stopped authentication cannot be resumed by interaction', async () => {
+  const clock = notificationClock();
+  clock.notices.start(); await clock.settle(); clock.document.hidden = true;
+  await clock.advance(600000); clock.activity('keydown');
+  clock.document.hidden = false; await clock.notices.refresh();
+  assert.equal(clock.queries.length, 1);
+  clock.activity('touchstart'); await clock.settle(); assert.equal(clock.queries.length, 2);
+  clock.notices.stop(); await clock.advance(1500000);
+  clock.activity('pointerdown'); await clock.settle(); assert.equal(clock.queries.length, 2);
+  clock.notices.start(); await clock.settle(); assert.equal(clock.queries.length, 3);
+});

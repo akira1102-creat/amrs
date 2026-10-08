@@ -224,6 +224,19 @@
       this.transport = dependencies.transport;
       this.onNavigate = dependencies.onNavigate || (() => {});
       this.canRefresh = dependencies.canRefresh || (() => true);
+      this.now = dependencies.now || (() => Date.now());
+      this.lastActivityAt = this.now();
+      this.activityEvents = ['pointerdown', 'pointermove', 'keydown', 'input', 'wheel', 'touchstart', 'scroll'];
+      this.activityListener = () => {
+        if (this.document?.hidden || this.timer === null) return;
+        const wasIdle = this.isIdle();
+        this.lastActivityAt = this.now();
+        if (wasIdle) {
+          root.clearInterval(this.timer);
+          this.timer = root.setInterval(() => void this.refresh(), 180000);
+          void this.refresh();
+        }
+      };
       this.entries = []; this.seq = 0; this.loading = false; this.timer = null; this.bound = false; this.expanded = true;
       this.read = Object.create(null);
       try {
@@ -240,18 +253,23 @@
       this.render();
     }
     start() {
-      if (this.timer) return;
-      void this.refresh(); this.timer = root.setInterval(() => void this.refresh(), 60000);
+      if (this.timer !== null) return;
+      this.lastActivityAt = this.now();
+      for (const type of this.activityEvents) this.document?.addEventListener?.(type, this.activityListener, { passive: true, capture: true });
+      this.timer = root.setInterval(() => void this.refresh(), 180000);
+      void this.refresh();
     }
     stop() {
-      if (this.timer) root.clearInterval(this.timer);
+      if (this.timer !== null) root.clearInterval(this.timer);
+      for (const type of this.activityEvents) this.document?.removeEventListener?.(type, this.activityListener, { capture: true });
       this.timer = null; this.seq++; this.loading = false; this.entries = []; this.render();
     }
+    isIdle() { return this.now() - this.lastActivityAt >= 600000; }
     async refresh() {
-      if (this.loading || !this.canRefresh()) return;
+      if (this.loading || this.isIdle() || !this.canRefresh()) return;
       const seq = ++this.seq; this.loading = true;
       try {
-        const result = await this.transport.get('action=followupNotifications');
+        const result = await this.transport.get('action=followupNotifications&notificationPoll=idle-v1');
         if (seq !== this.seq || !this.canRefresh()) return;
         if (result?.success) { this.entries = result.entries || []; this.render(); }
       } catch {} // Keep the last confirmed unread list during transient network failures.

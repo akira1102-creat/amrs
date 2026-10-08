@@ -1702,13 +1702,13 @@
 <script src="./galaxy-log.js?v=20261007d"></script>
 <script src="./mgm-check-request.js?v=20261007d"></script>
 <script src="./worksheet-editor.js?v=20261007d"></script>
-<script src="./followup-log.js?v=20261007d"></script>
+<script src="./followup-log.js?v=20261008a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
 const _APP_BUMP='2026.10.07-05';
-const _APP_VERSION='v1.137';
+const _APP_VERSION='v1.138';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2167,7 +2167,7 @@ function ensureFollowupLogApp(){
 }
 function startFollowupNotices(){
   if(!_accessSessionVerified||document.body.classList.contains('auth-locked')||!window.AmrsFollowupLog)return;
-  if(!_followupNotices)_followupNotices=window.AmrsFollowupLog.createNotifications({document,storage:localStorage,transport:_dualTransport,canRefresh:()=>_accessSessionVerified&&!document.hidden&&!document.body.classList.contains('auth-locked'),onNavigate:async entryId=>{
+  if(!_followupNotices)_followupNotices=window.AmrsFollowupLog.createNotifications({document,storage:localStorage,transport:_dualTransport,canRefresh:()=>_accessSessionVerified&&!document.hidden&&navigator.onLine!==false&&!document.body.classList.contains('auth-locked'),onNavigate:async entryId=>{
     const app=ensureFollowupLogApp();
     if(!app||app.modal&&!app.closeModal())return;
     showPage('followupLog');
