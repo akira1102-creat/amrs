@@ -12,9 +12,107 @@ test('log cards escape content and show known colleagues without responsibility 
   const card = log.renderCard({ id: 'test-id', title: '<img src=x>', venue: 'Test Venue', content: 'First\nSecond', status: 'pending', knownPeople: ['Operator A'], commentCount: 2 });
   assert.match(card, /&lt;img src=x&gt;/);
   assert.doesNotMatch(card, /<img|負責人|我已知悉/);
-  assert.match(card, /知悉同事/);
+  assert.match(card, /輸入者/);
   assert.match(card, /Operator A/);
   assert.match(card, /2 則留言/);
+});
+
+function editorHarness(values = {}) {
+  const controls = {}, errors = {}, focused = [];
+  for (const name of ['flEditCompany', 'flEditVenue', 'flTitle', 'flContent', 'flEditStatus', 'flPriority', 'flDueDate', 'flPerson']) {
+    const attributes = {}, classes = new Set();
+    controls[name] = { value: values[name] || '', innerHTML: '', disabled: false,
+      classList: { toggle(name, on) { on ? classes.add(name) : classes.delete(name); }, contains: name => classes.has(name) },
+      setAttribute(name, value) { attributes[name] = value; }, removeAttribute(name) { delete attributes[name]; }, getAttribute: name => attributes[name],
+      focus() { focused.push(name); }, scrollIntoView() {} };
+    errors[`${name}Error`] = { textContent: '', hidden: true };
+  }
+  controls.flPeople = { innerHTML: '' };
+  const message = { textContent: '', classList: { toggle() {} } };
+  const host = { querySelector: selector => selector === '#flModalMessage' ? message : controls[selector.slice(1)] || errors[selector.slice(1)] || null };
+  const calls = [];
+  const app = log.createApplication({ document: { getElementById: () => host }, venues: { GEG: ['Test Venue'], SCL: ['Other Venue'] }, transport: { async post(payload) { calls.push(payload); return { success: false, message: 'Synthetic save failure' }; } } });
+  app.knownPeople = []; app.editorId = 'synthetic-editor';
+  return { app, controls, errors, focused, message, calls };
+}
+
+test('empty mandatory fields are highlighted together and focus moves to the first missing field without writing', async () => {
+  const { app, controls, errors, focused, calls } = editorHarness();
+  await app.saveEditor();
+  assert.equal(calls.length, 0);
+  for (const field of ['flEditCompany', 'flTitle', 'flPerson']) {
+    assert.equal(controls[field].getAttribute('aria-invalid'), 'true');
+    assert.equal(controls[field].classList.contains('fl-invalid'), true);
+    assert.ok(errors[`${field}Error`].textContent);
+  }
+  assert.equal(controls.flEditVenue.getAttribute('aria-invalid'), undefined);
+  assert.equal(focused[0], 'flEditCompany');
+});
+
+test('optional venue can be blank and a typed inputter is saved even without pressing add', async () => {
+  const { app, calls } = editorHarness({ flEditCompany: 'OTHER', flTitle: 'Test entry', flPerson: 'Operator A', flEditStatus: 'pending', flPriority: 'normal' });
+  await app.saveEditor();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].entry.company, 'OTHER');
+  assert.equal(calls[0].entry.venue, '');
+  assert.deepEqual(Array.from(calls[0].entry.knownPeople), ['Operator A']);
+});
+
+test('required-field highlights clear after the user fills the missing information', async () => {
+  const { app, controls, errors } = editorHarness();
+  await app.saveEditor();
+  controls.flEditCompany.value = 'OTHER'; controls.flTitle.value = 'Test entry'; controls.flPerson.value = 'Operator A';
+  assert.equal(app.validateEditor(false), true);
+  for (const name of ['flEditCompany', 'flTitle', 'flPerson']) {
+    assert.equal(controls[name].getAttribute('aria-invalid'), undefined);
+    assert.equal(errors[`${name}Error`].hidden, true);
+  }
+});
+
+test('validation summary stops requesting the company as soon as a company has been selected', async () => {
+  const { app, controls, message } = editorHarness();
+  await app.saveEditor(); controls.flEditCompany.value = 'OTHER';
+  assert.equal(app.validateEditor(false), false);
+  assert.doesNotMatch(message.textContent, /請選擇公司/);
+  assert.match(message.textContent, /標題|輸入者/);
+});
+
+test('diary items and unread notices still identify other matters when optional venue is empty', async () => {
+  const entry = { id: 'other-entry', company: 'OTHER', venue: '', title: 'Test other matter', knownPeople: ['Operator A'], status: 'pending', revision: 'one' };
+  assert.match(log.renderCard(entry), /其他事項/);
+  const host = { innerHTML: '', addEventListener() {} };
+  const notices = log.createNotifications({ document: { getElementById: () => host }, transport: { get: async () => ({ success: true, entries: [entry] }) } });
+  await notices.refresh();
+  assert.match(host.innerHTML, /其他事項/);
+});
+
+test('company changes replace the select options and clear a venue from another company', () => {
+  const { app, controls } = editorHarness({ flEditCompany: 'GEG', flEditVenue: 'Other Venue' });
+  app.change({ target: controls.flEditCompany = { ...controls.flEditCompany, id: 'flEditCompany' } });
+  assert.equal(controls.flEditVenue.value, '');
+  assert.match(controls.flEditVenue.innerHTML, />全部<\/option>/);
+  assert.match(controls.flEditVenue.innerHTML, /Test Venue/);
+  assert.doesNotMatch(controls.flEditVenue.innerHTML, /Other Venue/);
+  assert.equal(app.modalDirty, true);
+});
+
+test('a cross-company venue is rejected and highlighted before submission', async () => {
+  const { app, calls, controls } = editorHarness({ flEditCompany: 'GEG', flEditVenue: 'Other Venue', flTitle: 'Test entry', flPerson: 'Operator A' });
+  await app.saveEditor();
+  assert.equal(calls.length, 0);
+  assert.equal(controls.flEditVenue.getAttribute('aria-invalid'), 'true');
+});
+
+test('new entry uses explicit company and fixed venue selects with other matters and required inputter', () => {
+  const { app } = editorHarness(); let html;
+  app.showModal = (_title, content) => { html = content; return true; };
+  app.openEditor();
+  assert.match(html, /<select id="flEditCompany"[^>]*required/);
+  assert.match(html, /value="" selected>請選擇公司/);
+  assert.match(html, /value="OTHER">其他事項/);
+  assert.match(html, /<select id="flEditVenue"/);
+  assert.doesNotMatch(html, /<input id="flEditVenue"/);
+  assert.match(html, /輸入者.*必填/);
 });
 
 test('each list entry is one keyboard-accessible detail button containing its summary fields', () => {

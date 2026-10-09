@@ -4,6 +4,17 @@ import { createRepository } from '../src/repository.mjs';
 import { permissionForAction, handleRequest } from '../src/api.mjs';
 import { issueSessionToken } from '../src/crypto.mjs';
 import access from '../../access-control.js';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { COMPANY_CASINOS } from '../src/config.mjs';
+
+test('server venue allowlist stays aligned with the data-entry company lists', () => {
+  const html = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const match = html.match(/const COMPANY_CASINOS=(\{[\s\S]*?\});/);
+  assert.ok(match);
+  const venues = vm.runInNewContext(`(${match[1]})`);
+  assert.deepEqual(JSON.parse(JSON.stringify(venues)), COMPANY_CASINOS);
+});
 
 test('follow-up log is available to every authenticated token but never anonymously', async () => {
   assert.equal(access.pagePermission('followupLog'), '');
@@ -84,15 +95,49 @@ function harness() {
   return { repo, tables, writes };
 }
 const newEntry = () => ({ action: 'createFollowupLog', id: 'synthetic-entry', entry: {
-  company: 'GEG', venue: 'Test Venue', title: 'Test follow-up', content: '=literal text',
+  company: 'GEG', venue: '全部', title: 'Test follow-up', content: '=literal text',
   status: 'pending', priority: 'normal', dueDate: '', knownPeople: ['Operator A', 'Operator B'],
 } });
+
+test('log entries allow an optional venue and other matters while preserving the sheet schema', async () => {
+  for (const company of ['GEG', 'OTHER']) {
+    for (const venue of ['', '全部']) {
+      const { repo, tables } = harness(), payload = newEntry();
+      Object.assign(payload.entry, { company, venue });
+      const result = await repo.postAction(payload);
+      assert.equal(result.entry.company, company);
+      assert.equal(result.entry.venue, venue);
+      assert.deepEqual(tables.Entries[0], headers);
+      assert.deepEqual(result.entry.knownPeople, ['Operator A', 'Operator B']);
+    }
+  }
+});
+
+test('log validation rejects missing company or inputter and venues outside the selected company without writing', async () => {
+  for (const patch of [{ company: '' }, { knownPeople: [] }, { knownPeople: ['  '] }, { venue: 'Unlisted Venue' }, { company: 'OTHER', venue: 'Unlisted Venue' }]) {
+    const { repo, writes } = harness(), payload = newEntry();
+    Object.assign(payload.entry, patch);
+    await assert.rejects(repo.postAction(payload), error => error.status === 400);
+    assert.equal(writes.length, 0);
+  }
+});
+
+test('legacy diary rows remain readable and legacy all-company entries can be edited without changing their scope', async () => {
+  const { repo, tables } = harness();
+  tables.Entries.push(['legacy-entry', 'ALL', '全部場地', 'Old entry', '', 'pending', 'normal', '', '["Operator A"]', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z']);
+  const detail = await repo.getAction({ action: 'followupLog', id: 'legacy-entry' });
+  const result = await repo.postAction({ action: 'updateFollowupLog', id: detail.entry.id, baseVersion: detail.entry.version, entry: { ...detail.entry, title: 'Updated entry' } });
+  assert.equal(result.entry.company, 'ALL');
+  assert.equal(result.entry.venue, '全部場地');
+});
 
 test('creates a cloud log entry once, reads it back and leaves existing sheets untouched', async () => {
   const { repo, tables, writes } = harness();
   const result = await repo.postAction(newEntry());
   assert.equal(result.success, true);
   assert.equal(result.entry.content, '=literal text');
+  const notifications = await repo.getAction({ action: 'followupNotifications' });
+  assert.equal(notifications.entries[0].company, 'GEG');
   assert.deepEqual(result.entry.knownPeople, ['Operator A', 'Operator B']);
   await repo.postAction(newEntry());
   assert.equal(tables.Entries.length, 2);

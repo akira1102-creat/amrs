@@ -1,5 +1,5 @@
 import { sha256Base64Url } from './crypto.mjs';
-import { COMPANIES } from './config.mjs';
+import { COMPANIES, COMPANY_CASINOS } from './config.mjs';
 
 export const LOG_HEADERS = ['ID', 'Company', 'Venue', 'Title', 'Content', 'Status', 'Priority', 'Due Date', 'Known People', 'Created At', 'Updated At'];
 export const COMMENT_HEADERS = ['ID', 'Entry ID', 'Name', 'Content', 'Created At'];
@@ -12,17 +12,19 @@ function required(value, label, maximum) {
   if (!result || result.length > maximum) throw fail(`${label}必須填寫，且不可超過 ${maximum} 字`);
   return result;
 }
-function entryInput(input = {}) {
+function entryInput(input = {}, current = null) {
   const company = text(input.company), venue = text(input.venue);
-  if (company !== 'ALL' && !COMPANIES.includes(company)) throw fail('請選擇公司');
-  if (company !== 'ALL' && !venue) throw fail('請選擇場地');
+  if (!COMPANIES.includes(company) && company !== 'OTHER' && !(company === 'ALL' && current?.company === 'ALL')) throw fail('請選擇公司');
+  const legacyVenue = current?.company === company && current?.venue === venue;
+  if (venue && venue !== '全部' && !(COMPANY_CASINOS[company] || []).includes(venue) && !legacyVenue) throw fail('請選擇該公司的場地或「全部」');
   if (venue.length > 100) throw fail('場地名稱過長');
   const status = text(input.status) || 'pending', priority = text(input.priority) || 'normal';
   if (!STATUSES.includes(status) || !['normal', 'urgent'].includes(priority)) throw fail('狀態或優先程度無效');
   const dueDate = text(input.dueDate);
   if (dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || !Number.isFinite(Date.parse(dueDate)) || new Date(dueDate).toISOString().slice(0, 10) !== dueDate)) throw fail('跟進日期無效');
   const knownPeople = Array.isArray(input.knownPeople) ? [...new Set(input.knownPeople.map(text).filter(Boolean))] : [];
-  if (knownPeople.length > 30 || knownPeople.some(name => name.length > 60)) throw fail('知悉同事資料過長');
+  if (!knownPeople.length) throw fail('請填寫輸入者姓名');
+  if (knownPeople.length > 30 || knownPeople.some(name => name.length > 60)) throw fail('輸入者資料過長');
   const content = text(input.content);
   if (content.length > 8000) throw fail('內容不可超過 8000 字');
   return { company, venue: company === 'ALL' ? '全部場地' : venue, title: required(input.title, '標題', 160), content, status, priority, dueDate, knownPeople };
@@ -66,7 +68,7 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
       if (!entry) throw fail('找不到此事項，請重新載入', 404);
       return { success: true, entry, comments: allComments.filter(comment => comment.entryId === entry.id) };
     }
-    if (params.action === 'followupNotifications') return {success:true, entries:decorated.sort((a,b)=>Number(b.priority==='urgent')-Number(a.priority==='urgent')||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id)).map(({id,venue,title,status,priority,updatedAt,revision})=>({id,venue,title,status,priority,updatedAt,revision}))};
+    if (params.action === 'followupNotifications') return {success:true, entries:decorated.sort((a,b)=>Number(b.priority==='urgent')-Number(a.priority==='urgent')||b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id)).map(({id,company,venue,title,status,priority,updatedAt,revision})=>({id,company,venue,title,status,priority,updatedAt,revision}))};
     const search = text(params.search).toLowerCase(), status = text(params.status) || 'active';
     let filtered = decorated.filter(item => (!params.company || item.company === params.company) && (!params.venue || item.venue === params.venue)
       && (status === 'all' || (status === 'active' ? item.status !== 'completed' : item.status === status))
@@ -100,7 +102,7 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
       await sheets.valuesAppend({ spreadsheetId: sheetId(), range: 'Comments!A:E', valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', values: [[id, entryId, comment.name, comment.content, timestamp]] });
       return { success: true, comment };
     }
-    const input = entryInput(payload.entry);
+    const input = entryInput(payload.entry, current);
     let values;
     if (payload.action === 'createFollowupLog') {
       if (current) {

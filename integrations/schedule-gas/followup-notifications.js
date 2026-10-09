@@ -1,4 +1,4 @@
-// GAS integration build 2026.10.08-1. No credentials or private sheet IDs belong here.
+// GAS integration build 2026.10.09-1. No credentials or private sheet IDs belong here.
 // Helpers end in '_' so the public schedule web app cannot call them via google.script.run.
 function scheduleFollowupVenue_(value) {
   const clean = String(value || '').trim().replace(/\s*\*+\s*$/, '').replace(/[’']/g, "'");
@@ -10,6 +10,21 @@ function scheduleFollowupVenue_(value) {
 
 function scheduleFollowupVenueKey_(value) {
   return scheduleFollowupVenue_(value).toLowerCase().replace(/\s+/g, '');
+}
+
+function scheduleFollowupMatchesVenue_(entry, venue) {
+  const key = scheduleFollowupVenueKey_(venue);
+  if (!['全部', '全部場地'].includes(entry.venue)) return scheduleFollowupVenueKey_(entry.venue) === key;
+  const companies = typeof SCHEDULE_FOLLOWUP_COMPANY_VENUES !== 'undefined' ? SCHEDULE_FOLLOWUP_COMPANY_VENUES : {
+    Melco: ['ALT', 'COD', 'SC'],
+    MGM: ['MGM Macau', 'MGM Cotai'],
+    SJM: ['Lisboa', 'Grand Lisboa', 'Grand Lisboa Palace', 'Oceanus', 'Jai Alai', 'L’Arc'],
+    SCL: ['Venetian', 'Parisian', 'Londoner', 'Plaza', 'Sands'],
+    GEG: ['Galaxy', 'StarWorld'],
+    Wynn: ['Wynn', 'Wynn Palace'],
+  };
+  const venues = entry.company === 'ALL' ? Object.keys(companies).reduce((all, company) => all.concat(companies[company]), []) : companies[entry.company] || [];
+  return venues.some(value => scheduleFollowupVenueKey_(value) === key);
 }
 
 function parseScheduleFollowups_(rows) {
@@ -47,8 +62,7 @@ function scheduleFollowupDiscordText_(value) {
 }
 
 function buildVenueFollowupText_(venue, followups) {
-  const key = scheduleFollowupVenueKey_(venue);
-  const entries = (followups.entries || []).filter(entry => ['pending','progress','waiting'].includes(entry.status) && scheduleFollowupVenueKey_(entry.venue) === key);
+  const entries = (followups.entries || []).filter(entry => ['pending','progress','waiting'].includes(entry.status) && scheduleFollowupMatchesVenue_(entry, venue));
   if (!entries.length) return '';
   const labels = { pending:'待跟進', progress:'進行中', waiting:'等待' };
   let text = `　📌 ${scheduleFollowupDiscordText_(scheduleFollowupVenue_(venue))} 未完成跟進（${entries.length} 項）\n`;
@@ -94,10 +108,10 @@ function verifyDailyScheduleFollowups_() {
   const schedule = buildScheduleForDate(SpreadsheetApp.getActiveSpreadsheet(), new Date());
   if (schedule.error) throw new Error(schedule.error);
   const countFor = period => {
-    const keys = new Set(Object.keys(period && period.venueMap || {}).map(scheduleFollowupVenueKey_));
-    return followups.entries.filter(entry => keys.has(scheduleFollowupVenueKey_(entry.venue))).length;
+    const venues = Object.keys(period && period.venueMap || {});
+    return followups.entries.filter(entry => venues.some(venue => scheduleFollowupMatchesVenue_(entry, venue))).length;
   };
-  const summary = { build:'2026.10.08-1', readOk:true, activeEntries:followups.entries.length,
+  const summary = { build:'2026.10.09-1', readOk:true, activeEntries:followups.entries.length,
     amMatched:countFor(schedule.am), pmMatched:countFor(schedule.pm), silentDay:!!(schedule.isHoliday || schedule.isWeekend), sendsDiscord:false };
   Logger.log('跟進日誌驗證完成：' + JSON.stringify(summary));
   return summary;

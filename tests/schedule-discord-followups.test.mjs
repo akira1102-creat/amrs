@@ -46,6 +46,16 @@ test('AM and PM each match their own venues, including aliases and starred venue
   assert.equal(a.buildVenueFollowupText_('AL', data), '');
 });
 
+test('all-venue notices match only scheduled venues belonging to the chosen company', () => {
+  const a = app({ SCHEDULE_FOLLOWUP_COMPANY_VENUES: { TEST: ['Site Alpha'], SECOND: ['Site Beta'] } });
+  const entries = a.parseScheduleFollowups_([headers, row('all', '全部'), row('unspecified', ''), ['other', 'OTHER', '全部', 'Other matters', '', 'pending']]);
+  const am = a.buildVenueFollowupText_('A*', { entries }), pm = a.buildVenueFollowupText_('B', { entries });
+  assert.match(am, /Task all/);
+  assert.doesNotMatch(am, /Task unspecified|Other matters/);
+  assert.equal(pm, '');
+  assert.equal(a.buildVenueFollowupText_('AL', { entries }), '');
+});
+
 test('one unfinished item is listed once per venue even when a venue has multiple spellings', () => {
   const a = app();
   assert.equal(typeof a.buildScheduleFollowupBlock_, 'function', 'period formatter must exist');

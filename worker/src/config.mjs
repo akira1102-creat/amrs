@@ -1,4 +1,12 @@
 export const COMPANIES = ["Melco", "MGM", "SJM", "SCL", "GEG", "Wynn"];
+export const COMPANY_CASINOS = {
+  Melco: ['ALT', 'COD', 'SC'],
+  MGM: ['MGM Macau', 'MGM Cotai'],
+  SJM: ['Lisboa', 'Grand Lisboa', 'Grand Lisboa Palace', 'Oceanus', 'Jai Alai', 'L’Arc'],
+  SCL: ['Venetian', 'Parisian', 'Londoner', 'Plaza', 'Sands'],
+  GEG: ['Galaxy', 'StarWorld'],
+  Wynn: ['Wynn', 'Wynn Palace'],
+};
 export const DEFAULT_COMPANY = "SCL";
 export const WORKSHEET_NAME = "Worksheet";
 export const BROKEN_PARTS_SHEET = "Broken Parts List";

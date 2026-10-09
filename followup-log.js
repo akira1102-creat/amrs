@@ -11,12 +11,15 @@
   const time = (value, compact = false) => value ? new Date(value).toLocaleString('zh-HK', { timeZone: 'Asia/Hong_Kong', hour12: false, ...(compact ? { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' } : {}) }) : '';
   const options = (values, selected) => values.map(([value, label]) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`).join('');
   const peopleHtml = people => (people || []).map(name => `<span class="fl-person">${esc(name)}</span>`).join('') || '<span class="fl-muted">未填寫</span>';
+  const companyLabel = company => company === 'OTHER' ? '其他事項' : company === 'ALL' ? '全部公司' : text(company);
+  const scopeLabel = entry => [companyLabel(entry.company), text(entry.venue)].filter(Boolean).join(' · ');
+  const fieldErrorHtml = name => `<small id="${name}Error" class="fl-field-error" hidden></small>`;
   function renderCard(entry) {
     return `<button type="button" class="fl-row ${entry.priority === 'urgent' && entry.status !== 'completed' ? 'fl-urgent' : ''}" data-fl-open="${esc(entry.id)}" aria-label="查看事項：${esc(entry.title)}">
       <span class="fl-row-status"><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span>${entry.priority === 'urgent' ? '<span class="fl-priority">緊急</span>' : ''}</span>
-      <span class="fl-row-venue">${esc(entry.venue)}</span>
+      <span class="fl-row-venue">${esc(scopeLabel(entry))}</span>
       <span class="fl-row-main"><span class="fl-row-title">${esc(entry.title)}</span>${entry.content ? `<span class="fl-row-preview">${esc(entry.content)}</span>` : ''}${entry.dueDate ? `<span class="fl-row-due">跟進日期：${esc(entry.dueDate)}</span>` : ''}</span>
-      <span class="fl-row-people"><span class="fl-row-label">知悉同事：</span><span class="fl-row-names">${esc((entry.knownPeople || []).join('、') || '未填寫')}</span></span>
+      <span class="fl-row-people"><span class="fl-row-label">輸入者：</span><span class="fl-row-names">${esc((entry.knownPeople || []).join('、') || '未填寫')}</span></span>
       <span class="fl-row-updated"><span class="fl-row-time-full">${esc(time(entry.updatedAt)) || '—'}</span><span class="fl-row-time-short">${esc(time(entry.updatedAt, true)) || '—'}</span></span>
       <span class="fl-row-comments">${Number(entry.commentCount) || 0} 則留言<span class="fl-row-arrow" aria-hidden="true"> ›</span></span></button>`;
   }
@@ -47,7 +50,7 @@
         host.addEventListener('click', event => this.click(event));
         host.addEventListener('change', event => this.change(event));
         host.addEventListener('toggle', event => { if (event.target.classList?.contains('fl-filter-panel')) this.filtersOpen = event.target.open; }, true);
-        host.addEventListener('input', event => { if (event.target.closest('.fl-modal')) this.modalDirty = true; });
+        host.addEventListener('input', event => { if (event.target.closest('.fl-modal')) { this.modalDirty = true; if (this.editorValidationShown) this.validateEditor(false); } });
         host.addEventListener('keydown', event => { if (event.key === 'Escape' && this.modal) this.closeModal(); if (event.key === 'Enter' && event.target.id === 'flSearch') { event.preventDefault(); this.applyFilters(); } });
       }
       this.render();
@@ -68,12 +71,12 @@
       const host = this.host(); if (!host || this.modal) return;
       host.innerHTML = `<section class="fl-page"><div class="fl-header"><div><h2>跟進日誌</h2><p class="fl-muted">場地事項、留言及進展</p></div><div class="fl-actions"><button type="button" data-fl="refresh"${this.loading ? ' disabled' : ''}>${this.loading ? '正在載入…' : '重新載入'}</button><button class="fl-primary" type="button" data-fl="new">新增事項</button></div></div>
         <div class="fl-summary"><span>未完成 <strong>${this.summary.active || 0}</strong></span><span>緊急 <strong>${this.summary.urgent || 0}</strong></span><span>已完成 <strong>${this.summary.completed || 0}</strong></span></div>
-        <details class="fl-filter-panel"${this.filtersOpen ? ' open' : ''}><summary>篩選或搜尋</summary><div class="fl-filters"><label>公司篩選<select id="flCompany">${options([['', '全部公司'], ['ALL', '全部場地通知'], ...Object.keys(this.venues).map(v => [v, v])], this.filters.company)}</select></label>
-        <label>場地篩選<input id="flVenue" list="flVenueList" value="${esc(this.filters.venue)}" placeholder="全部場地"><datalist id="flVenueList">${(this.filters.company ? this.venues[this.filters.company] || [] : Object.values(this.venues).flat()).map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
+        <details class="fl-filter-panel"${this.filtersOpen ? ' open' : ''}><summary>篩選或搜尋</summary><div class="fl-filters"><label>公司篩選<select id="flCompany">${options([['', '全部公司'], ...Object.keys(this.venues).map(v => [v, v]), ['OTHER', '其他事項'], ['ALL', '全部場地通知（舊資料）']], this.filters.company)}</select></label>
+        <label>場地篩選<select id="flVenue">${options([['', '不限場地'], ['全部', '全部（公司所有場地）'], ...[...new Set(this.filters.company ? this.venues[this.filters.company] || [] : Object.values(this.venues).flat())].map(v => [v, v])], this.filters.venue)}</select></label>
         <label>狀態篩選<select id="flStatus">${options([['active', '未完成'], ['all', '全部'], ...Object.entries(STATUS)], this.filters.status)}</select></label>
-        <label class="fl-search">搜尋<input id="flSearch" value="${esc(this.filters.search)}" placeholder="標題、內容、場地或知悉同事"></label><button type="button" data-fl="search">搜尋</button></div></details>
+        <label class="fl-search">搜尋<input id="flSearch" value="${esc(this.filters.search)}" placeholder="標題、內容、場地或輸入者"></label><button type="button" data-fl="search">搜尋</button></div></details>
         <p class="fl-message${this.error ? ' fl-error' : ''}" role="status">${esc(this.error || (this.loading ? '正在讀取雲端資料…' : `共 ${this.total} 項`))}</p>
-        <div class="fl-list"><div class="fl-list-head" aria-hidden="true"><span>狀態</span><span>場地</span><span>事項</span><span>知悉同事</span><span>最後更新</span><span>留言</span></div>${this.entries.map(entry => `<div class="fl-list-item">${renderCard(entry)}<div class="fl-delete-cell"><button type="button" class="fl-delete" data-fl-delete="${esc(entry.id)}" aria-label="刪除事項：${esc(entry.title)}">刪除</button></div></div>`).join('') || (!this.loading ? '<div class="fl-empty">未有符合條件的事項。按「新增事項」開始記錄。</div>' : '')}</div>
+        <div class="fl-list"><div class="fl-list-head" aria-hidden="true"><span>狀態</span><span>公司／場地</span><span>事項</span><span>輸入者</span><span>最後更新</span><span>留言</span></div>${this.entries.map(entry => `<div class="fl-list-item">${renderCard(entry)}<div class="fl-delete-cell"><button type="button" class="fl-delete" data-fl-delete="${esc(entry.id)}" aria-label="刪除事項：${esc(entry.title)}">刪除</button></div></div>`).join('') || (!this.loading ? '<div class="fl-empty">未有符合條件的事項。按「新增事項」開始記錄。</div>' : '')}</div>
         <div class="fl-pagination"><button type="button" data-fl="prev"${this.page <= 1 || this.loading ? ' disabled' : ''}>上一頁</button><span>第 ${this.page} 頁</span><button type="button" data-fl="next"${this.page * this.pageSize >= this.total || this.loading ? ' disabled' : ''}>下一頁</button></div></section>`;
     }
     value(name) { return text(this.host()?.querySelector(`#${name}`)?.value); }
@@ -105,10 +108,13 @@
     change(event) {
       if (event.target.id === 'flEditCompany') {
         const company = this.value('flEditCompany');
-        const input = this.host().querySelector('#flEditVenue'); input.value = company === 'ALL' ? '全部場地' : ''; input.disabled = company === 'ALL';
-        this.host().querySelector('#flEditVenueList').innerHTML = (this.venues[company] || []).map(v => `<option value="${esc(v)}"></option>`).join('');
+        const input = this.host().querySelector('#flEditVenue');
+        input.innerHTML = this.venueOptions(company); input.value = company === 'ALL' ? '全部場地' : ''; input.disabled = !company || company === 'ALL';
+        this.modalDirty = true;
+        if (this.editorValidationShown) this.validateEditor(false);
       } else if (event.target.id === 'flCompany') { this.host().querySelector('#flVenue').value = ''; this.applyFilters(); }
-      else if (event.target.id === 'flStatus') this.applyFilters();
+      else if (['flStatus', 'flVenue'].includes(event.target.id)) this.applyFilters();
+      else if (this.editorValidationShown && event.target.closest?.('.fl-modal')) this.validateEditor(false);
     }
     closeModal(force = false) {
       if (this.busy || (!force && this.unknownWrite)) { this.toast('正在確認儲存結果，請勿關閉；可重試同一筆儲存', 'err'); return false; }
@@ -123,10 +129,10 @@
     }
     showModal(title, content, actions) {
       if (this.modal && !this.closeModal()) return false;
-      this.lastFocus = this.document.activeElement; this.modal = true; this.modalDirty = false; this.unknownWrite = false;
+      this.lastFocus = this.document.activeElement; this.modal = true; this.modalDirty = false; this.unknownWrite = false; this.editorValidationShown = false;
       const host = this.host();
       host.insertAdjacentHTML('beforeend', `<div class="fl-overlay"><section class="fl-modal" role="dialog" aria-modal="true" aria-labelledby="flModalTitle"><div class="fl-modal-head"><h3 id="flModalTitle">${esc(title)}</h3><button type="button" data-fl="close" aria-label="關閉">×</button></div><div class="fl-modal-content">${content}</div><p id="flModalMessage" class="fl-message" role="status"></p><div class="fl-actions fl-modal-actions">${actions}<button type="button" data-fl="close">關閉</button></div></section></div>`);
-      setTimeout(() => host.querySelector('.fl-modal input, .fl-modal button')?.focus(), 0);
+      setTimeout(() => host.querySelector('.fl-modal input, .fl-modal select, .fl-modal button')?.focus(), 0);
       return true;
     }
     async openDetail(entryId) {
@@ -139,8 +145,8 @@
         if (!result?.success) throw new Error(result?.message || '事項載入失敗');
         this.detail = result;
         let author = ''; try { author = this.storage?.getItem('_amrs_log_comment_name') || ''; } catch {}
-        const shown = this.showModal(result.entry.title, `<p>${esc(result.entry.venue)} · <span class="fl-status fl-${esc(result.entry.status)}">${esc(STATUS[result.entry.status])}</span>${result.entry.priority === 'urgent' ? ' · 緊急' : ''}</p>
-          <p class="fl-full-content">${esc(result.entry.content || '未填寫內容')}</p><div class="fl-people"><span class="fl-muted">知悉同事</span>${peopleHtml(result.entry.knownPeople)}</div>
+        const shown = this.showModal(result.entry.title, `<p>${esc(scopeLabel(result.entry))} · <span class="fl-status fl-${esc(result.entry.status)}">${esc(STATUS[result.entry.status])}</span>${result.entry.priority === 'urgent' ? ' · 緊急' : ''}</p>
+          <p class="fl-full-content">${esc(result.entry.content || '未填寫內容')}</p><div class="fl-people"><span class="fl-muted">輸入者</span>${peopleHtml(result.entry.knownPeople)}</div>
           ${result.entry.dueDate ? `<p>跟進日期：${esc(result.entry.dueDate)}</p>` : ''}<p class="fl-muted">建立：${esc(time(result.entry.createdAt))}<br>更新：${esc(time(result.entry.updatedAt))}</p>
           <h4>留言及進展</h4><div class="fl-comments">${result.comments.map(comment => `<article class="fl-comment"><div><strong>${esc(comment.name)}</strong><small>${esc(time(comment.createdAt))}</small></div><p>${esc(comment.content)}</p></article>`).join('') || '<p class="fl-muted">未有留言</p>'}</div>
           <div class="fl-comment-form"><label>留言者姓名<input id="flAuthor" list="flNames" value="${esc(author)}" maxlength="60" placeholder="輸入或選擇姓名"></label>${this.namesList()}<label>留言<textarea id="flComment" maxlength="4000" rows="3" placeholder="記錄最新進展或需要留意的事情"></textarea></label><button class="fl-primary" type="button" data-fl="comment">發佈留言</button></div>`, '<button type="button" data-fl="edit">修改事項／狀態</button><button type="button" class="fl-delete" data-fl="delete">刪除事項</button>');
@@ -165,16 +171,51 @@
     }
     openEditor(entry = null) {
       if (this.busy) return;
-      const company = entry?.company || 'ALL';
-      if (!this.showModal(entry ? '修改事項' : '新增事項', `<div class="fl-edit-grid"><label>公司<select id="flEditCompany">${options([['ALL', '全部場地'], ...Object.keys(this.venues).map(v => [v, v])], company)}</select></label><label>場地<input id="flEditVenue" list="flEditVenueList" value="${esc(entry?.venue || (company === 'ALL' ? '全部場地' : ''))}"${company === 'ALL' ? ' disabled' : ''}><datalist id="flEditVenueList">${(this.venues[company] || []).map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
-        <label class="fl-wide">標題 *<input id="flTitle" value="${esc(entry?.title)}" maxlength="160" placeholder="簡短講述要跟進的事情"></label><label class="fl-wide">內容<textarea id="flContent" maxlength="8000" rows="4">${esc(entry?.content)}</textarea></label>
+      const company = entry?.company || '';
+      if (!this.showModal(entry ? '修改事項' : '新增事項', `<div class="fl-edit-grid"><label>公司（必填）<select id="flEditCompany" required aria-describedby="flEditCompanyError">${options([['', '請選擇公司'], ...Object.keys(this.venues).map(v => [v, v]), ['OTHER', '其他事項'], ...(company === 'ALL' ? [['ALL', '全部公司（舊資料）']] : [])], company)}</select>${fieldErrorHtml('flEditCompany')}</label><label>場地（選填）<select id="flEditVenue" aria-describedby="flEditVenueError"${!company || company === 'ALL' ? ' disabled' : ''}>${this.venueOptions(company, entry?.venue, entry)}</select>${fieldErrorHtml('flEditVenue')}</label>
+        <label class="fl-wide">標題（必填）<input id="flTitle" required aria-describedby="flTitleError" value="${esc(entry?.title)}" maxlength="160" placeholder="簡短講述要跟進的事情">${fieldErrorHtml('flTitle')}</label><label class="fl-wide">內容<textarea id="flContent" maxlength="8000" rows="4">${esc(entry?.content)}</textarea></label>
         <label>狀態<select id="flEditStatus">${options(Object.entries(STATUS), entry?.status || 'pending')}</select></label><label>優先程度<select id="flPriority">${options([['normal', '一般'], ['urgent', '緊急']], entry?.priority || 'normal')}</select></label><label>跟進日期（選填）<input id="flDueDate" type="date" value="${esc(entry?.dueDate)}"></label>
-        <div class="fl-wide"><label>知悉同事（選填）</label><div id="flPeople" class="fl-people"></div><div class="fl-add-person"><input id="flPerson" list="flNames" maxlength="60" placeholder="輸入或選擇姓名">${this.namesList()}<button type="button" data-fl="add-person">加入</button></div><small class="fl-muted">只表示知道此事，不代表處理責任。</small></div></div>`, '<button class="fl-primary" type="button" data-fl="save">儲存到雲端</button>')) return;
+        <div class="fl-wide"><label for="flPerson">輸入者（必填）</label><div id="flPeople" class="fl-people"></div><div class="fl-add-person"><input id="flPerson" list="flNames" aria-describedby="flPersonError" maxlength="60" placeholder="輸入或選擇輸入者姓名">${this.namesList()}<button type="button" data-fl="add-person">加入</button></div>${fieldErrorHtml('flPerson')}<small class="fl-muted">請填寫記錄此事項的同事；姓名未按「加入」亦會一併儲存。</small></div></div>`, '<button class="fl-primary" type="button" data-fl="save">儲存到雲端</button>')) return;
       this.editing = entry; this.editorId = entry?.id || id(); this.knownPeople = [...(entry?.knownPeople || [])];
+      this.editorValidationShown = false;
       this.renderPeople();
     }
+    venueOptions(company, selected = '', entry = this.editing) {
+      if (company === 'ALL') return options([['全部場地', '全部場地（舊資料）']], '全部場地');
+      const venues = (this.venues[company] || []).map(v => [v, v]);
+      if (entry?.company === company && entry.venue && entry.venue !== '全部' && !(this.venues[company] || []).includes(entry.venue)) venues.push([entry.venue, `${entry.venue}（舊資料）`]);
+      return options([['', company ? '不指定場地' : '請先選擇公司'], ...(company ? [['全部', '全部'], ...venues] : [])], selected || '');
+    }
     renderPeople() {
-      this.host().querySelector('#flPeople').innerHTML = this.knownPeople.map(name => `<span class="fl-person">${esc(name)}<button type="button" data-fl-remove="${esc(name)}" aria-label="移除${esc(name)}">×</button></span>`).join('') || '<span class="fl-muted">未選擇同事</span>';
+      this.host().querySelector('#flPeople').innerHTML = this.knownPeople.map(name => `<span class="fl-person">${esc(name)}<button type="button" data-fl-remove="${esc(name)}" aria-label="移除${esc(name)}">×</button></span>`).join('') || '<span class="fl-muted">未填寫輸入者</span>';
+      this.host().querySelector('#flPerson').required = !this.knownPeople.length;
+      if (this.editorValidationShown) this.validateEditor(false);
+    }
+    editorEntry() {
+      return { company: this.value('flEditCompany'), venue: this.value('flEditVenue'), title: this.value('flTitle'), content: this.value('flContent'), status: this.value('flEditStatus'), priority: this.value('flPriority'), dueDate: this.value('flDueDate'), knownPeople: [...new Set([...(this.knownPeople || []), this.value('flPerson')].map(text).filter(Boolean))] };
+    }
+    fieldError(name, message) {
+      const control = this.host()?.querySelector(`#${name}`), error = this.host()?.querySelector(`#${name}Error`);
+      control?.classList.toggle('fl-invalid', !!message);
+      if (message) control?.setAttribute('aria-invalid', 'true'); else control?.removeAttribute('aria-invalid');
+      if (error) { error.textContent = message; error.hidden = !message; }
+    }
+    validateEditor(focus = true) {
+      const entry = this.editorEntry(), errors = {};
+      if (!entry.company || !(Object.hasOwn(this.venues, entry.company) || entry.company === 'OTHER' || (entry.company === 'ALL' && this.editing?.company === 'ALL'))) errors.flEditCompany = '請選擇公司';
+      const legacyVenue = this.editing?.company === entry.company && this.editing?.venue === entry.venue;
+      if (entry.venue && entry.venue !== '全部' && !(this.venues[entry.company] || []).includes(entry.venue) && !legacyVenue) errors.flEditVenue = '請選擇該公司的場地或「全部」';
+      if (!entry.title) errors.flTitle = '請填寫標題';
+      if (!entry.knownPeople.length) errors.flPerson = '請填寫輸入者姓名';
+      else if (entry.knownPeople.length > 30 || entry.knownPeople.some(name => name.length > 60)) errors.flPerson = '輸入者最多 30 位，每個姓名最多 60 字';
+      for (const field of ['flEditCompany', 'flEditVenue', 'flTitle', 'flPerson']) this.fieldError(field, errors[field] || '');
+      if (focus || this.editorValidationShown) this.modalMessage(Object.values(errors).join('；'), !!Object.keys(errors).length);
+      if (focus && Object.keys(errors).length) {
+        this.editorValidationShown = true;
+        const first = this.host()?.querySelector(`#${Object.keys(errors)[0]}`);
+        first?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); first?.focus?.();
+      }
+      return !Object.keys(errors).length;
     }
     modalMessage(message, error = false) {
       const el = this.host()?.querySelector('#flModalMessage'); if (el) { el.textContent = message; el.classList.toggle('fl-error', error); }
@@ -201,8 +242,8 @@
       }
     }
     async saveEditor() {
-      const entry = { company: this.value('flEditCompany'), venue: this.value('flEditVenue'), title: this.value('flTitle'), content: this.value('flContent'), status: this.value('flEditStatus'), priority: this.value('flPriority'), dueDate: this.value('flDueDate'), knownPeople: this.knownPeople };
-      if (!entry.title || (!entry.venue && entry.company !== 'ALL')) { this.modalMessage('請填寫標題及場地', true); return; }
+      if (!this.validateEditor()) return;
+      const entry = this.editorEntry();
       const result = await this.write({ action: this.editing ? 'updateFollowupLog' : 'createFollowupLog', id: this.editorId, baseVersion: this.editing?.version, entry });
       if (!result) return;
       this.closeModal(true); this.toast('事項已儲存', 'ok'); await this.load(); await this.openDetail(result.entry.id); this.onChange();
@@ -286,7 +327,7 @@
         host.addEventListener('toggle', event => { if (event.target.classList?.contains('fl-notice-panel')) this.expanded = event.target.open; }, true);
       }
       const unread = this.unread(); host.hidden = !unread.length;
-      host.innerHTML = unread.length ? `<details class="fl-notice-panel"${this.expanded ? ' open' : ''}><summary>跟進日誌 · ${unread.length} 項未讀<span>按事項查看</span></summary><div class="fl-notice-list">${unread.map(entry => `<button type="button" data-fl-notice="${esc(entry.id)}" class="${entry.priority === 'urgent' ? 'fl-notice-urgent' : ''}"><span>${esc(entry.venue)}</span><strong>${esc(entry.title)}</strong><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span><span aria-hidden="true">›</span></button>`).join('')}</div></details>` : '';
+      host.innerHTML = unread.length ? `<details class="fl-notice-panel"${this.expanded ? ' open' : ''}><summary>跟進日誌 · ${unread.length} 項未讀<span>按事項查看</span></summary><div class="fl-notice-list">${unread.map(entry => `<button type="button" data-fl-notice="${esc(entry.id)}" class="${entry.priority === 'urgent' ? 'fl-notice-urgent' : ''}"><span>${esc(scopeLabel(entry))}</span><strong>${esc(entry.title)}</strong><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span><span aria-hidden="true">›</span></button>`).join('')}</div></details>` : '';
     }
   }
   return { STATUS, renderCard, createApplication: dependencies => new Application(dependencies), createNotifications: dependencies => new Notifications(dependencies) };
