@@ -372,9 +372,12 @@
     .stat-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #21262d;font-size:13px;color:#8b949e}
     .stat-row:last-child{border-bottom:none}
     .stat-count{font-weight:700;color:#58a6ff}
-    #retryNotice{max-width:640px;margin:0 auto 10px;padding:10px 16px;background:#2d1f00;border:1px solid #9a6700;border-radius:12px;font-size:13px;color:#f0883e;display:flex;align-items:center;gap:10px}
-    #retryNoticeMsg{flex:1}
-    #retrySyncBtn{padding:6px 14px;font-size:12px;font-weight:700;background:#9a6700;color:#fff;border:none;border-radius:8px;cursor:pointer;white-space:nowrap}
+    #retryNotice{max-width:640px;margin:0 auto 10px;padding:10px 16px;background:#2d1f00;border:1px solid #9a6700;border-radius:12px;font-size:13px;color:#f0883e;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    #retryNoticeMsg{flex:1;min-width:180px}
+    .retry-notice-actions{display:flex;gap:8px;margin-left:auto}
+    #retrySyncBtn,#retryDeleteBtn{min-height:40px;padding:6px 14px;font-size:12px;font-weight:700;background:#9a6700;color:#fff;border:none;border-radius:8px;cursor:pointer;white-space:nowrap}
+    #retryDeleteBtn{background:#512020;color:#ffb4b4;border:1px solid #a44b4b}
+    #retrySyncBtn:disabled,#retryDeleteBtn:disabled{opacity:.5;cursor:not-allowed}
     #batchArea{margin-bottom:14px}
     .sn-mode-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
     .sn-mode-row label{min-width:0;margin:0}
@@ -1443,7 +1446,10 @@
 
 <div id="retryNotice" style="display:none">
   <span id="retryNoticeMsg"></span>
-  <button id="retrySyncBtn" onclick="_attemptRetry()">立即同步</button>
+  <div class="retry-notice-actions">
+    <button id="retrySyncBtn" onclick="_attemptRetry()" type="button">立即同步</button>
+    <button id="retryDeleteBtn" onclick="discardSubmissionRetries()" type="button">刪除待同步</button>
+  </div>
 </div>
 
 <button class="submit-btn" id="submitBtn" onclick="submitAll()" disabled>全部提交</button>
@@ -1707,8 +1713,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.09-01';
-const _APP_VERSION='v1.139';
+const _APP_BUMP='2026.10.12-01';
+const _APP_VERSION='v1.140';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3652,6 +3658,7 @@ function switchQueueCompany(company){
   queue=loadCompanyQueue(company);selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;
   if(document.getElementById('queueList'))renderQueue();
   _renderStats();
+  _updateRetryNotice();
 }
 queue=loadCompanyQueue(activeCompany);
 function makeSubmissionId(){
@@ -3727,12 +3734,35 @@ function queueSubmissionRetry(chunks,startIndex,message){
 }
 function _updateRetryNotice(){
   const el=document.getElementById('retryNotice');if(!el)return;
-  if(_retryQueue.length){
-    const total=_retryQueue.reduce((s,i)=>s+i.records.length,0);
+  const total=_retryQueue.reduce((sum,item)=>sum+(item.records||[]).filter(record=>String(record.company||'SCL')===activeCompany).length,0);
+  if(total){
     document.getElementById('retryNoticeMsg').textContent=_retryBusy?`${total} 筆記錄正在安全同步...`:`${total} 筆記錄等待同步${_retryLastError?`（${_retryLastError}）`:''}`;
     const button=document.getElementById('retrySyncBtn');button.disabled=_retryBusy;button.textContent=_retryBusy?'同步中...':'立即同步';
+    const deleteButton=document.getElementById('retryDeleteBtn');if(deleteButton)deleteButton.disabled=_retryBusy;
     el.style.display='flex';
   }else{el.style.display='none';}
+}
+function discardSubmissionRetries(){
+  if(_retryBusy){showToast('正在同步，請等本次同步結束後再刪除','warn');return;}
+  const company=activeCompany;
+  const matchesCompany=record=>String(record.company||'SCL')===company;
+  const count=_retryQueue.reduce((sum,item)=>sum+(item.records||[]).filter(matchesCompany).length,0);
+  if(!count)return;
+  if(!window.confirm(`確定刪除 ${company} 的 ${count} 筆本機待同步記錄，並停止重試？\n\n提交結果可能已寫入雲端，建議先核對。若尚未寫入雲端，刪除後不會再提交，需重新輸入。\n\n此操作不會刪除任何雲端記錄、其他公司的待同步記錄，或待提交清單。`))return;
+  const remaining=_retryQueue.map(item=>{
+    const records=(item.records||[]).filter(record=>!matchesCompany(record));
+    if(!records.length)return null;
+    if(records.length===(item.records||[]).length)return item;
+    return {...item,records,repairs:(item.repairs||[]).filter(repair=>!matchesCompany(repair))};
+  }).filter(Boolean);
+  // Persist before changing memory or timers; failed storage must not silently resurrect data on restart.
+  try{localStorage.setItem('_ml_retry',JSON.stringify(remaining));}
+  catch(error){showToast('未能刪除本機待同步資料，請重試','err');return;}
+  clearTimeout(_retryTimer);_retryTimer=null;
+  _retryQueue=remaining;_retryAttempts=0;_retryLastError='';
+  _updateRetryNotice();
+  showToast(`✓ 已刪除 ${count} 筆本機待同步記錄，不會再重試；雲端資料不變`);
+  if(_retryQueue.length)_scheduleRetry(1000);
 }
 function _scheduleRetry(delay=1500){
   clearTimeout(_retryTimer);
