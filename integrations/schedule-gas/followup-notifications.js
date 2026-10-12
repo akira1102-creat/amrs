@@ -1,4 +1,4 @@
-// GAS integration build 2026.10.09-1. No credentials or private sheet IDs belong here.
+// GAS integration build 2026.10.12-1. No credentials or private sheet IDs belong here.
 // Helpers end in '_' so the public schedule web app cannot call them via google.script.run.
 function scheduleFollowupVenue_(value) {
   const clean = String(value || '').trim().replace(/\s*\*+\s*$/, '').replace(/[’']/g, "'");
@@ -66,25 +66,132 @@ function buildVenueFollowupText_(venue, followups) {
   if (!entries.length) return '';
   const labels = { pending:'待跟進', progress:'進行中', waiting:'等待' };
   let text = `　📌 ${scheduleFollowupDiscordText_(scheduleFollowupVenue_(venue))} 未完成跟進（${entries.length} 項）\n`;
-  entries.forEach(entry => {
+  const items = entries.map(entry => {
     const urgent = entry.priority === 'urgent' ? '🚨 緊急 · ' : '';
-    text += `　　• [${urgent}${labels[entry.status]}] ${scheduleFollowupDiscordText_(entry.title)}\n`;
-    if (entry.content) text += entry.content.split(/\r?\n/).map(line => `　　　${scheduleFollowupDiscordText_(line)}`).join('\n') + '\n';
-    if (entry.dueDate) text += `　　　跟進日期：${scheduleFollowupDiscordText_(entry.dueDate)}\n`;
+    let item = `　　• [${urgent}${labels[entry.status]}] ${scheduleFollowupDiscordText_(entry.title)}`;
+    const compact = followups.reminders ? followups.reminders.record(entry) : false;
+    if (!compact) {
+      if (entry.content) {
+        const lines = entry.content.split(/\r?\n/);
+        lines.forEach((line, i) => {
+          // Keep existing paragraph breaks; give numbered major points breathing room.
+          if (i && lines[i - 1].trim() && /^\s*(?:\d+\s*[.)）、]|[①②③④⑤⑥⑦⑧⑨⑩])/.test(line)) item += '\n';
+          item += '\n' + (line.trim() ? '　　　' + scheduleFollowupDiscordText_(line) : '');
+        });
+      }
+      if (entry.dueDate) item += `\n　　　跟進日期：${scheduleFollowupDiscordText_(entry.dueDate)}`;
+    }
+    return item;
   });
-  return text;
+  return text + items.join('\n\n') + '\n';
 }
 
 function buildScheduleFollowupBlock_(venueMap, followups) {
   const seen = new Set();
-  let block = '';
+  const blocks = [];
   Object.keys(venueMap || {}).forEach(venue => {
     const key = scheduleFollowupVenueKey_(venue);
     if (seen.has(key)) return;
     seen.add(key);
-    block += buildVenueFollowupText_(venue, followups);
+    const block = buildVenueFollowupText_(venue, followups);
+    if (block) blocks.push(block.trimEnd());
   });
-  return block ? '\n' + block : '';
+  return blocks.length ? '\n' + blocks.join('\n\n') + '\n' : '';
+}
+
+function scheduleFollowupDateKey_(date) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2,'0'), String(date.getDate()).padStart(2,'0')].join('-');
+}
+
+function previousScheduleFollowupWorkday_(ss, date) {
+  for (let offset = 1; offset <= 45; offset++) {
+    const previous = new Date(date);
+    previous.setDate(date.getDate() - offset);
+    if ([0,6].includes(previous.getDay())) continue;
+    const schedule = buildScheduleForDate(ss, previous);
+    // Missing monthly data is not evidence of a holiday. Safely show full text.
+    if (!schedule || schedule.error) return '';
+    if (!schedule.isHoliday && !schedule.isWeekend) return scheduleFollowupDateKey_(previous);
+  }
+  return '';
+}
+
+function scheduleFollowupFingerprint_(entry) {
+  const value = JSON.stringify([entry.company,entry.venue,entry.title,entry.content,entry.priority,entry.dueDate]);
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, value, Utilities.Charset.UTF_8)
+    .map(byte => (byte & 255).toString(16).padStart(2,'0')).join('');
+}
+
+function readScheduleFollowupReceipt_(props, dateKey) {
+  const receipt = Object.create(null);
+  if (!dateKey) return receipt;
+  try {
+    const prefix = 'SCHEDULE_FOLLOWUP_SENT_' + dateKey + '_';
+    const count = Number(props.getProperty(prefix + 'COUNT') || 0);
+    if (!Number.isInteger(count) || count < 0 || count > 100) return receipt;
+    for (let i = 0; i < count; i++) {
+      const pairs = JSON.parse(props.getProperty(prefix + i));
+      if (!Array.isArray(pairs)) throw new Error('Invalid receipt');
+      pairs.forEach(pair => {
+        if (!Array.isArray(pair) || typeof pair[0] !== 'string' || !/^[a-f0-9]{64}$/.test(pair[1])) throw new Error('Invalid receipt');
+        receipt[pair[0]] = pair[1];
+      });
+    }
+    return receipt;
+  } catch (_) {
+    Logger.log('跟進提醒記錄未能讀取，本次使用完整文章。');
+    return Object.create(null);
+  }
+}
+
+function createScheduleFollowupReminderContext_(ss, date) {
+  const props = PropertiesService.getScriptProperties();
+  const day = scheduleFollowupDateKey_(date), previousDay = previousScheduleFollowupWorkday_(ss, date);
+  const previous = readScheduleFollowupReceipt_(props, previousDay);
+  const today = readScheduleFollowupReceipt_(props, day);
+  return {
+    day: day, previousDay: previousDay, records: Object.create(null),
+    record: function(entry) {
+      const fingerprint = scheduleFollowupFingerprint_(entry);
+      this.records[entry.id] = fingerprint;
+      return previous[entry.id] === fingerprint || today[entry.id] === fingerprint;
+    }
+  };
+}
+
+function commitScheduleFollowupReminders_(context) {
+  const props = PropertiesService.getScriptProperties();
+  const receipt = Object.assign(readScheduleFollowupReceipt_(props, context.day), context.records);
+  const prefix = 'SCHEDULE_FOLLOWUP_SENT_' + context.day + '_';
+  const pairs = Object.keys(receipt).map(id => [id,receipt[id]]);
+  const count = Math.ceil(pairs.length / 40);
+  for (let i = 0; i < count; i++) props.setProperty(prefix + i, JSON.stringify(pairs.slice(i * 40,(i + 1) * 40)));
+  props.setProperty(prefix + 'COUNT', String(count));
+  // Retain only today and the preceding workday. Receipts contain IDs + hashes, never articles.
+  const savedDate = props.getProperty('SCHEDULE_FOLLOWUP_LAST_SENT_DAY');
+  if (savedDate && savedDate !== context.day && savedDate !== context.previousDay && /^\d{4}-\d{2}-\d{2}$/.test(savedDate)) {
+    const oldPrefix = 'SCHEDULE_FOLLOWUP_SENT_' + savedDate + '_';
+    const oldCount = Math.min(100, Math.max(0, Number(props.getProperty(oldPrefix + 'COUNT')) || 0));
+    for (let i = 0; i < oldCount; i++) props.deleteProperty(oldPrefix + i);
+    props.deleteProperty(oldPrefix + 'COUNT');
+  }
+  // Track the retained previous day so it can be pruned on the next run.
+  const olderDate = props.getProperty('SCHEDULE_FOLLOWUP_PREVIOUS_SENT_DAY');
+  if (olderDate && olderDate !== context.day && olderDate !== context.previousDay && /^\d{4}-\d{2}-\d{2}$/.test(olderDate)) {
+    const oldPrefix = 'SCHEDULE_FOLLOWUP_SENT_' + olderDate + '_';
+    const oldCount = Math.min(100, Math.max(0, Number(props.getProperty(oldPrefix + 'COUNT')) || 0));
+    for (let i = 0; i < oldCount; i++) props.deleteProperty(oldPrefix + i);
+    props.deleteProperty(oldPrefix + 'COUNT');
+  }
+  props.setProperty('SCHEDULE_FOLLOWUP_PREVIOUS_SENT_DAY', context.previousDay);
+  props.setProperty('SCHEDULE_FOLLOWUP_LAST_SENT_DAY', context.day);
+}
+
+function sendScheduleWithFollowupReminders_(message, context) {
+  if (!sendToDiscord(message)) return false;
+  try { commitScheduleFollowupReminders_(context); }
+  catch (_) { Logger.log('通知已發送，但跟進提醒記錄未能儲存；下次保留完整文章。'); }
+  return true;
 }
 
 function splitScheduleDiscordMessages_(message) {
@@ -111,7 +218,7 @@ function verifyDailyScheduleFollowups_() {
     const venues = Object.keys(period && period.venueMap || {});
     return followups.entries.filter(entry => venues.some(venue => scheduleFollowupMatchesVenue_(entry, venue))).length;
   };
-  const summary = { build:'2026.10.09-1', readOk:true, activeEntries:followups.entries.length,
+  const summary = { build:'2026.10.12-1', readOk:true, activeEntries:followups.entries.length,
     amMatched:countFor(schedule.am), pmMatched:countFor(schedule.pm), silentDay:!!(schedule.isHoliday || schedule.isWeekend), sendsDiscord:false };
   Logger.log('跟進日誌驗證完成：' + JSON.stringify(summary));
   return summary;

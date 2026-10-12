@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 
 const helperPath = new URL('../integrations/schedule-gas/followup-notifications.js', import.meta.url);
 const headers = ['ID','Company','Venue','Title','Content','Status','Priority','Due Date','Known People','Created At','Updated At'];
@@ -109,4 +110,95 @@ test('Discord chunks stay within the content limit without truncating long conte
     assert.doesNotMatch(chunk, /[\uD800-\uDBFF]$/);
     assert.doesNotMatch(chunk, /^[\uDC00-\uDFFF]/);
   }
+});
+
+function reminders() {
+  const properties = new Map();
+  const store = { getProperty: key => properties.get(key) || null,
+    setProperty(key, value) { properties.set(key, String(value)); return this; },
+    deleteProperty(key) { properties.delete(key); return this; } };
+  const a = app({
+    Logger: { log() {} },
+    PropertiesService: { getScriptProperties: () => store },
+    Utilities: { DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
+      computeDigest: (algorithm, value, charset) => Array.from(createHash(algorithm).update(value, charset).digest()) },
+    buildScheduleForDate: (_ss, date) => ({ isWeekend: [0,6].includes(date.getDay()), isHoliday: date.getFullYear() === 2026 && date.getMonth() === 0 && date.getDate() === 13 }),
+  });
+  assert.equal(typeof a.createScheduleFollowupReminderContext_, 'function');
+  const entry = {id:'synthetic-entry',company:'TEST',venue:'Site Alpha',title:'Check connection',content:'Full details',status:'pending',priority:'normal',dueDate:'2026-01-16',updatedAt:'2026-01-01'};
+  const render = (date, entries = [entry], venues = {A:['Person A']}) => {
+    const context = a.createScheduleFollowupReminderContext_({}, date);
+    return {context, text:a.buildScheduleFollowupBlock_(venues,{entries,reminders:context})};
+  };
+  return {a,properties,entry,render};
+}
+
+test('first successful reminder is full, next consecutive workdays remain title-only',()=>{
+  const t=reminders();
+  const first=t.render(new Date(2026,0,8));assert.match(first.text,/Full details/);
+  t.a.commitScheduleFollowupReminders_(first.context);
+  const second=t.render(new Date(2026,0,9));assert.match(second.text,/Check connection/);assert.doesNotMatch(second.text,/Full details|跟進日期/);
+  t.a.commitScheduleFollowupReminders_(second.context);
+  const third=t.render(new Date(2026,0,12));assert.doesNotMatch(third.text,/Full details/);
+});
+
+test('weekends and Public Holiday are skipped when finding the preceding workday',()=>{
+  const t=reminders();const friday=t.render(new Date(2026,0,9));t.a.commitScheduleFollowupReminders_(friday.context);
+  const monday=t.render(new Date(2026,0,12));assert.doesNotMatch(monday.text,/Full details/);t.a.commitScheduleFollowupReminders_(monday.context);
+  const wednesday=t.render(new Date(2026,0,14));assert.doesNotMatch(wednesday.text,/Full details/);
+});
+
+test('a missing working-day reminder and changed content both require full text again',()=>{
+  const t=reminders();const first=t.render(new Date(2026,0,8));t.a.commitScheduleFollowupReminders_(first.context);
+  const missing=t.render(new Date(2026,0,9),[],{B:['Person A']});t.a.commitScheduleFollowupReminders_(missing.context);
+  assert.match(t.render(new Date(2026,0,12)).text,/Full details/);
+  t.entry.content='Updated full details';assert.match(t.render(new Date(2026,0,9)).text,/Updated full details/);
+});
+
+test('only rendered entries are recorded and timestamp-only updates do not repeat the article',()=>{
+  const t=reminders();const first=t.render(new Date(2026,0,8));t.a.commitScheduleFollowupReminders_(first.context);
+  t.entry.updatedAt='2026-01-09';assert.doesNotMatch(t.render(new Date(2026,0,9)).text,/Full details/);
+  const other={...t.entry,id:'different-entry',title:'Another item'};assert.match(t.render(new Date(2026,0,9),[other]).text,/Full details/);
+});
+
+test('failed Discord sends do not mark full articles delivered; successful sends do',()=>{
+  const t=reminders();t.a.sendToDiscord=()=>false;
+  const first=t.render(new Date(2026,0,8));assert.equal(typeof t.a.sendScheduleWithFollowupReminders_,'function');
+  assert.equal(t.a.sendScheduleWithFollowupReminders_(first.text,first.context),false);
+  assert.match(t.render(new Date(2026,0,9)).text,/Full details/);
+  t.a.sendToDiscord=()=>true;t.a.sendScheduleWithFollowupReminders_(first.text,first.context);
+  assert.doesNotMatch(t.render(new Date(2026,0,9)).text,/Full details/);
+});
+
+test('major journal items, venue groups and numbered points are separated by a blank line',()=>{
+  const t=reminders();t.entry.content='1）First point\nDetails\n2）Second point';
+  const text=t.render(new Date(2026,0,8),[t.entry,{...t.entry,id:'second',title:'Next item'},{...t.entry,id:'third',venue:'Site Beta',title:'Other venue'}],{A:[],B:[]}).text;
+  assert.match(text,/Details\n\n　　　2）Second point/);
+  assert.match(text,/跟進日期：2026-01-16\n\n　　• .*Next item/);
+  assert.match(text,/跟進日期：2026-01-16\n\n　📌 Site Beta/);
+});
+
+test('large reminder receipts stay below property value limits and contain no article text',()=>{
+  const t=reminders();const entries=Array.from({length:180},(_,i)=>({...t.entry,id:'synthetic-entry-'+i}));
+  const first=t.render(new Date(2026,0,8),entries);t.a.commitScheduleFollowupReminders_(first.context);
+  for(const value of t.properties.values()){assert.ok(Buffer.byteLength(value,'utf8')<9000);assert.doesNotMatch(value,/Full details|Check connection/);}
+  const next=t.render(new Date(2026,0,9),entries);assert.equal((next.text.match(/synthetic-entry/g)||[]).length,0);assert.doesNotMatch(next.text,/Full details/);
+});
+
+test('unreadable previous schedule and corrupt history default to complete reminders',()=>{
+  const t=reminders();const first=t.render(new Date(2026,0,8));t.a.commitScheduleFollowupReminders_(first.context);
+  const receiptKey=Array.from(t.properties.keys()).find(key=>key.endsWith('_0'));
+  t.properties.set(receiptKey,'not valid JSON');assert.match(t.render(new Date(2026,0,9)).text,/Full details/);
+  t.a.buildScheduleForDate=()=>({error:'Unavailable'});assert.match(t.render(new Date(2026,0,9)).text,/Full details/);
+});
+
+test('preceding workday is found across a month boundary',()=>{
+  const t=reminders();const friday=t.render(new Date(2026,0,30));t.a.commitScheduleFollowupReminders_(friday.context);
+  assert.doesNotMatch(t.render(new Date(2026,1,2)).text,/Full details/);
+});
+
+test('old receipts are pruned while the last two working-day receipts remain',()=>{
+  const t=reminders();for(const day of [8,9,12,14])t.a.commitScheduleFollowupReminders_(t.render(new Date(2026,0,day)).context);
+  const keys=Array.from(t.properties.keys()).join('\n');
+  assert.doesNotMatch(keys,/SENT_2026-01-08|SENT_2026-01-09/);assert.match(keys,/SENT_2026-01-12/);assert.match(keys,/SENT_2026-01-14/);
 });
