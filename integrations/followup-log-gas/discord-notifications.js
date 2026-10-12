@@ -1,5 +1,5 @@
 /** @OnlyCurrentDoc */
-// Bound-sheet GAS build 2026.10.09-3. Keep Webhook and all source IDs private.
+// Bound-sheet GAS build 2026.10.12-1. Keep Webhook and all source IDs private.
 // Entries and Comments are append-only; AMRS edits rows and soft-deletes entries.
 function installFollowupDiscord() {
   followupDiscordLocked_(function () {
@@ -124,8 +124,7 @@ function followupDiscordText_(name, row, parent) {
     try { author = JSON.parse(parent[8]).join('、'); } catch (_) { author = parent[8]; }
   }
   const text = (name === 'Entries' ? '📌 新跟進事項' : '💬 新留言') + '\n' + scope + '\n事項：' + parent[3] + '\n' +
-    (name === 'Entries' ? '輸入者：' : '留言者：') + author + '\n' + (name === 'Entries' ? parent[4] : row[3]) +
-    '\n查看：' + 'https://akira1102-creat.github.io/amrs/';
+    (name === 'Entries' ? '輸入者：' : '留言者：') + author + '\n' + (name === 'Entries' ? parent[4] : row[3]);
   // Plain text, no accidental formatting or user-supplied mass mentions.
   return text.replace(/([\\*_`~|>])/g, '\\$1');
 }

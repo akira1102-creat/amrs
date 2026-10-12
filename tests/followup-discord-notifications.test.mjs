@@ -30,6 +30,8 @@ test('new entry and comment send company, venue, title, author and content witho
   assert.equal(t.sent.length,2);
   assert.match(t.sent[0].content,/TEST.*Site Alpha/);assert.match(t.sent[0].content,/Person A/);assert.match(t.sent[0].content,/Check cable/);
   assert.match(t.sent[1].content,/Test issue/);assert.match(t.sent[1].content,/Person C/);assert.match(t.sent[1].content,/Bring spare/);
+  assert.equal(t.sent[0].content, '📌 新跟進事項\nTEST / Site Alpha\n事項：Test issue\n輸入者：Person A\n@everyone Check cable');
+  assert.equal(t.sent[1].content, '💬 新留言\nTEST / Site Alpha\n事項：Test issue\n留言者：Person C\nBring spare');
   assert.deepEqual(t.sent[0].allowed_mentions,{parse:[]});
 });
 test('editing existing entries and deleted entries do not create notifications',()=>{
