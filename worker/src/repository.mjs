@@ -1393,7 +1393,7 @@ export function createRepository(env = {}, dependencies = {}) {
     return cached(memory, db, cacheAdapter, "monthly-base", monthlyStatsBaseCacheKey(monthCode, new Date(nowMs(now))), async () => {
       const schedule = await readScheduleTable(monthCode, { refresh });
       const scheduleData = schedule
-        ? getMonthlyScheduleFromRows(schedule.rows, monthCode, new Date(nowMs(now)), schedule.sheetName, { timeZone: config.timeZone })
+        ? getMonthlyScheduleFromRows(schedule.rows, monthCode, new Date(nowMs(now)), schedule.sheetName, { timeZone: config.timeZone, headers: schedule.headers })
         : { sheetName: scheduleSheetName(monthCode), venues: {} };
       const [settings, gegSettings] = await Promise.all([
         readMonthlySettings({ refresh }),

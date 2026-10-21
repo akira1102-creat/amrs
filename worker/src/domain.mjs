@@ -1134,11 +1134,21 @@ export function getMonthlyScheduleFromRows(rows, monthCode, now = new Date(), sh
   }
   const normalizedMonth = normalizeMonthlyCode(monthCode, now, options.timeZone || DEFAULT_TIME_ZONE);
   const venues = {};
+  const headers = Array.isArray(options.headers) ? options.headers : [];
+  const assignmentColumns = headers.length ? Object.values(scheduleRemarkColumns(headers)).flatMap((range) => {
+    const columns = [];
+    for (let column = range.start; column < range.end; column += 1) {
+      const name = gasString(rowValue(headers, column)).trim();
+      if (column !== range.remark && name && !/^remark(?:\s|$)/i.test(name)) columns.push(column);
+    }
+    return columns;
+  }) : [1, 2, 3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, 17, 18, 19];
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const day = Number(gasString(rowValue(row, 0)).trim());
     if (!Number.isFinite(day) || day < 1 || day > 31) return;
     const dayVenues = {};
-    row.slice(1, 9).concat(row.slice(12, 20)).forEach((assignment) => {
+    assignmentColumns.forEach((column) => {
+      const assignment = rowValue(row, column);
       scheduleVenueEntriesInText(assignment).forEach((entry) => {
         if (!entry.machineCountExcluded) dayVenues[entry.venue] = true;
       });
@@ -1260,11 +1270,11 @@ export function monthlyVisitCachePhase(monthCode, now = new Date(), options = DE
 }
 
 export function monthlyStatsCacheKey(monthCode, now = new Date()) {
-  return `monthly-stats-v8-${monthCode}${monthlyVisitCachePhase(monthCode, now)}`;
+  return `monthly-stats-v9-${monthCode}${monthlyVisitCachePhase(monthCode, now)}`;
 }
 
 export function monthlyStatsBaseCacheKey(monthCode, now = new Date()) {
-  return `monthly-stats-base-v5-${monthCode}${monthlyVisitCachePhase(monthCode, now)}`;
+  return `monthly-stats-base-v6-${monthCode}${monthlyVisitCachePhase(monthCode, now)}`;
 }
 
 export function monthlyCompanyStatsCacheKey(monthCode, company) {

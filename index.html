@@ -1713,8 +1713,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.12-01';
-const _APP_VERSION='v1.140';
+const _APP_BUMP='2026.10.21-01';
+const _APP_VERSION='v1.141';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2662,7 +2662,7 @@ function openScheduleInputFromButton(button){
 }
 const SCL_MONTHLY_INPUTS={Venetian:'sclMonthlyVenetian',Londoner:'sclMonthlyLondoner',Parisian:'sclMonthlyParisian',Sands:'sclMonthlySands',Plaza:'sclMonthlyPlaza'};
 const GEG_MONTHLY_INPUTS={Galaxy:'gegMonthlyGalaxy',StarWorld:'gegMonthlyStarWorld'};
-const MONTHLY_STATS_CACHE_PREFIX='_amrs_monthly_stats_v4_',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1',MONTHLY_STATS_CACHE_FRESH_MS=10*60*1000;
+const MONTHLY_STATS_CACHE_PREFIX='_amrs_monthly_stats_v5_',MONTHLY_COMPANY_ORDER_KEY='_amrs_monthly_company_order_v1',MONTHLY_STATS_CACHE_FRESH_MS=10*60*1000;
 const SCL_MONTHLY_SETTINGS_CACHE_KEY='_amrs_scl_monthly_settings_v1',GEG_MONTHLY_SETTINGS_CACHE_KEY='_amrs_geg_monthly_settings_v1',SCL_MONTHLY_SETTINGS_CACHE_FRESH_MS=5*60*1000;
 let _sclMonthlySettingsLoaded=false,_sclMonthlySettingsRequest=null,_gegMonthlySettingsLoaded=false,_gegMonthlySettingsRequest=null,_monthlyStatsRequest=null,_monthlyStatsMonth='';
 function monthlyStatsMonthCode(date=new Date()){

@@ -372,6 +372,27 @@ test("schedule overview keeps an afternoon remark beyond the legacy T-column ran
   assert.equal(result.days[0].remarks.pm, "Afternoon note");
 });
 
+test("monthly statistics and schedule quantity share header-aware non-starred visits", async () => {
+  const headers = ["Day", "Marco", "Operator A", "Remark", "", "Marco", "Operator B", "Remark"];
+  const rows = [
+    [4, "LON*", "GX*", "LON: extra task", "", "LON*", "GX*", "GX: extra task"],
+    [5, "LON", "", "GX: note only", "", "LON", "GX", ""],
+  ];
+  const harness = createSheetsHarness({ ...companyData, schedule: [{ title: "2026-AUG", values: [[], [], headers, ...rows] }] });
+  const repository = createRepository({}, { config, sheetsClient: harness.client, now: () => Date.parse("2026-08-04T04:00:00Z") });
+  const base = await repository.getAction({ action: "monthlyStatsBase", month: "2608", refresh: "1" });
+  assert.deepEqual(base.scheduleVenues.Londoner, { scheduledVisits: 1, completedVisits: 0, remainingVisits: 1, visitPercent: 0 });
+  assert.deepEqual(base.scheduleVenues.Galaxy, { scheduledVisits: 1, completedVisits: 0, remainingVisits: 1, visitPercent: 0 });
+  const monthly = await repository.getAction({ action: "monthlyStats", month: "2608" });
+  const quantities = await repository.getAction({ action: "scheduleMachineCounts", month: "2608" });
+  for (const result of [monthly, quantities]) {
+    const galaxy = result.companies.find(item => item.company === "GEG").venues.find(item => item.venue === "Galaxy");
+    assert.equal(galaxy.scheduledVisits, 1);
+    assert.equal(galaxy.remainingVisits, 1);
+    assert.equal(galaxy.machinesPerRemainingVisit, galaxy.remaining);
+  }
+});
+
 test("updates the requested schedule remark cell and invalidates the schedule read path", async () => {
   const headers = Array.from({ length: 23 }, (_, index) => `Person ${index}`);
   headers[0] = "Day";

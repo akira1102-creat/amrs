@@ -485,6 +485,22 @@ test("maps monthly schedule rows and applies venue-specific completion cutoffs",
   assert.equal(completed.venues.Venetian.completedVisits, 1);
 });
 
+test("monthly visits follow staff headers, not venue names in shifted remarks", () => {
+  const headers = ["Day", "Marco", "Operator A", "Remark", "", "Marco", "Operator B", "Remark"];
+  const rows = [
+    [3, "LON*", "GX*", "LON: additional task", "", "LON*", "GX*", "GX: additional task"],
+    [4, "LON", "LON", "GX: note only", "", "LON*", "GX", "VML: note only"],
+    [5, "LON*", "GX*", "LON: additional task", "", "LON*", "GX*", "GX: additional task"],
+    [6, "VML", "", "", "", "LON", "GX*", ""],
+  ];
+  const result = getMonthlyScheduleFromRows(rows, "2608", new Date("2026-08-05T04:00:00Z"), "2026-AUG", { headers });
+  assert.deepEqual(result.venues, {
+    Londoner: { scheduledVisits: 2, completedVisits: 1, remainingVisits: 1, visitPercent: 50 },
+    Galaxy: { scheduledVisits: 1, completedVisits: 1, remainingVisits: 0, visitPercent: 100 },
+    Venetian: { scheduledVisits: 1, completedVisits: 0, remainingVisits: 1, visitPercent: 0 },
+  });
+});
+
 test("maps MGM Check Request rows, resolves identifiers and limits editable columns", () => {
   const row = ["2026/06/09", "11:15", "11:24", "21BB02", "259", "", "BOX-1", "VA-1", "Can't read", "", "未CHECK", "Note", ""];
   const request = mgmCheckRequestFromRow(row, 2, "MGM Macau", [{ serialNo: "259", aaTag: "TAE0248" }]);
