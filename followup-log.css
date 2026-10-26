@@ -34,3 +34,33 @@
 .fl-list-item .fl-delete-cell{position:absolute;right:5px;top:7px;width:42px}.fl-list-item .fl-row-status{padding-right:43px}.fl-list-item .fl-delete-cell .fl-delete{font-size:11px;padding:6px;min-height:30px}
 }
 @media(max-width:768px){.fl-edit-grid{grid-template-columns:1fr}.fl-wide{grid-column:auto}.fl-overlay{padding:10px}.fl-modal{padding:16px;max-height:94dvh}.fl-notice-list button{grid-template-columns:minmax(0,1fr) auto 12px;gap:5px}.fl-notice-list button>span:first-child{grid-column:1;grid-row:1;font-size:11px}.fl-notice-list button>strong{grid-column:1;grid-row:2}.fl-notice-list .fl-status{grid-column:2;grid-row:1/3}.fl-notice-list button>span:last-child{grid-column:3;grid-row:1/3}.fl-delete-cell{width:48px}.fl-delete-cell .fl-delete{font-size:11px;padding:6px}.fl-list-item:first-of-type{border-top:0}}
+
+/* Compact, device-local unread action; it never changes the journal itself. */
+.fl-notice-wrap{position:relative}.fl-notice-panel summary{padding-right:62px;min-height:24px;line-height:24px}
+.fl-notice-read-all{position:absolute;z-index:1;top:3px;right:6px;display:grid;place-items:center;width:40px;height:40px;padding:9px;border:0;border-radius:9px;background:transparent;color:#b8c2cf;cursor:pointer;-webkit-appearance:none;appearance:none}
+.fl-notice-read-all svg{width:21px;height:21px;pointer-events:none}.fl-notice-read-all:hover{color:#f2cc60;background:#d299221a}.fl-notice-read-all:focus-visible{outline:2px solid #58a6ff;outline-offset:-2px}
+.fl-schedule-setting{padding:14px;border:1px solid #30363d;border-radius:10px;background:#0d1117;display:grid;gap:9px}
+.fl-modal label.fl-checkbox{flex-direction:row;align-items:center;gap:10px;color:#e6edf3;cursor:pointer;font-weight:600}
+.fl-modal .fl-checkbox input{width:18px;height:18px;min-height:18px;padding:0;flex:0 0 18px;appearance:auto;-webkit-appearance:checkbox;accent-color:#58a6ff}.fl-schedule-setting small{font-size:12px;line-height:1.7}
+
+/* A discussion stream: one original post, connected replies and a clear composer. */
+.fl-thread-modal{width:740px;padding:0;background:#11161d;border-color:#353c47;border-radius:20px;box-shadow:0 24px 90px #0008}
+.fl-thread-modal .fl-modal-head{position:sticky;top:0;z-index:2;margin:0;padding:14px 22px;background:#11161df5;border-bottom:1px solid #2c333d;backdrop-filter:blur(12px)}
+.fl-thread-modal .fl-modal-head h3{font-size:15px;font-weight:600;letter-spacing:.04em}.fl-thread-modal .fl-modal-head button{border:0;background:transparent;font-size:24px;padding:0;width:40px}
+.fl-thread{padding:24px 24px 0}.fl-thread-post,.fl-thread-compose{display:grid;grid-template-columns:42px minmax(0,1fr);gap:14px}
+.fl-thread-rail{position:relative;display:flex;justify-content:center;align-items:flex-start;min-width:0}.fl-thread-avatar{display:grid;place-items:center;position:relative;z-index:1;width:40px;height:40px;flex-shrink:0;border:1px solid #46638a;border-radius:50%;background:linear-gradient(145deg,#21344e,#172234);font-size:13px;font-weight:700;letter-spacing:.02em;color:#bcd8ff;user-select:none}
+.fl-thread-root .fl-thread-rail:after,.fl-thread-reply .fl-thread-rail:after{content:"";position:absolute;top:49px;bottom:0;width:2px;background:#303945;border-radius:2px}
+.fl-thread-reply:last-child .fl-thread-rail:after{display:none}.fl-thread-reply .fl-thread-avatar{border-color:#434b59;background:linear-gradient(145deg,#2a303a,#1a2029);color:#d7dde7}
+.fl-thread-body{min-width:0;padding:2px 0 24px}.fl-thread-byline{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px;line-height:1.6}
+.fl-thread-byline strong{color:#f0f3f8;overflow-wrap:anywhere}.fl-thread-byline time{font-size:11px;color:#8996a6;white-space:nowrap}
+.fl-thread-scope{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:7px;color:#90a4bd;font-size:12px}
+.fl-thread-modal h4.fl-thread-title{border:0;padding:0;margin:18px 0 10px;font-size:22px;line-height:1.45;letter-spacing:-.02em;color:#f0f3f8}
+.fl-thread-modal .fl-full-content{margin:10px 0 15px;font-size:15px;line-height:1.85;color:#dce3ec;overflow-wrap:anywhere}
+.fl-thread-due{font-size:12px;color:#9daabd}.fl-thread-due strong{color:#c5d5eb;margin-left:6px}.fl-thread-meta{display:flex;flex-wrap:wrap;gap:6px 16px;color:#8290a1;font-size:11px;line-height:1.7}
+.fl-thread-reply-count{display:flex;align-items:center;gap:7px;margin-top:18px;color:#a6b5c7;font-size:12px}.fl-thread-reply-count svg{width:17px;height:17px}
+.fl-thread-reply{padding-top:17px}.fl-thread-reply .fl-thread-body{border-top:1px solid #252d37;padding-top:14px;padding-bottom:19px}.fl-thread-reply .fl-thread-rail{padding-top:14px}.fl-thread-reply .fl-thread-rail:after{top:62px;bottom:-17px}.fl-thread-reply .fl-full-content{margin-bottom:0}
+.fl-thread-empty{padding:12px 0 22px 56px;font-size:13px;color:#8290a1}.fl-thread-compose{padding-top:22px;border-top:1px solid #303945;margin-top:10px}.fl-thread-compose .fl-thread-avatar{background:#21262d;border-style:dashed;border-color:#526074;color:#b8c4d4}
+.fl-thread-compose .fl-comment-form{margin:0 0 22px;gap:12px}.fl-thread-modal .fl-comment-form label{font-size:12px}.fl-thread-modal .fl-comment-form input,.fl-thread-modal .fl-comment-form textarea{background:#0c1118;border-color:#303945;font-size:15px}
+.fl-thread-compose-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.fl-thread-compose-foot small{color:#8290a1;font-size:11px}.fl-thread-compose-foot button{border-radius:22px;padding:8px 20px;font-weight:600}
+.fl-thread-modal>.fl-message{margin:0 24px 10px;min-height:0}.fl-thread-modal .fl-modal-actions{margin:0;padding:14px 24px;background:#0d1219;gap:8px}.fl-thread-modal .fl-modal-actions button{font-size:12px;padding:8px 12px}
+@media(max-width:600px){.fl-notice-panel summary>span{display:none}.fl-thread-modal{border-radius:16px;width:100%;max-height:94dvh}.fl-thread-modal .fl-modal-head{padding:9px 14px}.fl-thread{padding:18px 14px 0}.fl-thread-post,.fl-thread-compose{grid-template-columns:34px minmax(0,1fr);gap:10px}.fl-thread-avatar{width:32px;height:32px;font-size:11px}.fl-thread-root .fl-thread-rail:after{top:40px}.fl-thread-reply .fl-thread-rail:after{top:54px}.fl-thread-modal h4.fl-thread-title{font-size:20px}.fl-thread-byline{gap:3px 8px}.fl-thread-byline time{font-size:10px}.fl-thread-modal .fl-full-content{font-size:14px;line-height:1.85}.fl-thread-empty{padding-left:44px}.fl-thread-modal .fl-comment-form input,.fl-thread-modal .fl-comment-form textarea{font-size:16px}.fl-thread-compose-foot small{max-width:130px}.fl-thread-modal .fl-modal-actions{padding:12px 14px}.fl-thread-modal>.fl-message{margin-left:14px;margin-right:14px}}

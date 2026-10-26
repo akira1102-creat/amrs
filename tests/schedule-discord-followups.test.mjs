@@ -36,6 +36,27 @@ test('only unfinished, non-deleted journal entries are eligible for notification
   assert.deepEqual(Array.from(result, x => x.id), ['a','b','c']);
 });
 
+test('Schedule reminders stop after seven Hong Kong calendar days even if edited or commented later', () => {
+  const a = app();
+  const entry = { id: 'seven-day', venue: 'Site Alpha', title: 'Limited notice', status: 'pending', createdAt: '2026-10-20T16:30:00Z', updatedAt: '2026-10-27T05:00:00Z' };
+  assert.match(a.buildVenueFollowupText_('A', { entries: [entry], reminders: { day: '2026-10-27', record: () => false } }), /Limited notice/);
+  assert.equal(a.buildVenueFollowupText_('A', { entries: [entry], reminders: { day: '2026-10-28', record: () => { throw new Error('Expired entries must not enter receipt'); } } }), '');
+  assert.match(a.buildVenueFollowupText_('A', { entries: [{ ...entry, schedulePermanent: true }], reminders: { day: '2027-02-01', record: () => false } }), /Limited notice/);
+  assert.equal(a.buildVenueFollowupText_('A', { entries: [{ ...entry, schedulePermanent: true, status: 'completed' }], reminders: { day: '2027-02-01' } }), '');
+});
+
+test('the optional permanent column works with old sheets and rejects a mismatched new header', () => {
+  const a = app();
+  const legacy = a.parseScheduleFollowups_([headers, row('old', 'Site Alpha')])[0];
+  assert.equal(legacy.createdAt, '2026-01-01T00:00:00Z');
+  assert.equal(legacy.schedulePermanent, false);
+  const extended = [...headers, 'Schedule Permanent'];
+  for (const [value, expected] of [['TRUE', true], ['FALSE', false], ['', false]]) {
+    assert.equal(a.parseScheduleFollowups_([extended, [...row('new', 'Site Alpha'), value]])[0].schedulePermanent, expected);
+  }
+  assert.throws(() => a.parseScheduleFollowups_([[...headers, 'Unrelated column']]), /欄位/);
+});
+
 test('AM and PM each match their own venues, including aliases and starred venue codes', () => {
   const a = app();
   assert.equal(typeof a.buildVenueFollowupText_, 'function', 'venue formatter must exist');
@@ -50,7 +71,7 @@ test('AM and PM each match their own venues, including aliases and starred venue
 test('all-venue notices match only scheduled venues belonging to the chosen company', () => {
   const a = app({ SCHEDULE_FOLLOWUP_COMPANY_VENUES: { TEST: ['Site Alpha'], SECOND: ['Site Beta'] } });
   const entries = a.parseScheduleFollowups_([headers, row('all', '全部'), row('unspecified', ''), ['other', 'OTHER', '全部', 'Other matters', '', 'pending']]);
-  const am = a.buildVenueFollowupText_('A*', { entries }), pm = a.buildVenueFollowupText_('B', { entries });
+  const am = a.buildVenueFollowupText_('A*', { entries, day: '2026-01-01' }), pm = a.buildVenueFollowupText_('B', { entries, day: '2026-01-01' });
   assert.match(am, /Task all/);
   assert.doesNotMatch(am, /Task unspecified|Other matters/);
   assert.equal(pm, '');
@@ -69,7 +90,7 @@ test('urgent items precede normal items and notification includes actionable con
   const a = app();
   assert.equal(typeof a.parseScheduleFollowups_, 'function');
   const entries = a.parseScheduleFollowups_([headers,row('n','Site Alpha'),row('u','Site Alpha','waiting',{priority:'urgent',content:'Check cable\nBring replacement',dueDate:'2026-01-02'})]);
-  const text = a.buildVenueFollowupText_('A', {entries});
+  const text = a.buildVenueFollowupText_('A', {entries, day: '2026-01-01'});
   assert.ok(text.indexOf('Task u') < text.indexOf('Task n'));
   assert.match(text,/緊急/); assert.match(text,/等待/); assert.match(text,/Check cable/); assert.match(text,/Bring replacement/); assert.match(text,/2026-01-02/);
 });

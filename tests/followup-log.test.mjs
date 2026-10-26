@@ -209,6 +209,59 @@ test('late notification responses cannot reappear after authentication is stoppe
   assert.equal(host.hidden,true);assert.equal(notices.unread().length,0);
 });
 
+test('the broom clears every loaded unread revision on this device without navigating or writing to cloud', async () => {
+  const data = new Map(), listeners = {}, navigated = [];
+  let writes = 0;
+  const host = { innerHTML: '', addEventListener(type, fn) { listeners[type] = fn; } };
+  const storage = { getItem: key => data.get(key), setItem(key, value) { writes++; data.set(key, value); } };
+  let feed = [{ id: 'one', revision: 'r1' }, { id: 'two', revision: 'r2' }];
+  const dependencies = { document: { getElementById: () => host }, storage, onNavigate: entry => navigated.push(entry), transport: { get: async () => ({ success: true, entries: feed }) } };
+  const notices = log.createNotifications(dependencies);
+  await notices.refresh();
+  assert.match(host.innerHTML, /aria-label="全部標記為已讀"/);
+  assert.match(host.innerHTML, /<svg/);
+  listeners.click({ target: { closest: () => ({ dataset: { flReadAll: '' } }) }, preventDefault() {}, stopPropagation() {} });
+  assert.equal(writes, 1);
+  assert.equal(notices.unread().length, 0);
+  assert.equal(host.hidden, true);
+  assert.equal(navigated.length, 0);
+  const restarted = log.createNotifications(dependencies); await restarted.refresh();
+  assert.equal(restarted.unread().length, 0);
+  feed = [{ id: 'one', revision: 'r3' }, { id: 'two', revision: 'r2' }, { id: 'three', revision: 'r1' }];
+  await restarted.refresh();
+  assert.deepEqual(Array.from(restarted.unread(), item => item.id), ['one', 'three']);
+  const other = log.createNotifications({ ...dependencies, storage: { getItem: () => null } }); await other.refresh();
+  assert.equal(other.unread().length, 3);
+});
+
+test('failed local persistence leaves the unread banner intact', async () => {
+  const notices = log.createNotifications({ document: { getElementById: () => null }, storage: { getItem: () => null, setItem() { throw new Error('Storage full'); } }, transport: { get: async () => ({ success: true, entries: [{ id: 'one', revision: 'r1' }] }) } });
+  await notices.refresh();
+  assert.equal(notices.markAllRead(), false);
+  assert.equal(notices.unread().length, 1);
+});
+
+test('thread details retain the article, named chronological replies and safe composer', () => {
+  const html = log.renderThread({ id: 'one', title: '<unsafe>', company: 'OTHER', content: 'First\nSecond', status: 'waiting', knownPeople: ['Operator A'], createdAt: '2026-10-20T00:00:00Z', schedulePermanent: true }, [
+    { id: 'b', name: 'Operator B', content: '<img src=x>', createdAt: '2026-10-22T01:00:00Z' },
+    { id: 'a', name: 'Operator A', content: 'Earlier reply', createdAt: '2026-10-21T01:00:00Z' },
+  ], 'Operator C');
+  assert.match(html, /fl-thread-root/);
+  assert.match(html, /fl-thread-reply/);
+  assert.match(html, /&lt;unsafe&gt;/);
+  assert.match(html, /&lt;img src=x&gt;/);
+  assert.doesNotMatch(html, /<img/);
+  assert.ok(html.indexOf('Earlier reply') < html.indexOf('&lt;img'));
+  for (const value of ['First\nSecond', 'Operator A', 'Operator B', 'Operator C', '永久顯示', 'flAuthor', 'flComment', 'data-fl="comment"']) assert.ok(html.includes(value), value);
+});
+
+test('the editor saves its permanent Schedule flag and defaults it off', () => {
+  const { app, controls } = editorHarness({ flEditCompany: 'OTHER', flTitle: 'Test entry', flPerson: 'Operator A' });
+  assert.equal(app.editorEntry().schedulePermanent, false);
+  controls.flSchedulePermanent = { checked: true };
+  assert.equal(app.editorEntry().schedulePermanent, true);
+});
+
 test('leaving the log while details load never marks a hidden entry as read', async () => {
   let done,reads=0;
   const app=log.createApplication({document:{getElementById:()=>null},onRead:()=>reads++,transport:{get:()=>new Promise(resolve=>done=resolve)},toast(){}});

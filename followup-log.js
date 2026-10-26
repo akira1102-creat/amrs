@@ -14,6 +14,25 @@
   const companyLabel = company => company === 'OTHER' ? '其他事項' : company === 'ALL' ? '全部公司' : text(company);
   const scopeLabel = entry => [companyLabel(entry.company), text(entry.venue)].filter(Boolean).join(' · ');
   const fieldErrorHtml = name => `<small id="${name}Error" class="fl-field-error" hidden></small>`;
+  const avatar = name => {
+    const words = text(name).split(/\s+/).filter(Boolean);
+    const initials = words.length > 1 ? words.slice(0, 2).map(word => Array.from(word)[0]).join('') : Array.from(text(name)).slice(0, 2).join('');
+    return `<span class="fl-thread-avatar" aria-hidden="true">${esc(initials.toUpperCase() || '記')}</span>`;
+  };
+  function renderThread(entry, comments = [], author = '') {
+    const names = (entry.knownPeople || []).join('、') || '未填寫輸入者';
+    const replies = [...comments].sort((a, b) => text(a.createdAt).localeCompare(text(b.createdAt)) || text(a.id).localeCompare(text(b.id)));
+    return `<div class="fl-thread"><article class="fl-thread-post fl-thread-root"><div class="fl-thread-rail">${avatar(entry.knownPeople?.[0])}</div><div class="fl-thread-body">
+      <div class="fl-thread-byline"><strong>${esc(names)}</strong><time datetime="${esc(entry.createdAt)}">${esc(time(entry.createdAt, true))}</time></div>
+      <div class="fl-thread-scope">${esc(scopeLabel(entry))}<span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span>${entry.priority === 'urgent' ? '<span class="fl-priority">緊急</span>' : ''}</div>
+      <h4 class="fl-thread-title">${esc(entry.title)}</h4><p class="fl-full-content">${esc(entry.content || '未填寫內容')}</p>
+      ${entry.dueDate ? `<p class="fl-thread-due">跟進日期 <strong>${esc(entry.dueDate)}</strong></p>` : ''}
+      <div class="fl-thread-meta"><span>${entry.schedulePermanent ? 'Schedule 永久顯示（至完成）' : 'Schedule 提醒 7 日'}</span>${entry.updatedAt ? `<span>更新 ${esc(time(entry.updatedAt, true))}</span>` : ''}</div>
+      <div class="fl-thread-reply-count"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 11.5a8 8 0 0 1-8 8H5l-3 2v-10a9 9 0 0 1 18 0Z"/></svg>${replies.length} 則留言與進展</div>
+      </div></article>
+      <div class="fl-thread-replies" aria-label="留言及進展">${replies.map(comment => `<article class="fl-thread-post fl-thread-reply"><div class="fl-thread-rail">${avatar(comment.name)}</div><div class="fl-thread-body"><div class="fl-thread-byline"><strong>${esc(comment.name)}</strong><time datetime="${esc(comment.createdAt)}">${esc(time(comment.createdAt, true))}</time></div><p class="fl-full-content">${esc(comment.content)}</p></div></article>`).join('') || '<p class="fl-thread-empty">未有留言，分享第一個進展。</p>'}</div>
+      <div class="fl-thread-compose"><div class="fl-thread-rail">${avatar(author)}</div><div class="fl-comment-form"><label>留言者姓名<input id="flAuthor" list="flNames" value="${esc(author)}" maxlength="60" autocomplete="name" placeholder="輸入或選擇姓名"></label><label>留言<textarea id="flComment" maxlength="4000" rows="3" placeholder="分享最新進展或補充資料…"></textarea></label><div class="fl-thread-compose-foot"><small>留言會通知其他裝置</small><button class="fl-primary" type="button" data-fl="comment">發佈留言</button></div></div></div></div>`;
+  }
   function renderCard(entry) {
     return `<button type="button" class="fl-row ${entry.priority === 'urgent' && entry.status !== 'completed' ? 'fl-urgent' : ''}" data-fl-open="${esc(entry.id)}" aria-label="查看事項：${esc(entry.title)}">
       <span class="fl-row-status"><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span>${entry.priority === 'urgent' ? '<span class="fl-priority">緊急</span>' : ''}</span>
@@ -127,11 +146,11 @@
       if (this.busy || this.unknownWrite) return false;
       this.detailSeq++; return true;
     }
-    showModal(title, content, actions) {
+    showModal(title, content, actions, kind = '') {
       if (this.modal && !this.closeModal()) return false;
       this.lastFocus = this.document.activeElement; this.modal = true; this.modalDirty = false; this.unknownWrite = false; this.editorValidationShown = false;
       const host = this.host();
-      host.insertAdjacentHTML('beforeend', `<div class="fl-overlay"><section class="fl-modal" role="dialog" aria-modal="true" aria-labelledby="flModalTitle"><div class="fl-modal-head"><h3 id="flModalTitle">${esc(title)}</h3><button type="button" data-fl="close" aria-label="關閉">×</button></div><div class="fl-modal-content">${content}</div><p id="flModalMessage" class="fl-message" role="status"></p><div class="fl-actions fl-modal-actions">${actions}<button type="button" data-fl="close">關閉</button></div></section></div>`);
+      host.insertAdjacentHTML('beforeend', `<div class="fl-overlay"><section class="fl-modal${kind === 'thread' ? ' fl-thread-modal' : ''}" role="dialog" aria-modal="true" aria-labelledby="flModalTitle" tabindex="-1"><div class="fl-modal-head"><h3 id="flModalTitle">${esc(title)}</h3><button type="button" data-fl="close" aria-label="關閉">×</button></div><div class="fl-modal-content">${content}</div><p id="flModalMessage" class="fl-message" role="status"></p><div class="fl-actions fl-modal-actions">${actions}<button type="button" data-fl="close">關閉</button></div></section></div>`);
       setTimeout(() => host.querySelector('.fl-modal input, .fl-modal select, .fl-modal button')?.focus(), 0);
       return true;
     }
@@ -145,11 +164,7 @@
         if (!result?.success) throw new Error(result?.message || '事項載入失敗');
         this.detail = result;
         let author = ''; try { author = this.storage?.getItem('_amrs_log_comment_name') || ''; } catch {}
-        const shown = this.showModal(result.entry.title, `<p>${esc(scopeLabel(result.entry))} · <span class="fl-status fl-${esc(result.entry.status)}">${esc(STATUS[result.entry.status])}</span>${result.entry.priority === 'urgent' ? ' · 緊急' : ''}</p>
-          <p class="fl-full-content">${esc(result.entry.content || '未填寫內容')}</p><div class="fl-people"><span class="fl-muted">輸入者</span>${peopleHtml(result.entry.knownPeople)}</div>
-          ${result.entry.dueDate ? `<p>跟進日期：${esc(result.entry.dueDate)}</p>` : ''}<p class="fl-muted">建立：${esc(time(result.entry.createdAt))}<br>更新：${esc(time(result.entry.updatedAt))}</p>
-          <h4>留言及進展</h4><div class="fl-comments">${result.comments.map(comment => `<article class="fl-comment"><div><strong>${esc(comment.name)}</strong><small>${esc(time(comment.createdAt))}</small></div><p>${esc(comment.content)}</p></article>`).join('') || '<p class="fl-muted">未有留言</p>'}</div>
-          <div class="fl-comment-form"><label>留言者姓名<input id="flAuthor" list="flNames" value="${esc(author)}" maxlength="60" placeholder="輸入或選擇姓名"></label>${this.namesList()}<label>留言<textarea id="flComment" maxlength="4000" rows="3" placeholder="記錄最新進展或需要留意的事情"></textarea></label><button class="fl-primary" type="button" data-fl="comment">發佈留言</button></div>`, '<button type="button" data-fl="edit">修改事項／狀態</button><button type="button" class="fl-delete" data-fl="delete">刪除事項</button>');
+        const shown = this.showModal('事項討論', renderThread(result.entry, result.comments, author) + this.namesList(), '<button type="button" data-fl="edit">修改事項／狀態</button><button type="button" class="fl-delete" data-fl="delete">刪除事項</button>', 'thread');
         if (shown) this.onRead(result.entry);
         this.commentId = id();
       } catch (error) { this.toast(error.message || '事項載入失敗', 'err'); }
@@ -175,6 +190,7 @@
       if (!this.showModal(entry ? '修改事項' : '新增事項', `<div class="fl-edit-grid"><label>公司（必填）<select id="flEditCompany" required aria-describedby="flEditCompanyError">${options([['', '請選擇公司'], ...Object.keys(this.venues).map(v => [v, v]), ['OTHER', '其他事項'], ...(company === 'ALL' ? [['ALL', '全部公司（舊資料）']] : [])], company)}</select>${fieldErrorHtml('flEditCompany')}</label><label>場地（選填）<select id="flEditVenue" aria-describedby="flEditVenueError"${!company || company === 'ALL' ? ' disabled' : ''}>${this.venueOptions(company, entry?.venue, entry)}</select>${fieldErrorHtml('flEditVenue')}</label>
         <label class="fl-wide">標題（必填）<input id="flTitle" required aria-describedby="flTitleError" value="${esc(entry?.title)}" maxlength="160" placeholder="簡短講述要跟進的事情">${fieldErrorHtml('flTitle')}</label><label class="fl-wide">內容<textarea id="flContent" maxlength="8000" rows="4">${esc(entry?.content)}</textarea></label>
         <label>狀態<select id="flEditStatus">${options(Object.entries(STATUS), entry?.status || 'pending')}</select></label><label>優先程度<select id="flPriority">${options([['normal', '一般'], ['urgent', '緊急']], entry?.priority || 'normal')}</select></label><label>跟進日期（選填）<input id="flDueDate" type="date" value="${esc(entry?.dueDate)}"></label>
+        <div class="fl-wide fl-schedule-setting"><label class="fl-checkbox"><input id="flSchedulePermanent" type="checkbox"${entry?.schedulePermanent ? ' checked' : ''}>Schedule 永久顯示</label><small class="fl-muted">未勾選：由建立日起最多提醒 7 個日曆日；勾選：持續提醒至事項完成。只影響每日 Discord Schedule，日誌及留言會保留。</small></div>
         <div class="fl-wide"><label for="flPerson">輸入者（必填）</label><div id="flPeople" class="fl-people"></div><div class="fl-add-person"><input id="flPerson" list="flNames" aria-describedby="flPersonError" maxlength="60" placeholder="輸入或選擇輸入者姓名">${this.namesList()}<button type="button" data-fl="add-person">加入</button></div>${fieldErrorHtml('flPerson')}<small class="fl-muted">請填寫記錄此事項的同事；姓名未按「加入」亦會一併儲存。</small></div></div>`, '<button class="fl-primary" type="button" data-fl="save">儲存到雲端</button>')) return;
       this.editing = entry; this.editorId = entry?.id || id(); this.knownPeople = [...(entry?.knownPeople || [])];
       this.editorValidationShown = false;
@@ -192,7 +208,7 @@
       if (this.editorValidationShown) this.validateEditor(false);
     }
     editorEntry() {
-      return { company: this.value('flEditCompany'), venue: this.value('flEditVenue'), title: this.value('flTitle'), content: this.value('flContent'), status: this.value('flEditStatus'), priority: this.value('flPriority'), dueDate: this.value('flDueDate'), knownPeople: [...new Set([...(this.knownPeople || []), this.value('flPerson')].map(text).filter(Boolean))] };
+      return { company: this.value('flEditCompany'), venue: this.value('flEditVenue'), title: this.value('flTitle'), content: this.value('flContent'), status: this.value('flEditStatus'), priority: this.value('flPriority'), dueDate: this.value('flDueDate'), schedulePermanent: !!this.host()?.querySelector('#flSchedulePermanent')?.checked, knownPeople: [...new Set([...(this.knownPeople || []), this.value('flPerson')].map(text).filter(Boolean))] };
     }
     fieldError(name, message) {
       const control = this.host()?.querySelector(`#${name}`), error = this.host()?.querySelector(`#${name}Error`);
@@ -264,6 +280,7 @@
       this.storage = dependencies.storage;
       this.transport = dependencies.transport;
       this.onNavigate = dependencies.onNavigate || (() => {});
+      this.toast = dependencies.toast || (() => {});
       this.canRefresh = dependencies.canRefresh || (() => true);
       this.now = dependencies.now || (() => Date.now());
       this.lastActivityAt = this.now();
@@ -293,6 +310,13 @@
       try { this.storage?.setItem('_amrs_log_read_v1', JSON.stringify(this.read)); } catch {}
       this.render();
     }
+    markAllRead() {
+      const next = Object.assign(Object.create(null), this.read);
+      for (const entry of this.unread()) next[entry.id] = entry.revision;
+      try { this.storage?.setItem('_amrs_log_read_v1', JSON.stringify(next)); }
+      catch { this.toast('未能儲存已讀狀態，請稍後再試', 'err'); return false; }
+      this.read = next; this.render(); return true;
+    }
     start() {
       if (this.timer !== null) return;
       this.lastActivityAt = this.now();
@@ -321,14 +345,15 @@
       if (!this.bound) {
         this.bound = true;
         host.addEventListener('click', event => {
-          const button = event.target.closest('button[data-fl-notice]');
+          const button = event.target.closest('button[data-fl-notice],button[data-fl-read-all]');
+          if (button && Object.hasOwn(button.dataset, 'flReadAll')) { event.preventDefault(); event.stopPropagation(); this.markAllRead(); return; }
           if (button) this.onNavigate(button.dataset.flNotice);
         });
         host.addEventListener('toggle', event => { if (event.target.classList?.contains('fl-notice-panel')) this.expanded = event.target.open; }, true);
       }
       const unread = this.unread(); host.hidden = !unread.length;
-      host.innerHTML = unread.length ? `<details class="fl-notice-panel"${this.expanded ? ' open' : ''}><summary>跟進日誌 · ${unread.length} 項未讀<span>按事項查看</span></summary><div class="fl-notice-list">${unread.map(entry => `<button type="button" data-fl-notice="${esc(entry.id)}" class="${entry.priority === 'urgent' ? 'fl-notice-urgent' : ''}"><span>${esc(scopeLabel(entry))}</span><strong>${esc(entry.title)}</strong><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span><span aria-hidden="true">›</span></button>`).join('')}</div></details>` : '';
+      host.innerHTML = unread.length ? `<div class="fl-notice-wrap"><button type="button" class="fl-notice-read-all" data-fl-read-all aria-label="全部標記為已讀" title="全部標記為已讀（只限此裝置）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 10 6-7M12 9l4 4M11 10l4 3-2 7H3l3-6 5-4ZM7 16l-2 4M10 17l-1 3M14 21h6"/></svg></button><details class="fl-notice-panel"${this.expanded ? ' open' : ''}><summary>跟進日誌 · ${unread.length} 項未讀<span>按事項查看</span></summary><div class="fl-notice-list">${unread.map(entry => `<button type="button" data-fl-notice="${esc(entry.id)}" class="${entry.priority === 'urgent' ? 'fl-notice-urgent' : ''}"><span>${esc(scopeLabel(entry))}</span><strong>${esc(entry.title)}</strong><span class="fl-status fl-${esc(entry.status)}">${esc(STATUS[entry.status] || entry.status)}</span><span aria-hidden="true">›</span></button>`).join('')}</div></details></div>` : '';
     }
   }
-  return { STATUS, renderCard, createApplication: dependencies => new Application(dependencies), createNotifications: dependencies => new Notifications(dependencies) };
+  return { STATUS, renderCard, renderThread, createApplication: dependencies => new Application(dependencies), createNotifications: dependencies => new Notifications(dependencies) };
 }));

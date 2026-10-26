@@ -99,6 +99,39 @@ const newEntry = () => ({ action: 'createFollowupLog', id: 'synthetic-entry', en
   status: 'pending', priority: 'normal', dueDate: '', knownPeople: ['Operator A', 'Operator B'],
 } });
 
+test('Schedule permanence round-trips in column L without moving existing timestamps or people', async () => {
+  const { repo, tables } = harness();
+  tables.Entries[0].push('Schedule Permanent');
+  const payload = newEntry(); payload.entry.schedulePermanent = true;
+  const { entry } = await repo.postAction(payload);
+  assert.equal(entry.schedulePermanent, true);
+  assert.equal(tables.Entries[1][11], 'TRUE');
+  assert.equal(tables.Entries[1][9], entry.createdAt);
+  assert.equal(tables.Entries[1][10], entry.updatedAt);
+  assert.equal(JSON.parse(tables.Entries[1][8])[0], 'Operator A');
+  assert.equal((await repo.getAction({ action: 'followupLog', id: entry.id })).entry.schedulePermanent, true);
+  const legacyEdit = { ...entry, title: 'Legacy client update' }; delete legacyEdit.schedulePermanent;
+  const kept = await repo.postAction({ action: 'updateFollowupLog', id: entry.id, baseVersion: entry.version, entry: legacyEdit });
+  assert.equal(kept.entry.schedulePermanent, true);
+  const changed = await repo.postAction({ action: 'updateFollowupLog', id: entry.id, baseVersion: kept.entry.version, entry: { ...kept.entry, schedulePermanent: false } });
+  assert.equal(changed.entry.schedulePermanent, false);
+  assert.equal(tables.Entries[1][11], 'FALSE');
+  assert.notEqual(changed.entry.version, kept.entry.version);
+  await repo.postAction({ action: 'deleteFollowupLog', id: entry.id, baseVersion: changed.entry.version });
+  assert.equal(tables.Entries[1][5], 'deleted');
+});
+
+test('legacy eleven-column rows remain editable and a missing permanence flag defaults to false', async () => {
+  const { repo, tables } = harness();
+  tables.Entries.push(['old', 'OTHER', '', 'Legacy title', '', 'pending', 'normal', '', '["Operator A"]', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z']);
+  const { entry } = await repo.getAction({ action: 'followupLog', id: 'old' });
+  assert.equal(entry.schedulePermanent, false);
+  const updated = await repo.postAction({ action: 'updateFollowupLog', id: 'old', baseVersion: entry.version, entry: { ...entry, title: 'Updated' } });
+  assert.equal(updated.entry.schedulePermanent, false);
+  const payload = newEntry(); payload.entry.schedulePermanent = 'false';
+  await assert.rejects(repo.postAction(payload), error => error.status === 400);
+});
+
 test('log entries allow an optional venue and other matters while preserving the sheet schema', async () => {
   for (const company of ['GEG', 'OTHER']) {
     for (const venue of ['', '全部']) {

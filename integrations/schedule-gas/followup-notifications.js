@@ -1,4 +1,4 @@
-// GAS integration build 2026.10.12-1. No credentials or private sheet IDs belong here.
+// GAS integration build 2026.10.27-1. No credentials or private sheet IDs belong here.
 // Helpers end in '_' so the public schedule web app cannot call them via google.script.run.
 function scheduleFollowupVenue_(value) {
   const clean = String(value || '').trim().replace(/\s*\*+\s*$/, '').replace(/[’']/g, "'");
@@ -32,12 +32,14 @@ function parseScheduleFollowups_(rows) {
   if (headers.some((header, index) => String(rows[0] && rows[0][index] || '').trim() !== header)) {
     throw new Error('跟進日誌欄位不符');
   }
+  if (String(rows[0] && rows[0][11] || '').trim() && rows[0][11] !== 'Schedule Permanent') throw new Error('跟進日誌欄位不符');
   return rows.slice(1).map(row => ({
     id: String(row[0] || '').trim(), company: String(row[1] || '').trim(),
     venue: String(row[2] || '').trim(), title: String(row[3] || '').trim(),
     content: String(row[4] || '').trim(), status: String(row[5] || '').trim(),
     priority: String(row[6] || '').trim(), dueDate: String(row[7] || '').trim(),
-    updatedAt: String(row[10] || '').trim(),
+    createdAt: String(row[9] || '').trim(), updatedAt: String(row[10] || '').trim(),
+    schedulePermanent: String(row[11] || '').trim().toLowerCase() === 'true',
   })).filter(entry => entry.id && entry.venue && entry.title && ['pending','progress','waiting'].includes(entry.status))
     .sort((a,b) => Number(b.priority === 'urgent') - Number(a.priority === 'urgent') || b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id));
 }
@@ -49,7 +51,8 @@ function loadScheduleFollowups_() {
     const sheet = SpreadsheetApp.openById(id).getSheetByName('Entries');
     if (!sheet) throw new Error('缺少 Entries');
     const lastRow = Math.max(1, sheet.getLastRow());
-    return { entries: parseScheduleFollowups_(sheet.getRange(1,1,lastRow,11).getDisplayValues()), error: '' };
+    const width = typeof sheet.getLastColumn === 'function' && sheet.getLastColumn() >= 12 ? 12 : 11;
+    return { entries: parseScheduleFollowups_(sheet.getRange(1,1,lastRow,width).getDisplayValues()), error: '' };
   } catch (error) {
     // Never expose sheet IDs, authorization details or raw provider errors in Discord.
     Logger.log('跟進日誌未能讀取，請檢查私有來源設定、欄位及執行帳戶權限');
@@ -61,8 +64,19 @@ function scheduleFollowupDiscordText_(value) {
   return String(value || '').replace(/([\\*_`~|>])/g, '\\$1');
 }
 
+function scheduleFollowupActiveOn_(entry, day) {
+  if (entry.schedulePermanent === true) return true;
+  const created = Date.parse(entry.createdAt);
+  // Missing legacy timestamps cannot safely establish an expiry date.
+  if (!Number.isFinite(created)) return true;
+  const createdDay = new Date(created + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const targetDay = /^\d{4}-\d{2}-\d{2}$/.test(String(day || '')) ? day : new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const age = (Date.parse(targetDay) - Date.parse(createdDay)) / 86400000;
+  return age >= 0 && age < 7;
+}
+
 function buildVenueFollowupText_(venue, followups) {
-  const entries = (followups.entries || []).filter(entry => ['pending','progress','waiting'].includes(entry.status) && scheduleFollowupMatchesVenue_(entry, venue));
+  const entries = (followups.entries || []).filter(entry => ['pending','progress','waiting'].includes(entry.status) && scheduleFollowupActiveOn_(entry, followups.reminders?.day || followups.day) && scheduleFollowupMatchesVenue_(entry, venue));
   if (!entries.length) return '';
   const labels = { pending:'待跟進', progress:'進行中', waiting:'等待' };
   let text = `　📌 ${scheduleFollowupDiscordText_(scheduleFollowupVenue_(venue))} 未完成跟進（${entries.length} 項）\n`;
@@ -218,7 +232,7 @@ function verifyDailyScheduleFollowups_() {
     const venues = Object.keys(period && period.venueMap || {});
     return followups.entries.filter(entry => venues.some(venue => scheduleFollowupMatchesVenue_(entry, venue))).length;
   };
-  const summary = { build:'2026.10.12-1', readOk:true, activeEntries:followups.entries.length,
+  const summary = { build:'2026.10.27-1', readOk:true, activeEntries:followups.entries.length,
     amMatched:countFor(schedule.am), pmMatched:countFor(schedule.pm), silentDay:!!(schedule.isHoliday || schedule.isWeekend), sendsDiscord:false };
   Logger.log('跟進日誌驗證完成：' + JSON.stringify(summary));
   return summary;

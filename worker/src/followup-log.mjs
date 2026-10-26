@@ -2,6 +2,7 @@ import { sha256Base64Url } from './crypto.mjs';
 import { COMPANIES, COMPANY_CASINOS } from './config.mjs';
 
 export const LOG_HEADERS = ['ID', 'Company', 'Venue', 'Title', 'Content', 'Status', 'Priority', 'Due Date', 'Known People', 'Created At', 'Updated At'];
+export const SCHEDULE_PERMANENT_HEADER = 'Schedule Permanent';
 export const COMMENT_HEADERS = ['ID', 'Entry ID', 'Name', 'Content', 'Created At'];
 export const LOG_ACTIONS = new Set(['followupLog', 'followupNotifications', 'createFollowupLog', 'updateFollowupLog', 'deleteFollowupLog', 'addFollowupComment']);
 const STATUSES = ['pending', 'progress', 'waiting', 'completed'];
@@ -27,14 +28,19 @@ function entryInput(input = {}, current = null) {
   if (knownPeople.length > 30 || knownPeople.some(name => name.length > 60)) throw fail('輸入者資料過長');
   const content = text(input.content);
   if (content.length > 8000) throw fail('內容不可超過 8000 字');
-  return { company, venue: company === 'ALL' ? '全部場地' : venue, title: required(input.title, '標題', 160), content, status, priority, dueDate, knownPeople };
+  if (input.schedulePermanent !== undefined && typeof input.schedulePermanent !== 'boolean') throw fail('Schedule 永久顯示設定無效');
+  const schedulePermanent = input.schedulePermanent ?? current?.schedulePermanent ?? false;
+  return { company, venue: company === 'ALL' ? '全部場地' : venue, title: required(input.title, '標題', 160), content, status, priority, dueDate, knownPeople, schedulePermanent };
 }
 const inputValues = entry => [entry.company, entry.venue, entry.title, entry.content, entry.status, entry.priority, entry.dueDate, JSON.stringify(entry.knownPeople)];
 async function fromRow(row, rowNumber) {
   const values = LOG_HEADERS.map((_, index) => text(row[index]));
   let knownPeople;
   try { knownPeople = JSON.parse(values[8] || '[]'); } catch { knownPeople = []; }
-  return { id: values[0], company: values[1], venue: values[2], title: values[3], content: values[4], status: values[5], priority: values[6], dueDate: values[7], knownPeople: Array.isArray(knownPeople) ? knownPeople : [], createdAt: values[9], updatedAt: values[10], version: await sha256Base64Url(JSON.stringify(values)), rowNumber };
+  const schedulePermanent = text(row[11]).toLowerCase() === 'true';
+  // Keep old-client versions valid for unchanged eleven-column rows during rollout.
+  const versionValues = schedulePermanent ? [...values, true] : values;
+  return { id: values[0], company: values[1], venue: values[2], title: values[3], content: values[4], status: values[5], priority: values[6], dueDate: values[7], knownPeople: Array.isArray(knownPeople) ? knownPeople : [], createdAt: values[9], updatedAt: values[10], schedulePermanent, version: await sha256Base64Url(JSON.stringify(versionValues)), rowNumber };
 }
 
 export function createFollowupLogRepository({ config, sheets, now = Date.now }) {
@@ -43,9 +49,10 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
     return text(config.followupLogSheetId);
   }
   async function table(sheet, headers) {
-    const response = await sheets.valuesGet({ spreadsheetId: sheetId(), range: `${sheet}!A:${sheet === 'Entries' ? 'K' : 'E'}`, valueRenderOption: 'FORMATTED_VALUE' });
+    const response = await sheets.valuesGet({ spreadsheetId: sheetId(), range: `${sheet}!A:${sheet === 'Entries' ? 'L' : 'E'}`, valueRenderOption: 'FORMATTED_VALUE' });
     const rows = response.values || [];
     if (headers.some((header, index) => text(rows[0]?.[index]) !== header)) throw fail('日誌試算表欄位不符，請聯絡管理員', 503);
+    if (sheet === 'Entries' && text(rows[0]?.[11]) && text(rows[0][11]) !== SCHEDULE_PERMANENT_HEADER) throw fail('日誌試算表欄位不符，請聯絡管理員', 503);
     return rows;
   }
   async function entries(includeDeleted = false) {
@@ -85,8 +92,8 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
     if (payload.action === 'deleteFollowupLog') {
       if (!current || current.status === 'deleted') return {success:true, deletedId:id};
       if (!payload.baseVersion || payload.baseVersion !== current.version) throw fail('其他同事已修改此事項，請重新載入後再刪除', 409);
-      const values = [id, ...inputValues({...current, status:'deleted'}), current.createdAt, timestamp];
-      await sheets.valuesUpdate({spreadsheetId:sheetId(),range:`Entries!A${current.rowNumber}:K${current.rowNumber}`,valueInputOption:'RAW',values:[values]});
+      const values = [id, ...inputValues({...current, status:'deleted'}), current.createdAt, timestamp, current.schedulePermanent ? 'TRUE' : 'FALSE'];
+      await sheets.valuesUpdate({spreadsheetId:sheetId(),range:`Entries!A${current.rowNumber}:L${current.rowNumber}`,valueInputOption:'RAW',values:[values]});
       return {success:true, deletedId:id};
     }
     if (current?.status === 'deleted') throw fail('此事項已刪除，請重新載入', payload.action === 'createFollowupLog' ? 409 : 404);
@@ -106,16 +113,16 @@ export function createFollowupLogRepository({ config, sheets, now = Date.now }) 
     let values;
     if (payload.action === 'createFollowupLog') {
       if (current) {
-        if (JSON.stringify(inputValues(input)) !== JSON.stringify(inputValues(current))) throw fail('事項識別碼已使用，請重新載入', 409);
+        if (JSON.stringify(inputValues(input)) !== JSON.stringify(inputValues(current)) || input.schedulePermanent !== current.schedulePermanent) throw fail('事項識別碼已使用，請重新載入', 409);
         return { success: true, entry: current };
       }
-      values = [id, ...inputValues(input), timestamp, timestamp];
-      await sheets.valuesAppend({ spreadsheetId: sheetId(), range: 'Entries!A:K', valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', values: [values] });
+      values = [id, ...inputValues(input), timestamp, timestamp, input.schedulePermanent ? 'TRUE' : 'FALSE'];
+      await sheets.valuesAppend({ spreadsheetId: sheetId(), range: 'Entries!A:L', valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS', values: [values] });
     } else if (payload.action === 'updateFollowupLog') {
       if (!current) throw fail('找不到此事項，請重新載入', 404);
       if (!payload.baseVersion || payload.baseVersion !== current.version) throw fail('其他同事已修改此事項，請重新載入後再修改', 409);
-      values = [id, ...inputValues(input), current.createdAt, timestamp];
-      await sheets.valuesUpdate({ spreadsheetId: sheetId(), range: `Entries!A${current.rowNumber}:K${current.rowNumber}`, valueInputOption: 'RAW', values: [values] });
+      values = [id, ...inputValues(input), current.createdAt, timestamp, input.schedulePermanent ? 'TRUE' : 'FALSE'];
+      await sheets.valuesUpdate({ spreadsheetId: sheetId(), range: `Entries!A${current.rowNumber}:L${current.rowNumber}`, valueInputOption: 'RAW', values: [values] });
     } else throw fail('日誌操作無效');
     return { success: true, entry: await fromRow(values, current?.rowNumber || all.length + 2) };
   }
