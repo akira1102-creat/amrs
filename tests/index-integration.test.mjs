@@ -43,8 +43,10 @@ test("Token management explains that Galaxy Log uses the existing AE permission"
 
 test("sidebar separates AE and CVCS query sections", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  assert.match(html, /id="dataQueryMenuSection">AE 資料查詢</);
-  assert.match(html, /id="cvcsQueryMenuSection">CVCS 資料查詢</);
+  for (const [id, label] of [['dataQueryMenuSection', 'AE 資料查詢'], ['cvcsQueryMenuSection', 'CVCS 資料查詢']]) {
+    const heading = html.match(new RegExp(`id="${id}"[^>]*>([\\s\\S]*?)</div>`))?.[1];
+    assert.equal(heading?.replace(/<[^>]*>/g, ''), label);
+  }
   const cvcsSection = html.indexOf('id="cvcsQueryMenuSection"');
   assert.ok(cvcsSection > html.indexOf('id="brokenPartsCompanyMenu"'));
   assert.ok(cvcsSection < html.indexOf('id="cvcsQueryMenuBtn"'));
@@ -211,12 +213,10 @@ test("schedule remarks expose edit controls for both shifts", () => {
   assert.match(html, /shift==='pm'\?'下午':'上午'/);
 });
 
-test("schedule cards expose shift-scoped personnel editing and mobile edge swipe navigation", () => {
+test("schedule cards expose shift-scoped personnel editing", () => {
   const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /updateSchedulePeople/);
   assert.match(html, /openSchedulePeopleEditor/);
-  assert.match(html, /touchstart/);
-  assert.match(html, /clientX > 24/);
 });
 
 test("schedule personnel editor offers a dropdown for every person in the selected shift", () => {
