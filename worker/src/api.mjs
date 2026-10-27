@@ -20,6 +20,7 @@ const repositoryByEnv = new WeakMap();
 const OPERATION_PROCESSING = "processing";
 const OPERATION_COMPLETED = "completed";
 const OPERATION_FAILED = "failed";
+const SUBMISSION_LEASE_MS = 180_000;
 const SUBMISSION_ACTIONS = new Set(["submitRecords", "submitCvcsRecords", "submitCvcsBrokenParts"]);
 
 const SCHEDULE_ACTIONS = new Set(["scheduleOverview", "scheduleMachineCounts", "updateScheduleRemark", "updateSchedulePeople"]);
@@ -226,6 +227,12 @@ async function prepareSubmission(db, payload, requestId, now) {
   });
   for (const record of records) {
     if (!text(record?.submissionId)) record.submissionId = randomId();
+    const previous = await getSubmissionItem(db, text(record.submissionId));
+    if (previous && previous.batchId !== batchId) {
+      const previousBatch = await getSubmissionBatch(db, previous.batchId);
+      if (previousBatch?.status === SUBMISSION_BATCH_STATUS.PROCESSING && nowValue(now) - previousBatch.updatedAt < SUBMISSION_LEASE_MS) throw new OperationInProgressError(previous.batchId);
+      await updateSubmissionItem(db, previous.submissionId, { batchId, now: nowValue(now) });
+    }
     await createSubmissionItem(db, {
       submissionId: text(record.submissionId),
       batchId,
@@ -277,11 +284,22 @@ async function finalizeSubmissionItems(db, repository, batchId, result, now) {
   return listSubmissionItems(db, batchId);
 }
 
-async function reconcileBatch(db, repository, batchId, now) {
+async function reconcileBatch(db, repository, batchId, now, options = {}) {
   let batch = await getSubmissionBatch(db, batchId);
   if (!batch) return null;
   const items = await listSubmissionItems(db, batchId);
   const pendingItems = items.filter((item) => item.status !== SUBMISSION_ITEM_STATUS.INSERTED && item.status !== SUBMISSION_ITEM_STATUS.SKIPPED);
+  if (batch.status === SUBMISSION_BATCH_STATUS.PROCESSING && nowValue(now) - batch.updatedAt < SUBMISSION_LEASE_MS) return { batch, items };
+  if ((pendingItems.length || batch.status !== SUBMISSION_BATCH_STATUS.COMPLETED) && !options.locked) {
+    const companies = [...new Set(items.map(item => text(item.company).toLowerCase()))];
+    const scope = companies.length === 1 ? `amrs-sheets-write:${companies[0].startsWith('cvcs') ? 'cvcs' : companies[0]}` : 'amrs-sheets-write:global';
+    try {
+      return await withWriteLock(db, { scope, owner: randomId(), ttlMs: SUBMISSION_LEASE_MS, waitMs: 0 }, () => reconcileBatch(db, repository, batchId, now, { locked: true }));
+    } catch (error) {
+      if (error?.name === 'WriteLockBusyError') return { batch, items };
+      throw error;
+    }
+  }
   if (pendingItems.length) {
     const found = await repository.findSubmissionIds(pendingItems);
     const knownSkipped = new Set(
@@ -301,7 +319,20 @@ async function reconcileBatch(db, repository, batchId, now) {
   }
   const refreshedItems = await listSubmissionItems(db, batchId);
   const unresolved = refreshedItems.filter((item) => item.status !== SUBMISSION_ITEM_STATUS.INSERTED && item.status !== SUBMISSION_ITEM_STATUS.SKIPPED);
-  if (!unresolved.length && refreshedItems.length >= batch.expectedCount && batch.status !== SUBMISSION_BATCH_STATUS.COMPLETED) {
+  const requiresOriginalPayload = batch.result?.success !== true && batch.result?.recovery?.requiresFollowups !== false;
+  if (batch.status === SUBMISSION_BATCH_STATUS.FAILED && requiresOriginalPayload && batch.result?.requiresOriginalPayload !== true) {
+    batch = await updateSubmissionBatch(db, batchId, { result: { ...(batch.result || {}), success: false, retryable: true, requiresOriginalPayload: true }, now: nowValue(now) });
+  }
+  if ((unresolved.length || requiresOriginalPayload) && batch.status === SUBMISSION_BATCH_STATUS.PROCESSING && nowValue(now) - batch.updatedAt >= SUBMISSION_LEASE_MS) {
+    const message = requiresOriginalPayload && refreshedItems.some(item => item.status === SUBMISSION_ITEM_STATUS.INSERTED || item.status === SUBMISSION_ITEM_STATUS.SKIPPED)
+      ? '維護記錄已部分寫入，但跟進更新未確認；請以原資料重新提交完成核對'
+      : '上次提交已中斷；已核對未寫入的記錄，可修改後重新提交';
+    for (const item of unresolved) await updateSubmissionItem(db, item.submissionId, { status: SUBMISSION_ITEM_STATUS.FAILED, now: nowValue(now) });
+    batch = await updateSubmissionBatch(db, batchId, { status: SUBMISSION_BATCH_STATUS.FAILED, errorMessage: message, result: { success: false, retryable: true, message, requiresOriginalPayload }, now: nowValue(now) });
+    const operation = await getOperation(db, batchId);
+    if (operation?.status === OPERATION_PROCESSING && isSubmissionAction(operation.action)) await updateOperation(db, batchId, { status: OPERATION_FAILED, errorMessage: message, retryable: true }, now);
+  }
+  if (!unresolved.length && !requiresOriginalPayload && refreshedItems.length >= batch.expectedCount && batch.status !== SUBMISSION_BATCH_STATUS.COMPLETED) {
     const insertedCount = refreshedItems.filter((item) => item.status === SUBMISSION_ITEM_STATUS.INSERTED).length;
     batch = await updateSubmissionBatch(db, batchId, {
       status: SUBMISSION_BATCH_STATUS.COMPLETED,
@@ -342,7 +373,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   let operation = await getOperation(db, requestId);
   await requireOperationSession(request, env, operation);
   if (operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || operation.result?.submissionId || "");
-  if (operation?.status === OPERATION_PROCESSING) {
+  if (operation?.status === OPERATION_PROCESSING && (!isSubmissionAction(action) || nowValue(now) - operation.updatedAt < SUBMISSION_LEASE_MS)) {
     return {
       success: true,
       status: OPERATION_PROCESSING,
@@ -357,7 +388,7 @@ async function executeMutation(payload, request, env, dependencies = {}) {
   operation = started.operation;
   await requireOperationSession(request, env, operation);
   if (!started.created && operation?.status === OPERATION_COMPLETED) return resultWithOperation(operation.result, operation, operation.result?.batchId || "");
-  if (!started.created && operation?.status === OPERATION_PROCESSING) {
+  if (!started.created && operation?.status === OPERATION_PROCESSING && (!isSubmissionAction(action) || nowValue(now) - operation.updatedAt < SUBMISSION_LEASE_MS)) {
     return {
       success: true,
       status: OPERATION_PROCESSING,
@@ -367,29 +398,35 @@ async function executeMutation(payload, request, env, dependencies = {}) {
       retryable: true,
     };
   }
-  if (!started.created && operation?.status === OPERATION_FAILED) {
-    operation = await updateOperation(db, requestId, { status: OPERATION_PROCESSING, result: null }, now);
-  }
   const submissionBatchId = isSubmissionAction(action)
     ? text(payload?.batchId) || requestId
     : "";
   let prepared = null;
   let submissionComplete = true;
+  let enteredWrite = false;
   try {
-    prepared = await prepareSubmission(db, payload, requestId, now);
-    const effectivePayload = prepared?.payload || payload;
-    const companies = mutationCompanies(effectivePayload);
+    const companies = mutationCompanies(payload);
     const lockScope = companies?.length === 1 ? `amrs-sheets-write:${companies[0]}` : "amrs-sheets-write:global";
-    const result = await withWriteLock(db, {
+    return await withWriteLock(db, {
       scope: lockScope,
-      owner: requestId,
-      ttlMs: 60_000,
-      waitMs: 20_000,
-      pollMs: 100,
+      owner: randomId(),
+      ttlMs: SUBMISSION_LEASE_MS,
+      waitMs: 0,
     }, async () => {
+      const current = await getOperation(db, requestId);
+      if (current?.status === OPERATION_COMPLETED) return resultWithOperation(current.result, current, current.result?.batchId || '');
+      if (!started.created && current?.status === OPERATION_PROCESSING && nowValue(now) - current.updatedAt < SUBMISSION_LEASE_MS) return { success: true, status: OPERATION_PROCESSING, operationId: requestId, retryable: true };
+      enteredWrite = true;
+      operation = await updateOperation(db, requestId, { status: OPERATION_PROCESSING, result: null }, now);
+      prepared = await prepareSubmission(db, payload, requestId, now);
+      const effectivePayload = prepared?.payload || payload;
+      if (prepared) await updateSubmissionBatch(db, prepared.batchId, {
+        status: SUBMISSION_BATCH_STATUS.PROCESSING,
+        result: { recovery: { requiresFollowups: Boolean(payload.brokenPartsRepairs?.length || prepared.payload.records.some(record => ['brokenParts','bpUodActivationDate','bpUodUnlockDay','bpUodUnlockDate','bpHoldDate','bpHoldReleaseDate'].some(field => text(record[field])))) } },
+        now: nowValue(now),
+      });
       if (prepared) await markSubmissionItemsBeforeMutation(db, repository, prepared.batchId, now);
-      return repository.postAction(effectivePayload);
-    });
+      const result = await repository.postAction(effectivePayload);
     const finalResult = resultWithOperation(result, operation || { requestId }, prepared?.batchId || "");
     if (prepared) {
       const items = await finalizeSubmissionItems(db, repository, prepared.batchId, result, now);
@@ -413,7 +450,10 @@ async function executeMutation(payload, request, env, dependencies = {}) {
     return operationStatus === OPERATION_PROCESSING
       ? { ...response, status: OPERATION_PROCESSING, retryable: true }
       : response;
+    });
   } catch (error) {
+    if (error?.name === 'WriteLockBusyError') error.message = '同公司有其他資料正在儲存，請稍後再提交';
+    if (!enteredWrite && !started.created) { error.operationId = requestId; error.requestId = requestId; throw error; }
     const failedBatchId = prepared?.batchId || submissionBatchId;
     if (failedBatchId) {
       await updateSubmissionBatch(db, failedBatchId, {
@@ -446,6 +486,8 @@ async function operationStatus(db, repository, requestId, now, request, env) {
         status: OPERATION_COMPLETED,
         result: reconciled.batch.result || { success: true, batchId },
       }, now);
+    } else if (reconciled?.batch?.status === SUBMISSION_BATCH_STATUS.FAILED) {
+      operation = await updateOperation(db, requestId, { status: OPERATION_FAILED, errorMessage: reconciled.batch.errorMessage, retryable: true }, now);
     }
   }
   return operation;
@@ -464,7 +506,7 @@ async function statusResponse(db, repository, id, now, request, env) {
       success: true,
       status: batch?.status || item.status,
       result: batch?.result || null,
-      retryable: batch?.status === SUBMISSION_BATCH_STATUS.PROCESSING,
+      retryable: batch?.status === SUBMISSION_BATCH_STATUS.PROCESSING || batch?.result?.retryable === true,
       batch,
       items,
     };
@@ -476,7 +518,7 @@ async function statusResponse(db, repository, id, now, request, env) {
     success: true,
     status: finalBatch.status,
     result: finalBatch.result || null,
-    retryable: finalBatch.status === SUBMISSION_BATCH_STATUS.PROCESSING,
+    retryable: finalBatch.status === SUBMISSION_BATCH_STATUS.PROCESSING || finalBatch.result?.retryable === true,
     batch: finalBatch,
     items: result?.items || [],
   };

@@ -12,6 +12,19 @@ const GAS = "https://gas.synthetic.invalid/exec";
 const DEPLOY_ID = "synthetic-deploy-id-1234567890";
 const ACCESS_TOKEN = "amrs_synthetic-personal-token";
 
+test('individual recovery status stays on authenticated Cloudflare without submitting or falling back to GAS', async () => {
+  const calls = [];
+  const transport = createDualTransport({ cloudflareBaseUrl: CLOUD, accessToken: ACCESS_TOKEN, fetchImpl: async (url, init) => {
+    calls.push({ url: String(url), method: init.method });
+    if (String(url).endsWith('/session')) return jsonResponse({ token: 'synthetic-session', expiresIn: 3600 });
+    assert.equal(init.headers.authorization, 'Bearer synthetic-session');
+    return jsonResponse({ success: true, status: 'failed', items: [{ submissionId: 'synthetic-row', status: 'failed' }] });
+  } });
+  const result = await transport.getSubmissionStatus('synthetic-row');
+  assert.equal(result.items[0].status, 'failed');
+  assert.deepEqual(calls.map(call => [new URL(call.url).pathname, call.method]), [['/session', 'POST'], ['/submissions/synthetic-row', 'GET']]);
+});
+
 class MemoryStorage {
   #values = new Map();
 

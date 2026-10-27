@@ -106,6 +106,13 @@ function createD1Harness() {
                 if (locks.get(scope)?.owner === owner) locks.delete(scope);
                 return { success: true, meta: { changes: 1 } };
               }
+              if (sql.includes('UPDATE write_locks SET expires_at')) {
+                const [expiresAt, scope, owner, now] = bindings;
+                const current = locks.get(scope);
+                if (!current || current.owner !== owner || current.expiresAt <= now) return { success: true, meta: { changes: 0 } };
+                current.expiresAt = expiresAt;
+                return { success: true, meta: { changes: 1 } };
+              }
               return { success: true, meta: { changes: 1 } };
             },
             async first() {
@@ -218,7 +225,7 @@ for (const company of ["cvcs", "cvcs-broken", "SCL"]) {
     const allowedToken = await issueSessionToken(env.AMRS_TOKEN_SECRET, { scope: "amrs", permissions: [permission] });
     env.DB.batches.set("restricted-batch", {
       batchId: "restricted-batch", status: "processing", expectedCount: 1,
-      insertedCount: 0, skippedCount: 0, repairedCount: 0, resultJson: null,
+      insertedCount: 0, skippedCount: 0, repairedCount: 0, resultJson: '{"success":true}',
       errorMessage: null, createdAt: 1, updatedAt: 1,
     });
     env.DB.items.set("restricted-item", {
@@ -476,7 +483,7 @@ test("keeps the operation processing when a successful write cannot yet be recon
   assert.equal(env.DB.batches.get("unresolved-operation").status, "processing");
 });
 
-test("keeps a processing submission pollable through both batch and item status endpoints", async () => {
+test("keeps a recent processing submission pollable without repeatedly scanning Sheets", async () => {
   const { env, token } = await createAuthenticatedContext();
   env.DB.batches.set("processing-batch", {
     batchId: "processing-batch", status: "processing", expectedCount: 1,
@@ -487,15 +494,125 @@ test("keeps a processing submission pollable through both batch and item status 
     submissionId: "processing-item", batchId: "processing-batch", company: "SCL",
     status: "processing", rowNumber: null, createdAt: 1, updatedAt: 1,
   });
-  const repository = { findSubmissionIds: async () => ({}) };
+  const repository = { findSubmissionIds: async () => { throw new Error('active submissions must not be rescanned'); } };
   for (const path of ["/submissions/processing-batch", "/submissions/processing-item"]) {
-    const response = await handleRequest(request(path, token), env, { repository });
+    const response = await handleRequest(request(path, token), env, { repository, now: () => 5 });
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.success, true);
     assert.equal(body.status, "processing");
     assert.equal(body.result, null);
   }
+});
+
+test('recovers an abandoned submission under the company lock without inserting existing IDs twice', async () => {
+  const { env, token } = await createAuthenticatedContext();
+  env.DB.operations.set('stale-batch', { requestId: 'stale-batch', action: 'submitRecords', status: 'processing', resultJson: null, errorMessage: null, retryable: 0, createdAt: 1, updatedAt: 1 });
+  const saved = new Set(['already-saved']);
+  let writes = 0;
+  const repository = {
+    findSubmissionIds: async items => Object.fromEntries(items.filter(item => saved.has(item.submissionId)).map(item => [item.submissionId, { company: 'SCL' }])),
+    postAction: async payload => {
+      writes++;
+      const insertedSubmissionIds = payload.records.filter(item => !saved.has(item.submissionId)).map(item => item.submissionId);
+      const skippedSubmissionIds = payload.records.filter(item => saved.has(item.submissionId)).map(item => item.submissionId);
+      insertedSubmissionIds.forEach(id => saved.add(id));
+      return { success: true, inserted: insertedSubmissionIds.length, skipped: skippedSubmissionIds.length, insertedSubmissionIds, skippedSubmissionIds };
+    },
+  };
+  const payload = { action: 'submitRecords', requestId: 'stale-batch', records: [{ company: 'SCL', submissionId: 'already-saved' }, { company: 'SCL', submissionId: 'missing-row' }] };
+  const post = () => handleRequest(request('/api', token, { method: 'POST', body: JSON.stringify(payload) }), env, { repository });
+  const result = await (await post()).json();
+  assert.equal(result.inserted, 1);
+  assert.equal(result.skipped, 1);
+  assert.equal(env.DB.operations.get('stale-batch').status, 'completed');
+  assert.equal(saved.size, 2);
+  await post();
+  assert.equal(writes, 1);
+});
+
+test('a second computer gets a bounded busy response and can retry after the first company write finishes', async () => {
+  const { env, token } = await createAuthenticatedContext();
+  let finish, entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const written = [];
+  const repository = {
+    findSubmissionIds: async () => ({}),
+    postAction: async payload => {
+      written.push(payload.records[0].submissionId);
+      if (written.length === 1) { entered(); await new Promise(resolve => { finish = resolve; }); }
+      return { success: true, inserted: 1, insertedSubmissionIds: [payload.records[0].submissionId] };
+    },
+  };
+  const post = id => handleRequest(request('/api', token, { method: 'POST', body: JSON.stringify({ action: 'submitRecords', requestId: id, records: [{ company: 'SCL', submissionId: `${id}-row` }] }) }), env, { repository });
+  const first = post('computer-a');
+  await started;
+  const before = env.DB.calls.length;
+  const second = await post('computer-b');
+  assert.equal(second.status, 409);
+  assert.equal((await second.json()).retryable, true);
+  assert.ok(env.DB.calls.length - before < 35, 'busy request must not perform hundreds of lock polls');
+  assert.equal(written.length, 1);
+  finish();
+  assert.equal((await first).status, 200);
+  assert.equal((await post('computer-b')).status, 200);
+  assert.deepEqual(written, ['computer-a-row', 'computer-b-row']);
+});
+
+test('an expired batch status reconciles once and exposes missing rows as retryable rather than processing forever', async () => {
+  const { env, token } = await createAuthenticatedContext();
+  env.DB.batches.set('abandoned-batch', { batchId: 'abandoned-batch', status: 'processing', expectedCount: 1, insertedCount: 0, skippedCount: 0, repairedCount: 0, resultJson: null, errorMessage: null, createdAt: 1, updatedAt: 1 });
+  env.DB.items.set('abandoned-row', { submissionId: 'abandoned-row', batchId: 'abandoned-batch', company: 'SCL', status: 'processing', rowNumber: null, createdAt: 1, updatedAt: 1 });
+  let scans = 0;
+  const repository = { findSubmissionIds: async () => { scans++; return {}; } };
+  const result = await (await handleRequest(request('/submissions/abandoned-row', token), env, { repository })).json();
+  assert.equal(result.status, 'failed');
+  assert.equal(result.retryable, true);
+  assert.equal(result.items[0].status, 'failed');
+  assert.equal(scans, 1);
+});
+
+test('finding the main row cannot falsely confirm an interrupted parts or Hold update', async () => {
+  const { env, token } = await createAuthenticatedContext();
+  env.DB.batches.set('partial-followup', { batchId: 'partial-followup', status: 'processing', expectedCount: 1, insertedCount: 0, skippedCount: 0, repairedCount: 0, resultJson: JSON.stringify({ recovery: { requiresFollowups: true } }), errorMessage: null, createdAt: 1, updatedAt: 1 });
+  env.DB.items.set('main-row-saved', { submissionId: 'main-row-saved', batchId: 'partial-followup', company: 'SCL', status: 'processing', rowNumber: null, createdAt: 1, updatedAt: 1 });
+  const repository = { findSubmissionIds: async () => ({ 'main-row-saved': { company: 'SCL' } }) };
+  const result = await (await handleRequest(request('/submissions/partial-followup', token), env, { repository })).json();
+  assert.equal(result.status, 'failed');
+  assert.equal(result.result.requiresOriginalPayload, true);
+  assert.equal(result.items[0].status, 'inserted');
+});
+
+test('an active followup writer is not failed merely because its main rows have already been found', async () => {
+  const {env,token}=await createAuthenticatedContext();
+  env.DB.batches.set('active-followup',{batchId:'active-followup',status:'processing',expectedCount:1,insertedCount:1,skippedCount:0,repairedCount:0,resultJson:JSON.stringify({recovery:{requiresFollowups:true}}),errorMessage:null,createdAt:1,updatedAt:1});
+  env.DB.items.set('found-main',{submissionId:'found-main',batchId:'active-followup',company:'SCL',status:'inserted',rowNumber:null,createdAt:1,updatedAt:1});
+  env.DB.locks.set('amrs-sheets-write:scl',{owner:'active-writer',expiresAt:Date.now()+180000});
+  const result=await (await handleRequest(request('/submissions/active-followup',token),env,{repository:{findSubmissionIds:async()=>{throw Error('must not scan while writer holds lease');}}})).json();
+  assert.equal(result.status,'processing');assert.equal(env.DB.batches.get('active-followup').status,'processing');
+});
+
+test('retrying a subset after cancelling a row moves its existing submission ID into the new batch', async () => {
+  const { env, token } = await createAuthenticatedContext();
+  env.DB.batches.set('old-failed', { batchId: 'old-failed', status: 'failed', expectedCount: 2, insertedCount: 0, skippedCount: 0, repairedCount: 0, resultJson: null, errorMessage: null, createdAt: 1, updatedAt: 1 });
+  env.DB.items.set('kept-row', { submissionId: 'kept-row', batchId: 'old-failed', company: 'SCL', status: 'failed', rowNumber: null, createdAt: 1, updatedAt: 1 });
+  const repository = { findSubmissionIds: async () => ({}), postAction: async () => ({success:true,inserted:1,insertedSubmissionIds:['kept-row']}) };
+  const result = await (await handleRequest(request('/api',token,{method:'POST',body:JSON.stringify({action:'submitRecords',requestId:'retry-subset',records:[{company:'SCL',submissionId:'kept-row'}]})}),env,{repository})).json();
+  assert.equal(env.DB.items.get('kept-row').batchId,'retry-subset');
+  assert.equal(env.DB.batches.get('retry-subset').status,'completed');
+  assert.equal(result.inserted,1);
+});
+
+test('two simultaneous retries of the same abandoned batch cannot enter the writer together', async () => {
+  const {env,token}=await createAuthenticatedContext();
+  env.DB.operations.set('stale-race',{requestId:'stale-race',action:'submitRecords',status:'processing',resultJson:null,errorMessage:null,retryable:0,createdAt:1,updatedAt:1});
+  let writes=0,finish,entered;
+  const started=new Promise(resolve=>{entered=resolve;});
+  const repository={findSubmissionIds:async()=>({}),postAction:async()=>{writes++;entered();await new Promise(resolve=>{finish=resolve;});return {success:true,inserted:1,insertedSubmissionIds:['race-row']};}};
+  const post=()=>handleRequest(request('/api',token,{method:'POST',body:JSON.stringify({action:'submitRecords',requestId:'stale-race',records:[{company:'SCL',submissionId:'race-row'}]})}),env,{repository});
+  const first=post();await started;
+  const second=await post();assert.equal((await second.json()).status,'processing');assert.equal(writes,1);
+  finish();assert.equal((await first).status,200);assert.equal(env.DB.operations.get('stale-race').status,'completed');
 });
 
 test("uses a company-specific D1 lock for a single-company mutation", async () => {

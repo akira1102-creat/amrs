@@ -2078,11 +2078,21 @@ export function createRepository(env = {}, dependencies = {}) {
     const found = {};
     if (cvcsItems.length) Object.assign(found, await getCvcsRepository().findSubmissionIds(cvcsItems));
     for (const [company, ids] of groups) {
-      const main = await mainRowsForCompany(company, { refresh: true, cache: false, ensureIdentity: false });
+      const spreadsheetId = config.sheets[company];
+      const metadata = await spreadsheetMetadata(spreadsheetId, { refresh: true });
+      const sheet = findSheet(metadata, WORKSHEET_NAME, true);
+      if (!sheet) continue;
+      const width = Math.min(MAX_READ_COLUMNS, Math.max(52, Number(sheet.gridProperties?.columnCount || 0)));
+      const headers = await readValues(spreadsheetId, sheet.title, `A1:${columnNumberToA1(width)}1`);
+      const idColumn = headerIndex(headers[0] || [], SUBMISSION_HEADER);
+      if (!idColumn) continue;
+      const column = columnNumberToA1(idColumn);
+      const lastRow = Math.max(2, Number(sheet.gridProperties?.rowCount) || 2);
+      const values = await readValues(spreadsheetId, sheet.title, `${column}2:${column}${lastRow}`);
       const wanted = new Set(ids.filter(Boolean));
-      main.rows.forEach((row) => {
-        const id = text(arrayValue(row, main.idColumn));
-        if (id && wanted.has(id)) found[id] = { company, rowNumber: main.rows.indexOf(row) + 2 };
+      values.forEach((row, index) => {
+        const id = text(row?.[0]);
+        if (id && wanted.has(id)) found[id] = { company, rowNumber: index + 2 };
       });
     }
     return found;

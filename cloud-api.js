@@ -720,6 +720,17 @@
         || isTransientStatus(error?.httpStatus);
     }
 
+    async getSubmissionStatus(id, options = {}) {
+      const read = async forceRefresh => {
+        const token = await this.ensureSession({ forceRefresh, signal: options.signal });
+        return this._requestRaw(apiUrl(this.cloudflareBaseUrl, `/submissions/${encodeURIComponent(asString(id))}`), {
+          method: 'GET', headers: { accept: 'application/json', authorization: `Bearer ${token}` }, signal: options.signal,
+        }, { backend: 'cloudflare', phase: 'reconcile', timeoutMs: options.timeoutMs || this.pollTimeoutMs });
+      };
+      try { return await read(false); }
+      catch (error) { if (error.httpStatus !== 401) throw error; this.clearSession(); return read(true); }
+    }
+
     async get(queryOrOptions = "", maybeOptions = {}) {
       const optionKeys = ["query", "signal", "timeoutMs", "_sessionRetried"];
       const isOptionsObject = queryOrOptions

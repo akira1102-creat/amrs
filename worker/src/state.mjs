@@ -402,7 +402,9 @@ export async function acquireWriteLock(db, scopeOrInput, ownerOrOptions, options
 }
 
 export async function renewWriteLock(db, scopeOrInput, ownerOrOptions, optionsOrTtl, maybeOptions) {
-  return acquireWriteLock(db, scopeOrInput, ownerOrOptions, optionsOrTtl, maybeOptions);
+  const values = lockValues(scopeOrInput, ownerOrOptions, optionsOrTtl, maybeOptions);
+  const result = await run(db, 'UPDATE write_locks SET expires_at = ? WHERE scope = ? AND owner = ? AND expires_at > ?', [values.expiresAt, values.scope, values.owner, values.now]);
+  return Number(result?.meta?.changes) > 0;
 }
 
 export async function releaseWriteLock(db, scopeOrInput, ownerOrOptions) {
@@ -459,9 +461,20 @@ export async function withWriteLock(db, scopeOrInput, ownerOrCallback, callbackO
     await wait(Math.min(pollMs, waitMs - (currentNow - startedAt)));
   }
 
+  let renewal = null, leaseError = null, stopped = false;
+  const heartbeat = setInterval(() => {
+    if (renewal || stopped) return;
+    renewal = renewWriteLock(db, values.input).then(held => {
+      if (!held) leaseError = new WriteLockBusyError(values.scope);
+    }).catch(error => { leaseError = error; }).finally(() => { renewal = null; });
+  }, Math.max(10, Math.floor((values.expiresAt - values.now) / 3)));
   try {
-    return await callback({ scope: values.scope, owner: values.owner, expiresAt: values.expiresAt });
+    const result = await callback({ scope: values.scope, owner: values.owner, expiresAt: values.expiresAt });
+    if (leaseError) throw leaseError;
+    return result;
   } finally {
+    stopped = true; clearInterval(heartbeat);
+    if (renewal) await renewal;
     await releaseWriteLock(db, values.scope, values.owner);
   }
 }

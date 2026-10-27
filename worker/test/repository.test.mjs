@@ -185,6 +185,17 @@ const config = {
 };
 
 const commonHeaders = ["CASINO", "DATE", "PO Number", "Model", "Serial No.", "Reason", "Action Taken", "Error Description", "Box ID", "Inspector"];
+test('submission reconciliation reads only the identity column, not every maintenance field', async () => {
+  const harness = createSheetsHarness({ scl: [{ title: 'Worksheet', columnCount: 11, rowCount: 300,
+    values: [commonHeaders.concat('AMRS Submission ID'), ['Sample', '', '', 'SAE', '1234', '', '', '', '', '', 'synthetic-row-id']] }] });
+  const reads = [];
+  const original = harness.client.valuesGet;
+  harness.client.valuesGet = options => { reads.push(options.range); return original(options); };
+  const repository = createRepository({}, { config, sheetsClient: harness.client });
+  const found = await repository.findSubmissionIds([{ company: 'SCL', submissionId: 'synthetic-row-id' }]);
+  assert.equal(found['synthetic-row-id'].rowNumber, 2);
+  assert.ok(reads.every(range => /1(?::[A-Z]+1)?$/.test(range) || /!K2:K\d+$/.test(range)), reads.join(', '));
+});
 const companyData = {
   scl: [{ title: "Worksheet", values: [commonHeaders, ["Venetian", "2026/08/04", "2608", "SAE", "1234", "PM", "Preventive Maintenance", "", "", "Alice"]] }, {
     title: "Broken Parts List",

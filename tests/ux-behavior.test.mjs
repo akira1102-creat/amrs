@@ -19,7 +19,7 @@ test('submission checks start together and preserve state warnings before confir
   let finishDuplicate,finishState,opened;
   const started=[];
   const context=vm.createContext({
-    queue:[{sn:'9001',model:'SAE',reason:'PM',date:'2026/01/01'}],activeCompany:'SCL',_submitCheckBusy:false,
+    queue:[{sn:'9001',model:'SAE',reason:'PM',date:'2026/01/01'}],activeCompany:'SCL',_submitCheckBusy:false,isSubmitting:false,_retryBusy:false,editingIdx:-1,reconcileQueuedSubmissions:async()=>true,
     document:{getElementById:()=>({value:'2026-01-01'})},fmtDate:s=>s,
     collectQueueDuplicateWarnings:()=>[],syncSubmitButtonState:()=>{},showLoadingProgress:()=>({}),hideLoadingProgress:()=>{},
     collectRecentDuplicateWarnings:()=>{started.push('duplicates');return new Promise(resolve=>finishDuplicate=resolve);},
@@ -27,7 +27,7 @@ test('submission checks start together and preserve state warnings before confir
     openSubmissionWarningModal:rows=>opened=rows,showSubmitConfirmation:()=>assert.fail('must show state reminders first'),
   });
   vm.runInContext(source,context);
-  const promise=context.submitAll();assert.deepEqual(started,['duplicates','states']);
+  const promise=context.submitAll();await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(started,['duplicates','states']);
   finishState([{holding:true}]);finishDuplicate([]);await promise;
   assert.equal(opened[0].holding,true);assert.equal(context._submitCheckBusy,false);
 });

@@ -51,6 +51,13 @@ function createD1Harness() {
                 }
                 return { success: true, meta: { changes: 0 } };
               }
+              if (sql.includes('UPDATE write_locks SET expires_at')) {
+                const [expiresAt, scope, owner, now] = bindings;
+                const current = locks.get(scope);
+                if (!current || current.owner !== owner || current.expiresAt <= now) return { success: true, meta: { changes: 0 } };
+                current.expiresAt = expiresAt;
+                return { success: true, meta: { changes: 1 } };
+              }
               return { success: true, meta: { changes: 1 } };
             },
             async first() {
@@ -133,4 +140,13 @@ test("withWriteLock accepts object-form lock options", async () => {
     callbackLock = lock;
   }, { ttlMs: 100, now: 1000 });
   assert.equal(callbackLock.expiresAt, 1100);
+});
+
+test('a slow active writer renews its lease so another computer cannot take over mid-write', async () => {
+  const db = createD1Harness();
+  await withWriteLock(db, { scope: 'slow-write', owner: 'first', ttlMs: 90, now: () => Date.now() }, async () => {
+    await new Promise(resolve => setTimeout(resolve, 140));
+    assert.equal(await acquireWriteLock(db, { scope: 'slow-write', owner: 'second', ttlMs: 90, now: () => Date.now() }), false);
+  });
+  assert.equal(db.locks.has('slow-write'), false);
 });

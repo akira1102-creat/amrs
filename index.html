@@ -7,14 +7,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20261027b">
+  <link rel="manifest" href="manifest.json?v=20261027c">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20261027b">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20261027b">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20261027b">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20261027b">
-  <link rel="stylesheet" href="./followup-log.css?v=20261027b">
+  <link rel="stylesheet" href="./cvcs.css?v=20261027c">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20261027c">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20261027c">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20261027c">
+  <link rel="stylesheet" href="./followup-log.css?v=20261027c">
   <title>AMRS</title>
   <script>
     (function(){
@@ -114,7 +114,13 @@
     body.company-scl .scl-only{display:block}
     .q-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#0d1117;border-radius:14px;margin-bottom:10px;border:1px solid #21262d}
     .q-sn{font-size:22px;font-weight:800;color:#58a6ff;min-width:55px}
-    .q-info{flex:1}
+    .q-item.q-recovery{border:2px solid #d29922;background:#241d10}
+    .q-item.q-recovery-failed{border-color:#f85149;background:#281719}
+    .q-submit-status{font-size:12px;font-weight:750;color:#e3b341;margin:5px 0;line-height:1.5;overflow-wrap:anywhere}
+    .q-recovery-failed .q-submit-status{color:#ff9b94}
+    .q-del.q-cancel-submit{font-size:12px;white-space:nowrap;padding:8px;border:1px solid #f85149;border-radius:8px}
+    .q-edit-icon:disabled,.q-del:disabled{opacity:.4;cursor:wait}
+    .q-info{flex:1;min-width:0}
     .q-reason{font-size:14px;color:#e6edf3}
     .q-action{font-size:12px;color:#3fb950;margin-top:2px}
     .q-extra{font-size:11px;color:#8b949e;margin-top:2px}
@@ -335,6 +341,13 @@
     .mob .queue-bulk-btn{padding:6px 9px}
     .mob .q-edit-icon{font-size:18px;padding:3px 5px}
     .mob .q-del{font-size:20px;padding:3px 6px}
+    .q-item.q-recovery:not(.q-editing){display:grid;grid-template-columns:22px 1fr auto;gap:8px}
+    .q-recovery>.q-select{grid-column:1;grid-row:1}
+    .q-recovery>.q-sn{grid-column:2;grid-row:1}
+    .q-recovery>.q-edit-icon{grid-column:3;grid-row:1;justify-self:end}
+    .q-recovery>.q-info{grid-column:2/4;grid-row:2}
+    .q-recovery>.q-del.q-cancel-submit{grid-column:2/4;grid-row:3;justify-self:end;font-size:12px;padding:8px}
+    .q-recovery .q-edit-btns{flex-wrap:wrap}
     .mob .badge{font-size:13px;padding:2px 9px}
     .mob .submit-btn{padding:16px;font-size:18px}
     .mob .toast{font-size:15px;padding:12px 22px}
@@ -1702,21 +1715,21 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20261027b"></script>
-<script src="./access-control.js?v=20261027b"></script>
-<script src="./cvcs.js?v=20261027b"></script>
-<script src="./token-admin.js?v=20261027b"></script>
-<script src="./xlsx.mini.min.js?v=20261027b"></script>
-<script src="./galaxy-log.js?v=20261027b"></script>
-<script src="./mgm-check-request.js?v=20261027b"></script>
-<script src="./worksheet-editor.js?v=20261027b"></script>
-<script src="./followup-log.js?v=20261027b"></script>
+<script src="./cloud-api.js?v=20261027c"></script>
+<script src="./access-control.js?v=20261027c"></script>
+<script src="./cvcs.js?v=20261027c"></script>
+<script src="./token-admin.js?v=20261027c"></script>
+<script src="./xlsx.mini.min.js?v=20261027c"></script>
+<script src="./galaxy-log.js?v=20261027c"></script>
+<script src="./mgm-check-request.js?v=20261027c"></script>
+<script src="./worksheet-editor.js?v=20261027c"></script>
+<script src="./followup-log.js?v=20261027c"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.27-02';
-const _APP_VERSION='v1.143';
+const _APP_BUMP='2026.10.27-03';
+const _APP_VERSION='v1.144';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3728,87 +3741,129 @@ function _renderStats(){
 
 // ── Retry Queue ────────────────────────────────────────────
 let _retryQueue=[];
-try{_retryQueue=JSON.parse(localStorage.getItem('_ml_retry')||'[]');}catch(e){}
-function _saveRetry(){localStorage.setItem('_ml_retry',JSON.stringify(_retryQueue));}
-if(_retryQueue.some(item=>ensureSubmissionIds(item.records)))_saveRetry();
-let _retryBusy=false,_retryTimer=null,_retryAttempts=0,_retryLastError='';
+try{const saved=JSON.parse(localStorage.getItem('_ml_retry')||'[]');if(Array.isArray(saved))_retryQueue=saved;}catch(e){}
+let _retryBusy=false;
 function isRetryableServerMessage(message){
   return /lock|busy|too many|timeout|timed out|temporar|try again|service invoked|quota|rate limit|忙碌|稍後|重試|逾時/i.test(String(message||''));
 }
-function queueSubmissionRetry(chunks,startIndex,message){
-  const remaining=chunks.slice(startIndex);
-  if(!remaining.length)return;
-  const chunkKey=chunk=>(chunk.records||[]).map(record=>record.submissionId||'').join('|');
-  const existing=new Set(_retryQueue.map(chunkKey));
-  remaining.forEach(chunk=>{const key=chunkKey(chunk);if(!existing.has(key)){_retryQueue.push({records:chunk.records,repairs:chunk.repairs});existing.add(key);}});
-  _retryLastError=message||'提交結果未確認';
-  _saveRetry();_updateRetryNotice();_scheduleRetry(3000);
+function retryRepairsForRecord(chunk,record){
+  return (chunk.repairs||[]).filter(repair=>{
+    if(String(repair.company||record.company||'SCL')!==String(record.company||'SCL'))return false;
+    const source=repair.record||{};
+    if(source.serialNo!==undefined&&source.serialNo!=='')return Number(source.serialNo)===Number(record.serialNo)&&(!source.model||source.model===(record.model||'SAE'));
+    return (chunk.records||[]).find(row=>String(row.company||'SCL')===String(record.company||'SCL'))?.submissionId===record.submissionId;
+  });
+}
+function recoveredQueueItem(record,chunk,existing,state,message,lookupId){
+  return {...record,...existing,company:record.company||existing?.company||'SCL',submissionId:record.submissionId,
+    sn:existing?.sn??String(record.serialNo??''),action:existing?.action??record.actionTaken??'',
+    retryRepairs:[...(existing?.retryRepairs||[]),...retryRepairsForRecord(chunk,record)],
+    submissionRecovery:{state,message,needsCheck:state==='unknown'||state==='failed',lookupId:lookupId||chunk.records?.[0]?.submissionId||record.submissionId}};
+}
+function restoreLegacySubmissionRetries(){
+  if(!_retryQueue.length)return;
+  try{
+    const byCompany=new Map();
+    for(const chunk of _retryQueue){
+      ensureSubmissionIds(chunk.records);
+      for(const record of chunk.records||[]){
+        const company=String(record.company||'SCL');
+        if(!byCompany.has(company)){
+          const saved=company===activeCompany?queue.slice():JSON.parse(localStorage.getItem(queueStorageKey(company))||'[]');
+          if(!Array.isArray(saved))throw new Error('Invalid queue');
+          byCompany.set(company,saved);
+        }
+        const items=byCompany.get(company),index=items.findIndex(item=>item.submissionId===record.submissionId);
+        const recovered=recoveredQueueItem(record,chunk,index>=0?items[index]:null,'unknown','上次提交結果未確認；修改或再提交前會先核對');
+        if(index>=0)items[index]=recovered;else items.push(recovered);
+      }
+    }
+    for(const [company,items] of byCompany)localStorage.setItem(queueStorageKey(company),JSON.stringify(items));
+    localStorage.setItem('_ml_retry','[]');
+    _retryQueue=[];
+    if(byCompany.has(activeCompany))queue=byCompany.get(activeCompany);
+  }catch(error){showToast('未能還原舊待同步資料，原資料已保留，請檢查本機儲存空間','err');}
+}
+function queueSubmissionRetry(chunks,startIndex,error){
+  const failure=typeof error==='string'?{message:error,unknownOutcome:true}:error||{};
+  const next=queue.slice();
+  chunks.slice(startIndex).forEach((chunk,offset)=>{
+    const unknown=offset===0&&failure.unknownOutcome!==false;
+    const beforeSend=failure.apiAttempted===false&&['preflight','session'].includes(failure.phase);
+    const state=offset||beforeSend?'not-sent':unknown?'unknown':'failed';
+    const message=offset?'上一批未完成，這筆尚未送出':failure.message||'提交未完成，請檢查後重新提交';
+    for(const record of chunk.records||[]){
+      const index=next.findIndex(item=>item.submissionId===record.submissionId);
+      const item=recoveredQueueItem(record,chunk,index>=0?next[index]:null,state,message,offset?null:failure.batchId||failure.operationId);
+      if(index>=0)next[index]=item;else next.push(item);
+    }
+  });
+  queue=next;
+  localStorage.setItem(queueStorageKey(activeCompany),JSON.stringify(next));
+  _updateRetryNotice();
 }
 function _updateRetryNotice(){
   const el=document.getElementById('retryNotice');if(!el)return;
-  const total=_retryQueue.reduce((sum,item)=>sum+(item.records||[]).filter(record=>String(record.company||'SCL')===activeCompany).length,0);
-  if(total){
-    document.getElementById('retryNoticeMsg').textContent=_retryBusy?`${total} 筆記錄正在安全同步...`:`${total} 筆記錄等待同步${_retryLastError?`（${_retryLastError}）`:''}`;
-    const button=document.getElementById('retrySyncBtn');button.disabled=_retryBusy;button.textContent=_retryBusy?'同步中...':'立即同步';
-    const deleteButton=document.getElementById('retryDeleteBtn');if(deleteButton)deleteButton.disabled=_retryBusy;
-    el.style.display='flex';
-  }else{el.style.display='none';}
+  const total=queue.filter(item=>item.submissionRecovery).length;
+  const legacy=_retryQueue.reduce((sum,item)=>sum+(item.records||[]).filter(record=>String(record.company||'SCL')===activeCompany).length,0);
+  el.style.display=total||legacy?'flex':'none';
+  if(!total&&!legacy)return;
+  document.getElementById('retryNoticeMsg').textContent=legacy?'舊待同步資料未能還原，原資料已保留':total+' 筆未完成；已列於待提交清單，可逐筆修改或取消';
+  const busy=_retryBusy||isSubmitting;
+  const button=document.getElementById('retrySyncBtn');button.disabled=busy||!!legacy;button.textContent='核對並重新提交';
+  const cancel=document.getElementById('retryDeleteBtn');if(cancel){cancel.disabled=busy;cancel.textContent='取消這些提交';}
 }
 function discardSubmissionRetries(){
-  if(_retryBusy){showToast('正在同步，請等本次同步結束後再刪除','warn');return;}
-  const company=activeCompany;
-  const matchesCompany=record=>String(record.company||'SCL')===company;
-  const count=_retryQueue.reduce((sum,item)=>sum+(item.records||[]).filter(matchesCompany).length,0);
+  if(_retryBusy||isSubmitting){showToast('正在提交或核對，請稍後再取消','warn');return;}
+  const count=queue.filter(item=>item.submissionRecovery).length;
   if(!count)return;
-  if(!window.confirm(`確定刪除 ${company} 的 ${count} 筆本機待同步記錄，並停止重試？\n\n提交結果可能已寫入雲端，建議先核對。若尚未寫入雲端，刪除後不會再提交，需重新輸入。\n\n此操作不會刪除任何雲端記錄、其他公司的待同步記錄，或待提交清單。`))return;
-  const remaining=_retryQueue.map(item=>{
-    const records=(item.records||[]).filter(record=>!matchesCompany(record));
-    if(!records.length)return null;
-    if(records.length===(item.records||[]).length)return item;
-    return {...item,records,repairs:(item.repairs||[]).filter(repair=>!matchesCompany(repair))};
-  }).filter(Boolean);
-  // Persist before changing memory or timers; failed storage must not silently resurrect data on restart.
-  try{localStorage.setItem('_ml_retry',JSON.stringify(remaining));}
-  catch(error){showToast('未能刪除本機待同步資料，請重試','err');return;}
-  clearTimeout(_retryTimer);_retryTimer=null;
-  _retryQueue=remaining;_retryAttempts=0;_retryLastError='';
-  _updateRetryNotice();
-  showToast(`✓ 已刪除 ${count} 筆本機待同步記錄，不會再重試；雲端資料不變`);
-  if(_retryQueue.length)_scheduleRetry(1000);
+  if(!window.confirm('確定取消 '+activeCompany+' 的 '+count+' 筆未完成提交？\n\n只刪除本機待提交項目，不會刪除或撤回雲端資料；其他公司的資料及一般草稿不變。'))return;
+  const remaining=queue.filter(item=>!item.submissionRecovery);
+  try{localStorage.setItem(queueStorageKey(activeCompany),JSON.stringify(remaining));}
+  catch(error){showToast('未能取消本機待提交資料，請重試','err');return;}
+  queue=remaining;selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;_updateRetryNotice();renderQueue();
+  showToast('已取消 '+count+' 筆本機提交；雲端資料不變');
 }
-function _scheduleRetry(delay=1500){
-  clearTimeout(_retryTimer);
-  if(!_retryQueue.length||!navigator.onLine)return;
-  _retryTimer=setTimeout(_attemptRetry,delay);
-}
-async function _attemptRetry(){
-  if(_retryBusy||!_retryQueue.length||!navigator.onLine)return;
-  const SCRIPT_URL=getScriptUrl();if(!SCRIPT_URL)return;
-  const item=_retryQueue[0];
+async function reconcileQueuedSubmissions(onlyIds=null){
+  const company=activeCompany;
+  const targets=queue.filter(item=>(['unknown','replay'].includes(item.submissionRecovery?.state)||item.submissionRecovery?.needsCheck)&&(!onlyIds||onlyIds.has(item.submissionId)));
+  const groups=[...new Set(targets.map(item=>item.submissionRecovery.lookupId||item.submissionId))];
+  if(!groups.length)return true;
   _retryBusy=true;_updateRetryNotice();
-  let retryAllowed=true;
+  let ready=true;
   try{
-    const body=item.repairs?.length?{action:'submitRecords',records:item.records,brokenPartsRepairs:item.repairs}:item.records;
-    const data=await postSubmissionJson(body,90000);
-    if(!data.success){
-      const error=new Error(data.message||'同步失敗');
-      error.retryable=data.retryable===true||isRetryableServerMessage(data.message);
-      throw error;
+    for(const lookupId of groups){
+      let data;
+      try{
+        if(!_dualTransport?.getSubmissionStatus)throw new Error('需要連線核對提交結果');
+        data=await _dualTransport.getSubmissionStatus(lookupId,{timeoutMs:30000});
+      }catch(error){
+        if(error.httpStatus===404)data={status:'failed',items:[],unregistered:true};
+        else{showToast('未能核對上次提交，資料已保留；請稍後再試','warn');ready=false;continue;}
+      }
+      if(activeCompany!==company)return false;
+      if(['processing','pending'].includes(data.status)){showToast('雲端仍在處理，請稍後再試；暫時不會重複提交','warn');ready=false;continue;}
+      const statuses=new Map((data.items||[]).map(item=>[item.submissionId,item.status]));
+      const originalRequired=data.result?.requiresOriginalPayload===true;
+      const acknowledged=[];
+      const next=queue.flatMap(item=>{
+        if((item.submissionRecovery?.lookupId||item.submissionId)!==lookupId)return [item];
+        const written=['inserted','skipped'].includes(statuses.get(item.submissionId));
+        if(data.status==='completed'||written&&!originalRequired){acknowledged.push(item);return [];}
+        const state=written||data.unregistered?'replay':'failed';
+        const message=data.unregistered?'雲端未找到批次；請先以原資料重新提交核對':written?'維護已寫入，跟進更新未確認；請以原資料重新提交':'已核對未寫入，可修改、取消或重新提交';
+        return [{...item,submissionRecovery:{...item.submissionRecovery,state,needsCheck:false,message}}];
+      });
+      localStorage.setItem(queueStorageKey(company),JSON.stringify(next));
+      queue=next;selectedQueueIdxs.clear();editingIdx=-1;editTemp=null;
+      if(acknowledged.length){_appendLocalLog(acknowledged);showToast('已核對 '+acknowledged.length+' 筆已完成記錄，不會重複提交');}
     }
-    _appendLocalLog(item.records);
-    _retryQueue.shift();_retryAttempts=0;_retryLastError='';_saveRetry();
-    showToast(`✓ ${item.records.length} 筆暫存記錄已同步`);
-  }catch(e){
-    _retryAttempts++;
-    _retryLastError=e.httpStatus===404?'GAS 暫時未能連線，請稍後再試':(e.message||'同步失敗，稍後自動重試');
-    retryAllowed=e.retryable!==false&&e.httpStatus!==404&&!/找不到 GAS Web App|Deploy ID|\/exec 網址/i.test(_retryLastError);
-  }finally{
-    _retryBusy=false;_updateRetryNotice();
-    if(_retryQueue.length&&retryAllowed)_scheduleRetry(_retryLastError?Math.min(60000,5000*Math.pow(2,Math.min(_retryAttempts-1,3))):1000);
-  }
+  }catch(error){showToast('核對結果未能儲存，請保留本機資料再試','err');ready=false;}
+  finally{_retryBusy=false;_updateRetryNotice();renderQueue();}
+  return ready;
 }
-window.addEventListener('online',()=>_scheduleRetry(1000));
-if(_retryQueue.length&&navigator.onLine)_scheduleRetry(1200);
+function _attemptRetry(){if(!_retryBusy&&!isSubmitting)return submitAll();}
+restoreLegacySubmissionRetries();
 
 // ── Broken Parts ───────────────────────────────────────────
 let _partsCodes=[],_partsCodesRequest=null;
@@ -4944,7 +4999,15 @@ function doAddToQueue(item){
   switchToDrop();document.getElementById('actionDrop').value='Preventive Maintenance';
   if(_isMob)showSnPad();else document.getElementById('serialNo').focus();
 }
-function startEditQueue(i){editingIdx=i;const item=queue[i];editTemp={sn:item.sn,model:item.model||'SAE',aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',reason:item.reason,action:item.action,errorDescription:item.errorDescription||'',boxId:item.boxId||'',actionMode:ALL_ACTIONS.includes(item.action)?'drop':'custom'};renderQueue();}
+async function startEditQueue(i){
+  if(isSubmitting||_retryBusy||_submitCheckBusy){showToast('正在提交或核對，請稍後再修改','warn');return;}
+  const id=queue[i]?.submissionId;if(!id)return;
+  if((queue[i].submissionRecovery?.state==='unknown'||queue[i].submissionRecovery?.needsCheck)&&!await reconcileQueuedSubmissions(new Set([id])))return;
+  i=queue.findIndex(item=>item.submissionId===id);if(i<0)return;
+  const item=queue[i];
+  if(item.submissionRecovery?.state==='replay'){showToast('請先用原資料完成核對；已寫入的記錄之後可在資料查詢修改','warn');return;}
+  editingIdx=i;editTemp={...item,model:item.model||'SAE',aaTag:item.aaTag||'',voidSeal:item.voidSeal||'',newVoidSeal:item.newVoidSeal||'',location:item.location||'',inspector:item.inspector||'',errorDescription:item.errorDescription||'',boxId:item.boxId||'',actionMode:ALL_ACTIONS.includes(item.action)?'drop':'custom'};renderQueue();
+}
 function cancelEditQueue(){editingIdx=-1;editTemp=null;renderQueue();}
 function captureEditTemp(){
   if(editingIdx<0||!editTemp)return;
@@ -4961,17 +5024,26 @@ function captureEditTemp(){
   if(editTemp.actionMode==='custom'&&g('eq-action-custom'))editTemp.action=g('eq-action-custom').value;
   if(g('eq-error'))editTemp.errorDescription=g('eq-error').value;
   if(g('eq-boxid'))editTemp.boxId=g('eq-boxid').value;
+  ['casino','date','poNumber','brokenParts','bpDesc','bpColC','bpQty','bpRepairDay','bpRemark','bpUodActivationDate','bpUodUnlockDay','bpHoldDate','bpHoldReleaseDate'].forEach(field=>{if(g('eq-'+field))editTemp[field]=g('eq-'+field).value;});
 }
 function setEditActionMode(mode){captureEditTemp();editTemp.actionMode=mode;if(mode==='drop'&&ACTION_MAP[editTemp.reason])editTemp.action=ACTION_MAP[editTemp.reason];renderQueue();}
 function onEditReasonInput(){captureEditTemp();if(REASONS.includes(editTemp.reason))onEditReasonChange();}
 function onEditReasonChange(){captureEditTemp();const def=ACTION_MAP[editTemp.reason];if(def){editTemp.action=def;editTemp.actionMode='drop';}else{editTemp.actionMode='custom';editTemp.action='';}renderQueue();}
 function saveEditQueue(i){
+  if(isSubmitting||_retryBusy)return;
   captureEditTemp();
   const sn=(editTemp.sn||'').trim();
   if(!sn){showToast('請輸入機身號碼','err');return;}
   const action=editTemp.actionMode==='drop'?editTemp.action:(editTemp.action||'').trim();
   const linkedRepair=queue[i].poRepair&&action===queue[i].poRepair.lockedAction?queue[i].poRepair:null;
-  queue[i]={...queue[i],sn,model:editTemp.model||'SAE',aaTag:canonicalAaTag(editTemp.aaTag),voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim(),poRepair:linkedRepair};
+  const previousDate=queue[i].date;
+  const identityChanged=String(queue[i].sn)!==sn||(queue[i].model||'SAE')!==(editTemp.model||'SAE');
+  const fields=Object.fromEntries(['casino','date','poNumber','brokenParts','bpDesc','bpColC','bpQty','bpRepairDay','bpRemark','bpUodActivationDate','bpUodUnlockDay','bpHoldDate','bpHoldReleaseDate'].map(field=>[field,String(editTemp[field]??queue[i][field]??'').trim()]));
+  if(fields.date)fields.date=fmtDate(fields.date);
+  queue[i]={...queue[i],...fields,sn,model:editTemp.model||'SAE',aaTag:canonicalAaTag(editTemp.aaTag),voidSeal:(editTemp.voidSeal||'').trim(),newVoidSeal:(editTemp.newVoidSeal||'').trim(),location:editTemp.location||'',inspector:(editTemp.inspector||'').trim(),reason:editTemp.reason,action,errorDescription:(editTemp.errorDescription||'').trim(),boxId:(editTemp.boxId||'').trim(),poRepair:identityChanged?null:linkedRepair};
+  if(identityChanged)queue[i].retryRepairs=[];
+  else if(fields.date!==previousDate)queue[i].retryRepairs=(queue[i].retryRepairs||[]).map(repair=>({...repair,record:Object.fromEntries(Object.entries(repair.record||{}).map(([key,value])=>[key,['bpRepairDay','bpHoldReleaseDate','bpUodUnlockDay'].includes(key)&&value?fields.date:value]))}));
+  if(queue[i].submissionRecovery)queue[i].submissionRecovery={...queue[i].submissionRecovery,state:'failed',message:'已修改，待重新提交'};
   editingIdx=-1;editTemp=null;saveQueue();renderQueue();
   scheduleQueueDuplicateCheck(queue[i]);
 }
@@ -4985,6 +5057,7 @@ function toggleQueueSelectAll(checked){
 }
 function clearQueueSelection(){selectedQueueIdxs.clear();renderQueue();}
 function deleteQueueSelection(){
+  if(isSubmitting||_retryBusy)return;
   const idxs=[...selectedQueueIdxs].filter(i=>queue[i]).sort((a,b)=>b-a);
   if(!idxs.length){showToast('請先選擇記錄','err');return;}
   if(!confirm(`確定刪除已選擇的 ${idxs.length} 筆待提交記錄？`))return;
@@ -4998,15 +5071,20 @@ function deleteQueueSelection(){
     saveQueue();renderQueue();return true;
   });
 }
-function bulkSetModel(model){
-  const idxs=[...selectedQueueIdxs].filter(i=>queue[i]);
+async function bulkSetModel(model){
+  if(isSubmitting||_retryBusy||_submitCheckBusy)return;
+  const ids=new Set([...selectedQueueIdxs].filter(i=>queue[i]).map(i=>queue[i].submissionId));
+  if(!await reconcileQueuedSubmissions(ids))return;
+  const idxs=queue.map((item,i)=>ids.has(item.submissionId)&&item.submissionRecovery?.state!=='replay'?i:-1).filter(i=>i>=0);
   if(!idxs.length){showToast('請先選擇記錄','err');return;}
   idxs.forEach(i=>{queue[i].model=model;});
   if(editingIdx>=0&&selectedQueueIdxs.has(editingIdx)&&editTemp)editTemp.model=model;
   saveQueue();renderQueue();showToast(`✓ 已將 ${idxs.length} 筆記錄改為 ${model}`);
 }
 function removeFromQueue(i){
+  if(isSubmitting||_retryBusy)return;
   const removed=queue[i],company=activeCompany;if(!removed)return;
+  if(removed.submissionRecovery&&!confirm('確定取消這筆本機提交？雲端若已寫入不會被刪除或撤回。'))return;
   if(editingIdx===i){editingIdx=-1;editTemp=null;}
   queue.splice(i,1);
   selectedQueueIdxs=new Set([...selectedQueueIdxs].filter(idx=>idx!==i).map(idx=>idx>i?idx-1:idx));
@@ -5031,6 +5109,7 @@ function updateSnPadQueue(){
     +shown.map(item=>`<span class="spq-sn">${esc(item.sn)}</span>`).join('');
 }
 function renderQueue(){
+  _updateRetryNotice();
   const badge=document.getElementById('countBadge');
   const card=document.getElementById('queueCard');
   const btn=document.getElementById('submitBtn');
@@ -5063,10 +5142,15 @@ function renderQueue(){
       const aaTagEditHtml=activeCompany==='MGM'?`<div class="ef-row"><label>AA Tag</label><input id="eq-aa-tag" type="text" value="${esc(editTemp.aaTag)}" placeholder="TAE0000" inputmode="numeric"></div>`:'';
       const locationEditHtml=activeCompany==='MGM'?`<div class="ef-row"><label>場所</label><select id="eq-location"><option value="Floor"${editTemp.location==='Floor'?' selected':''}>場上</option><option value="Workshop"${editTemp.location==='Workshop'?' selected':''}>場下</option></select></div>`:'';
       const inspectorEditHtml=`<div class="ef-row"><label>調查人員</label><input id="eq-inspector" type="text" value="${esc(editTemp.inspector)}" placeholder="選填"></div>`;
-      return `<div class="q-item q-editing"><div class="q-edit-form">
+      const recoveryFields=item.submissionRecovery?`<div class="ef-row"><label>場地</label><select id="eq-casino">${[...new Set([...casinoOptionsForCompany(activeCompany),item.casino||''])].filter(Boolean).map(venue=>`<option${venue===editTemp.casino?' selected':''}>${esc(venue)}</option>`).join('')}</select></div>
+        <div class="ef-row"><label>日期</label><input id="eq-date" type="text" value="${esc(editTemp.date||'')}" placeholder="YYYY/MM/DD"></div>
+        <div class="ef-row"><label>PO 號碼</label><input id="eq-poNumber" type="text" value="${esc(editTemp.poNumber||'')}"></div>
+        <details><summary>零件 / UOD / Hold（選填）</summary>${[['brokenParts','零件編號'],['bpDesc','零件名稱 (JP)'],['bpColC','零件名稱 (EN)'],['bpQty','數量'],['bpRepairDay','維修日期 / Waiting'],['bpRemark','備註'],['bpUodActivationDate','UOD Activation Date'],['bpUodUnlockDay','UOD Unlock Date / Wait for Unlock'],['bpHoldDate','Hold Date'],['bpHoldReleaseDate','Hold Release Date']].map(([field,label])=>`<div class="ef-row"><label>${label}</label><input id="eq-${field}" type="text" value="${esc(editTemp[field]||'')}"></div>`).join('')}</details>`:'';
+      return `<div class="q-item q-editing${item.submissionRecovery?' q-recovery':''}"><div class="q-edit-form">
         <div class="q-edit-top"><label class="q-select-label"><input class="q-select" type="checkbox" onchange="toggleQueueSelect(${i},this.checked)"${checked}> 選取</label></div>
         <div class="ef-row"><label>機身號碼</label><input id="eq-sn" class="sn-input" type="text" value="${esc(editTemp.sn)}" inputmode="numeric"></div>
         <div class="ef-row"><label>機型</label><select id="eq-model">${mOpts}</select></div>
+        ${recoveryFields}
         ${sealEditHtml}
         ${aaTagEditHtml}
         ${locationEditHtml}
@@ -5078,13 +5162,17 @@ function renderQueue(){
         <div class="q-edit-btns">
           <button class="q-save-btn" onclick="saveEditQueue(${i})" type="button">✓ 儲存</button>
           <button class="q-cancel-btn" onclick="cancelEditQueue()" type="button">✗ 取消</button>
+          ${item.submissionRecovery?`<button class="q-cancel-btn" onclick="removeFromQueue(${i})" type="button">取消提交</button>`:''}
         </div>
       </div></div>`;
     }
-    return `<div class="q-item">
+    const recovery=item.submissionRecovery;
+    const statusLabel=recovery?({failed:'提交失敗',unknown:'提交結果未確認','not-sent':'尚未送出',replay:'跟進更新待確認'}[recovery.state]||'待重新提交'):'';
+    return `<div class="q-item${recovery?' q-recovery'+(recovery.state==='failed'?' q-recovery-failed':''):''}">
       <input class="q-select" type="checkbox" onchange="toggleQueueSelect(${i},this.checked)"${checked}>
       <div class="q-sn">${esc(item.sn)}</div>
       <div class="q-info">
+        ${recovery?`<div class="q-submit-status">${esc(statusLabel)} · ${esc(recovery.message||'請檢查後重新提交')}</div>`:''}
         <div class="q-reason">${esc(item.model||'SAE')} · ${esc(item.reason)}</div>
         ${item.action?`<div class="q-action">${esc(item.action)}</div>`:''}
         <div class="q-extra">${esc(item.company||activeCompany)} · ${esc(item.casino||'')} · ${esc(item.date||'')}${item.poNumber?' · PO '+esc(item.poNumber):''}</div>
@@ -5100,8 +5188,8 @@ function renderQueue(){
         ${item.bpHoldDate?`<div class="q-extra" style="color:#79c0ff">Holding：${esc(item.bpHoldDate)}</div>`:''}
         ${item.poRepair?`<div class="q-extra" style="color:#3fb950">提交時同步更新 Repair Day</div>`:''}
       </div>
-      <button class="q-edit-icon" onclick="startEditQueue(${i})" title="編輯" type="button">✏️</button>
-      <button class="q-del" onclick="removeFromQueue(${i})" type="button">✕</button>
+      <button class="q-edit-icon" onclick="startEditQueue(${i})" title="編輯" aria-label="編輯 ${esc(item.sn)}" type="button"${isSubmitting?' disabled':''}>✏️</button>
+      <button class="q-del${recovery?' q-cancel-submit':''}" onclick="removeFromQueue(${i})" type="button"${isSubmitting?' disabled':''}>${recovery?'取消提交':'✕'}</button>
     </div>`;
   }).join('');
   if(editingIdx>=0&&editTemp){
@@ -5990,6 +6078,9 @@ function showSubmitConfirmation(warnings=[],stateWarnings=[]){
   document.getElementById('confirmModal').classList.add('show');
 }
 async function submitAll(){
+  if(isSubmitting||_retryBusy||_submitCheckBusy)return;
+  if(editingIdx>=0){showToast('請先儲存或取消正在編輯的記錄','warn');return;}
+  if(!await reconcileQueuedSubmissions())return;
   const casino=document.getElementById('casino').value;
   const date=document.getElementById('date').value;
   const poNumber=document.getElementById('poNumber').value.trim();
@@ -5998,6 +6089,7 @@ async function submitAll(){
   queue.forEach((item,index)=>{
     if(!/^\d{1,4}$/.test(String(item.sn||'')))errors.push(`第 ${index+1} 筆機身號碼格式錯誤`);
     if(!String(item.reason||'').trim())errors.push(`S/N ${item.sn} 未填原因`);
+    if(item.submissionRecovery&&(!String(item.casino||'').trim()||!/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(String(item.date||''))))errors.push(`S/N ${item.sn} 請填寫場地及有效日期（YYYY/MM/DD）`);
     if(activeCompany==='GEG'&&item.voidSeal&&!/^\d{5}$/.test(item.voidSeal))errors.push(`S/N ${item.sn} Void Seal 必須為 5 位`);
   });
   if(errors.length){showToast(errors[0],'err');return;}
@@ -6087,7 +6179,8 @@ async function doSubmit(){
       return {company:item.company||activeCompany,record:{rowNumber:source.rowNumber,model:source.model,serialNo:source.serialNo,brokenParts:source.brokenParts,bpRepairDay:item.date||fmtDate(date)}};
     });
     const stateRepairs=selectedRepairs.filter(item=>Number(item.queueIndex)>=i&&Number(item.queueIndex)<i+CHUNK_SIZE).map(({queueIndex,...item})=>item);
-    const repairs=mergeSubmissionRepairs([...poRepairs,...stateRepairs]);
+    const retries=chunkItems.flatMap(item=>item.retryRepairs||[]);
+    const repairs=mergeSubmissionRepairs([...retries,...poRepairs,...stateRepairs]);
     chunks.push({records:records.slice(i,i+CHUNK_SIZE),repairs});
   }
   let savedCount=0,skippedCount=0,completedChunks=0;
@@ -6102,40 +6195,29 @@ async function doSubmit(){
         savedCount+=Number.isFinite(Number(data.inserted))?Number(data.inserted):chunk.records.length;
         skippedCount+=Number(data.skipped)||0;
         completedChunks=ci+1;
-        queue.splice(0,chunk.records.length);saveQueue();
+        const acknowledgedIds=new Set(chunk.records.map(item=>item.submissionId));
+        queue=queue.filter(item=>!acknowledgedIds.has(item.submissionId));saveQueue();
         showSubmitProgress(completedChunks,chunks.length);
         btn.textContent=chunks.length>1?`儲存中... (${completedChunks}/${chunks.length})`:'儲存中...';
         _appendLocalLog(chunk.records);
       }else{
-        if(data.retryable===true||isRetryableServerMessage(data.message)){
-          queueSubmissionRetry(chunks,ci,data.message||'伺服器正忙碌，稍後會自動重試');
-          renderQueue();
-          showToast('伺服器正忙碌，剩餘資料已安全暫存並會自動重試','warn');
-          clearQueue(false);
-          return;
-        }
-        renderQueue();
-        showToast('錯誤：'+(data.message||'伺服器錯誤'),'err');
-        btn.disabled=false;
-        return;
+        throw Object.assign(new Error(data.message||'提交失敗'),{unknownOutcome:false,retryable:data.retryable===true,batchId:data.batchId});
       }
     }
     if(navigator.vibrate)navigator.vibrate([80,40,80]);
     showToast(skippedCount?`✓ 已完成：新增 ${savedCount} 筆，略過 ${skippedCount} 筆已提交記錄`:`✓ 已儲存 ${savedCount} 筆記錄`);
     clearQueue();
   }catch(e){
-    if([400,401,403].includes(e.httpStatus)||(e.kind==='operation-failed'&&!e.unknownOutcome)){
-      renderQueue();
-      showToast(e.message||'請檢查 Deploy ID 或提交資料格式','err');
-      return;
-    }
-    queueSubmissionRetry(chunks,completedChunks,e.httpStatus===404?'GAS 暫時未能連線，稍後會再核對':(e.message||'提交結果未確認'));
-    showToast('提交結果未確認，剩餘資料已安全暫存並會自動核對重試','warn');
-    clearQueue(false);
+    if([400,401,403].includes(e.httpStatus))e.unknownOutcome=false;
+    try{queueSubmissionRetry(chunks,completedChunks,e);}
+    catch(storageError){showToast('未完成資料仍在待提交清單，但本機儲存失敗；請勿關閉頁面','err');renderQueue();return;}
+    renderQueue();
+    showToast('未完成資料已留在待提交清單，請逐筆檢查、修改或取消，再按全部提交','warn');
   }finally{
     hideSubmitProgress();
     btn.textContent='全部提交';
     isSubmitting=false;
+    renderQueue();
     syncSubmitButtonState();
   }
 }
