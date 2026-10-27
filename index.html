@@ -7,14 +7,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20261027c">
+  <link rel="manifest" href="manifest.json?v=20261027d">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20261027c">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20261027c">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20261027c">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20261027c">
-  <link rel="stylesheet" href="./followup-log.css?v=20261027c">
+  <link rel="stylesheet" href="./cvcs.css?v=20261027d">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20261027d">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20261027d">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20261027d">
+  <link rel="stylesheet" href="./followup-log.css?v=20261027d">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1715,21 +1715,21 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20261027c"></script>
-<script src="./access-control.js?v=20261027c"></script>
-<script src="./cvcs.js?v=20261027c"></script>
-<script src="./token-admin.js?v=20261027c"></script>
-<script src="./xlsx.mini.min.js?v=20261027c"></script>
-<script src="./galaxy-log.js?v=20261027c"></script>
-<script src="./mgm-check-request.js?v=20261027c"></script>
-<script src="./worksheet-editor.js?v=20261027c"></script>
-<script src="./followup-log.js?v=20261027c"></script>
+<script src="./cloud-api.js?v=20261027d"></script>
+<script src="./access-control.js?v=20261027d"></script>
+<script src="./cvcs.js?v=20261027d"></script>
+<script src="./token-admin.js?v=20261027d"></script>
+<script src="./xlsx.mini.min.js?v=20261027d"></script>
+<script src="./galaxy-log.js?v=20261027d"></script>
+<script src="./mgm-check-request.js?v=20261027d"></script>
+<script src="./worksheet-editor.js?v=20261027d"></script>
+<script src="./followup-log.js?v=20261027d"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.27-03';
-const _APP_VERSION='v1.144';
+const _APP_BUMP='2026.10.27-04';
+const _APP_VERSION='v1.145';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -3836,7 +3836,8 @@ async function reconcileQueuedSubmissions(onlyIds=null){
       let data;
       try{
         if(!_dualTransport?.getSubmissionStatus)throw new Error('需要連線核對提交結果');
-        data=await _dualTransport.getSubmissionStatus(lookupId,{timeoutMs:30000});
+        const submissionIds=queue.filter(item=>(item.submissionRecovery?.lookupId||item.submissionId)===lookupId).map(item=>item.submissionId);
+        data=await _dualTransport.getSubmissionStatus(lookupId,{timeoutMs:30000,company,submissionIds});
       }catch(error){
         if(error.httpStatus===404)data={status:'failed',items:[],unregistered:true};
         else{showToast('未能核對上次提交，資料已保留；請稍後再試','warn');ready=false;continue;}

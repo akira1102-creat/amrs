@@ -727,8 +727,13 @@
           method: 'GET', headers: { accept: 'application/json', authorization: `Bearer ${token}` }, signal: options.signal,
         }, { backend: 'cloudflare', phase: 'reconcile', timeoutMs: options.timeoutMs || this.pollTimeoutMs });
       };
-      try { return await read(false); }
-      catch (error) { if (error.httpStatus !== 401) throw error; this.clearSession(); return read(true); }
+      try {
+        try { return await read(false); }
+        catch (error) { if (error.httpStatus !== 401) throw error; this.clearSession(); return await read(true); }
+      } catch (error) {
+        if (error.httpStatus === 404 && options.company && options.submissionIds?.length) return this._cloudGet({ action: 'submissionLookup', company: options.company, ids: JSON.stringify(options.submissionIds) }, options);
+        throw error;
+      }
     }
 
     async get(queryOrOptions = "", maybeOptions = {}) {

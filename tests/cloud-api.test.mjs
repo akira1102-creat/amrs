@@ -25,6 +25,19 @@ test('individual recovery status stays on authenticated Cloudflare without submi
   assert.deepEqual(calls.map(call => [new URL(call.url).pathname, call.method]), [['/session', 'POST'], ['/submissions/synthetic-row', 'GET']]);
 });
 
+test('an unregistered legacy batch is checked against original Sheet IDs before records can be edited',async()=>{
+  const transport=createDualTransport({cloudflareBaseUrl:CLOUD,accessToken:ACCESS_TOKEN,fetchImpl:async(url,init)=>{
+    const target=new URL(url);
+    if(target.pathname==='/session')return jsonResponse({token:'synthetic-session',expiresIn:3600});
+    if(target.pathname.startsWith('/submissions/'))return jsonResponse({success:false,message:'Not found'},404);
+    assert.equal(init.method,'GET');assert.equal(target.searchParams.get('action'),'submissionLookup');assert.equal(target.searchParams.get('company'),'SCL');
+    assert.deepEqual(JSON.parse(target.searchParams.get('ids')),['unregistered-row']);
+    return jsonResponse({success:true,status:'failed',items:[{submissionId:'unregistered-row',status:'failed'}]});
+  }});
+  const result=await transport.getSubmissionStatus('unregistered-row',{company:'SCL',submissionIds:['unregistered-row']});
+  assert.equal(result.items[0].status,'failed');
+});
+
 class MemoryStorage {
   #values = new Map();
 

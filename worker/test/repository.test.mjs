@@ -196,6 +196,16 @@ test('submission reconciliation reads only the identity column, not every mainte
   assert.equal(found['synthetic-row-id'].rowNumber, 2);
   assert.ok(reads.every(range => /1(?::[A-Z]+1)?$/.test(range) || /!K2:K\d+$/.test(range)), reads.join(', '));
 });
+
+test('unregistered recovery reports per-record Sheet presence without returning maintenance contents',async()=>{
+  const harness=createSheetsHarness({scl:[{title:'Worksheet',columnCount:11,values:[commonHeaders.concat('AMRS Submission ID'),['Sample','','','SAE','1234','','','','','','old-saved-row']]}]});
+  const repository=createRepository({}, {config,sheetsClient:harness.client});
+  const result=await repository.getAction({action:'submissionLookup',company:'SCL',ids:JSON.stringify(['old-saved-row','never-sent-row'])});
+  assert.deepEqual(result.items,[{submissionId:'old-saved-row',status:'inserted'},{submissionId:'never-sent-row',status:'failed'}]);
+  assert.equal(result.result.requiresOriginalPayload,true);
+  assert.ok(!JSON.stringify(result).includes('1234'));
+  await assert.rejects(()=>repository.getAction({action:'submissionLookup',company:'invalid',ids:'[]'}));
+});
 const companyData = {
   scl: [{ title: "Worksheet", values: [commonHeaders, ["Venetian", "2026/08/04", "2608", "SAE", "1234", "PM", "Preventive Maintenance", "", "", "Alice"]] }, {
     title: "Broken Parts List",

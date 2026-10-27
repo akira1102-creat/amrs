@@ -1576,6 +1576,14 @@ export function createRepository(env = {}, dependencies = {}) {
   async function getAction(params = {}) {
     if (params.action === 'followupLog' || params.action === 'followupNotifications') return createFollowupLogRepository({ config, sheets, now }).get(params);
     const action = text(params.action);
+    if (action === 'submissionLookup') {
+      const company = text(params.company);
+      let ids;
+      try { ids = JSON.parse(params.ids || '[]'); } catch { throw Object.assign(new Error('Invalid submission IDs'), { status: 400 }); }
+      if (!COMPANIES.includes(company) || !Array.isArray(ids) || !ids.length || ids.length > 100 || ids.some(id => typeof id !== 'string' || !id.trim() || id.length > 128)) throw Object.assign(new Error('Invalid submission lookup'), { status: 400 });
+      const found = await findSubmissionIds(ids.map(submissionId => ({ company, submissionId })), { requireIdentity: true });
+      return { success: true, status: 'failed', result: { requiresOriginalPayload: ids.some(id => Object.hasOwn(found, id)) }, items: ids.map(submissionId => ({ submissionId, status: Object.hasOwn(found, submissionId) ? 'inserted' : 'failed' })) };
+    }
     const cvcsResult = await getCvcsRepository().getAction(params);
     if (cvcsResult) return cvcsResult;
     if (action === "ping") return { success: true };
@@ -2066,7 +2074,7 @@ export function createRepository(env = {}, dependencies = {}) {
     return insertRecords(payload);
   }
 
-  async function findSubmissionIds(items = []) {
+  async function findSubmissionIds(items = [], options = {}) {
     const cvcsItems = items.filter((item) => /^cvcs(?:-broken)?$/i.test(text(item.company)));
     const regularItems = items.filter((item) => !/^cvcs(?:-broken)?$/i.test(text(item.company)));
     const groups = new Map();
@@ -2081,11 +2089,11 @@ export function createRepository(env = {}, dependencies = {}) {
       const spreadsheetId = config.sheets[company];
       const metadata = await spreadsheetMetadata(spreadsheetId, { refresh: true });
       const sheet = findSheet(metadata, WORKSHEET_NAME, true);
-      if (!sheet) continue;
+      if (!sheet) { if (options.requireIdentity) throw Object.assign(new Error('Cannot verify the original worksheet'), { status: 503 }); continue; }
       const width = Math.min(MAX_READ_COLUMNS, Math.max(52, Number(sheet.gridProperties?.columnCount || 0)));
       const headers = await readValues(spreadsheetId, sheet.title, `A1:${columnNumberToA1(width)}1`);
       const idColumn = headerIndex(headers[0] || [], SUBMISSION_HEADER);
-      if (!idColumn) continue;
+      if (!idColumn) { if (options.requireIdentity) throw Object.assign(new Error('Cannot verify submission IDs; please check the original worksheet'), { status: 503 }); continue; }
       const column = columnNumberToA1(idColumn);
       const lastRow = Math.max(2, Number(sheet.gridProperties?.rowCount) || 2);
       const values = await readValues(spreadsheetId, sheet.title, `${column}2:${column}${lastRow}`);
