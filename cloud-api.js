@@ -745,9 +745,12 @@
         && optionKeys.some((key) => Object.prototype.hasOwnProperty.call(queryOrOptions, key));
       const options = isOptionsObject ? { ...queryOrOptions } : { ...maybeOptions, query: queryOrOptions };
       const query = options.query ?? "";
-      const workerOnly = LOG_ACTIONS.has(new URLSearchParams(normalizeQuery(query)).get('action'));
+      const queryParams = new URLSearchParams(normalizeQuery(query));
+      // Legacy GAS always skips PM, so it cannot answer an explicit PM check.
+      const workerOnly = LOG_ACTIONS.has(queryParams.get('action'))
+        || (queryParams.get('action') === 'duplicateFault' && queryParams.get('includePm') === '1');
       if (!this.cloudflareBaseUrl) {
-        if (workerOnly) throw new AmrsTransportError('Cloudflare is required for the follow-up log', { backend: 'cloudflare', kind: 'cloud-unavailable' });
+        if (workerOnly) throw new AmrsTransportError('Cloudflare is required for this check or follow-up log', { backend: 'cloudflare', kind: 'cloud-unavailable' });
         return this._gasGet(query, options);
       }
       try {

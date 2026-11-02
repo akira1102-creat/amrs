@@ -495,6 +495,16 @@ test("separates duplicate faults by model when a model is supplied", () => {
   }), { "1000": 1 });
 });
 
+test("PM is checked only when explicitly enabled by the reminder preference", async () => {
+  const data=structuredClone(companyData);
+  data.scl[0].values.push(["Venetian","2026/08/03","2608","TAE","9001","PM","Inspection"]);
+  const harness=createSheetsHarness(data);
+  const repository=createRepository({}, {config,sheetsClient:harness.client});
+  const query={action:"duplicateFault",company:"SCL",model:"TAE",serialNos:"9001",reason:"PM",date:"2026/08/04"};
+  assert.deepEqual((await repository.getAction(query)).duplicates,{});
+  assert.deepEqual((await repository.getAction({...query,includePm:"1"})).duplicates,{"9001":1});
+});
+
 test("passes the selected model through the duplicate read action", async () => {
   const data = structuredClone(companyData);
   data.scl[0].values.push(["Venetian", "2026/08/03", "2608", "TAE", "1000", "Hardware Problem", "Repair", "", "", ""]);

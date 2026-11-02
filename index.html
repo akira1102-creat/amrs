@@ -7,14 +7,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20261027d">
+  <link rel="manifest" href="manifest.json?v=20261102a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20261027d">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20261027d">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20261027d">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20261027d">
-  <link rel="stylesheet" href="./followup-log.css?v=20261027d">
+  <link rel="stylesheet" href="./cvcs.css?v=20261102a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20261102a">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20261102a">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20261102a">
+  <link rel="stylesheet" href="./followup-log.css?v=20261102a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -102,6 +102,13 @@
     .row-action select,.row-action input,.row-action .combo{flex:1}
     .label-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
     .mini-edit-btn{padding:5px 10px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
+    .recent-fault-settings{margin-top:10px;border:1px solid #30363d;border-radius:10px;font-size:12px}
+    .recent-fault-settings summary{padding:10px;cursor:pointer;color:#8b949e;overflow-wrap:anywhere}
+    .recent-fault-settings p{margin:0;padding:0 10px 10px;color:#8b949e;line-height:1.6}
+    .recent-fault-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:240px;overflow:auto;padding:0 10px 10px}
+    .recent-fault-options label{display:flex;align-items:center;gap:8px;margin:0;padding:8px;border-radius:8px;background:#0d1117;cursor:pointer;font-size:12px;overflow-wrap:anywhere}
+    .recent-fault-options input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;margin:0;padding:0;accent-color:#1f6feb}
+    .recent-fault-options label:has(input:checked){color:#58a6ff;background:#10213a}
     .icon-btn{flex-shrink:0;width:46px;font-size:16px;background:#21262d;border:1px solid #30363d;border-radius:14px;cursor:pointer;color:#e6edf3;display:flex;align-items:center;justify-content:center}
     .add-btn{width:100%;margin-top:16px;padding:14px;font-size:16px;background:#238636;color:#fff;border:none;border-radius:16px;font-weight:700;cursor:pointer}
     .add-btn:active{background:#2ea043}
@@ -1331,6 +1338,11 @@
       <input type="text" id="reason" oninput="onReasonInput()" onchange="onReasonChange()" placeholder="搜尋原因..." autocomplete="off">
       <div class="combo-menu" id="reasonMenu"></div>
     </div>
+    <details class="recent-fault-settings">
+      <summary>30日提醒豁免原因：<span id="recentFaultExemptionSummary">PM</span></summary>
+      <p>勾選後，提交時不提示該原因的30日重複記錄。可多選，按公司儲存於此裝置；不影響當日重複、等件、Holding 或等解鎖檢查。</p>
+      <div class="recent-fault-options" id="recentFaultExemptionOptions"></div>
+    </details>
   </div>
   <div>
     <label>處理方法&備註（選填）</label>
@@ -1715,21 +1727,21 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20261027d"></script>
-<script src="./access-control.js?v=20261027d"></script>
-<script src="./cvcs.js?v=20261027d"></script>
-<script src="./token-admin.js?v=20261027d"></script>
-<script src="./xlsx.mini.min.js?v=20261027d"></script>
-<script src="./galaxy-log.js?v=20261027d"></script>
-<script src="./mgm-check-request.js?v=20261027d"></script>
-<script src="./worksheet-editor.js?v=20261027d"></script>
-<script src="./followup-log.js?v=20261027d"></script>
+<script src="./cloud-api.js?v=20261102a"></script>
+<script src="./access-control.js?v=20261102a"></script>
+<script src="./cvcs.js?v=20261102a"></script>
+<script src="./token-admin.js?v=20261102a"></script>
+<script src="./xlsx.mini.min.js?v=20261102a"></script>
+<script src="./galaxy-log.js?v=20261102a"></script>
+<script src="./mgm-check-request.js?v=20261102a"></script>
+<script src="./worksheet-editor.js?v=20261102a"></script>
+<script src="./followup-log.js?v=20261102a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.10.27-04';
-const _APP_VERSION='v1.145';
+const _APP_BUMP='2026.11.02-01';
+const _APP_VERSION='v1.146';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -2942,6 +2954,7 @@ function selectCompany(company){
   syncCompanySpecificFields();
   syncCasinoOptions();
   restoreInputDraft();
+  applyTemplateMappings(readTemplateCache(company)?.mappings||[]);
   loadTemplateMappings();
   showPage('input');renderCompanyMenu();
   if(!hasCredentialForCompany(company))openGasSettings({returnState:prev});else loadTodayRecords();
@@ -3491,6 +3504,7 @@ function applyTemplateMappings(mappings){
   ALL_ACTIONS=[...actions,...DEFAULT_ACTIONS.filter(a=>!actions.includes(a))];
   _refreshSearchCombo('reason');
   _refreshSearchCombo('actionDrop');
+  renderRecentFaultExemptions();
 }
 function templateCacheKey(company){return TEMPLATE_CACHE_PREFIX+company;}
 function readTemplateCache(company){
@@ -3610,6 +3624,7 @@ function _rebuildReasonSelect(){
   rSel.value=cur;
   if(!rSel.value)rSel.value=_recentReasons[0]||'PM';
   _refreshSearchCombo('reason');
+  renderRecentFaultExemptions();
 }
 function _updateRecentReasons(reason,action=''){
   if(reason)_recentReasons=[reason,..._recentReasons.filter(r=>r!==reason)].slice(0,5);
@@ -4678,6 +4693,37 @@ function requestSameDayDuplicateConfirmation(items,batch){
   return true;
 }
 
+function recentFaultExemptionKey(company=activeCompany){return `_ml_recent_fault_exempt_${company}`;}
+function getRecentFaultExemptions(company=activeCompany){
+  try{
+    const saved=JSON.parse(localStorage.getItem(recentFaultExemptionKey(company))||'null');
+    if(Array.isArray(saved)&&saved.every(value=>typeof value==='string'&&value.trim()))return [...new Set(saved.map(value=>value.trim()))];
+  }catch(e){}
+  return ['PM'];
+}
+function isRecentFaultExempt(reason,company=activeCompany){
+  const normalized=String(reason||'').trim().toUpperCase();
+  return getRecentFaultExemptions(company).some(value=>value.toUpperCase()===normalized);
+}
+function renderRecentFaultExemptions(){
+  const box=document.getElementById('recentFaultExemptionOptions'),summary=document.getElementById('recentFaultExemptionSummary');
+  if(!box||!summary)return;
+  const selected=getRecentFaultExemptions(),seen=new Set();
+  const options=['PM',...REASONS,...selected].map(value=>String(value).trim()).filter(value=>{
+    const key=value.toUpperCase();if(!key||seen.has(key))return false;seen.add(key);return true;
+  });
+  summary.textContent=selected.length?selected.join('、'):'無（全部檢查）';
+  box.innerHTML=options.map(reason=>`<label><input type="checkbox" value="${esc(reason)}"${isRecentFaultExempt(reason)?' checked':''} onchange="setRecentFaultExemption(this.value,this.checked)"><span>${esc(reason)}</span></label>`).join('');
+}
+function setRecentFaultExemption(reason,checked){
+  if(isSubmitting||_submitCheckBusy){renderRecentFaultExemptions();showToast('提交檢查期間不能修改提醒設定','warn');return;}
+  const value=String(reason||'').trim();if(!value)return;
+  const selected=getRecentFaultExemptions().filter(item=>item.toUpperCase()!==value.toUpperCase());
+  if(checked)selected.push(value);
+  try{localStorage.setItem(recentFaultExemptionKey(),JSON.stringify(selected));}
+  catch(e){showToast('提醒設定未能儲存，已保留原有設定','err');}
+  renderRecentFaultExemptions();
+}
 function isDuplicateCheckItem(item){return String(item?.reason||'').trim().toUpperCase()!=='PM';}
 function duplicateItemKey(item){return `${String(item?.model||'SAE').trim().toUpperCase()}\u0000${String(item?.sn||'')}\u0000${String(item?.reason||'').trim()}\u0000${String(item?.date||'')}`;}
 function scheduleQueueDuplicateCheck(){renderQueueDuplicateNotice();}
@@ -4713,7 +4759,7 @@ function renderQueueDuplicateNotice(){
 
 async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=fmtDate(document.getElementById('date').value),model=''){
   const normalizedReason=String(reason||'').trim();
-  if(!normalizedReason||normalizedReason.toUpperCase()==='PM')return {};
+  if(!normalizedReason||isRecentFaultExempt(normalizedReason,company))return {};
   const url=getScriptUrl();
   if(!url)throw new Error('尚未設定網站代號');
   const params=new URLSearchParams({
@@ -4722,6 +4768,7 @@ async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=
     model:String(model||''),
     serialNos:[...new Set(serialNos.map(value=>String(value||'').trim()).filter(Boolean))].join(','),
     reason:normalizedReason,
+    includePm:normalizedReason.toUpperCase()==='PM'?'1':'0',
     date:String(date||'')
   });
   const data=await fetchJsonWithTimeout(`${url}?${params.toString()}`,{},60000);
@@ -4731,7 +4778,7 @@ async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=
 function duplicateCount(value){return Array.isArray(value)?value.length:Number(value)||0;}
 async function collectRecentDuplicateWarnings(){
   const groups=new Map();
-  queue.filter(isDuplicateCheckItem).forEach(item=>{
+  queue.filter(item=>String(item.reason||'').trim()&&!isRecentFaultExempt(item.reason,item.company||activeCompany)).forEach(item=>{
     const company=item.company||activeCompany;
     const model=String(item.model||'SAE').trim().toUpperCase()||'SAE';
     const reason=String(item.reason||'').trim();
@@ -4750,7 +4797,7 @@ async function collectRecentDuplicateWarnings(){
       const duplicates=await fetchDuplicateFaults(chunk,group.reason,group.company,group.date,group.model);
       Object.entries(duplicates).forEach(([serialNo,value])=>{
         const count=duplicateCount(value);
-        if(count>0)warnings.push({message:`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆相同非 PM 記錄（${group.reason}）`,company:group.company,model:group.model,serialNo});
+        if(count>0)warnings.push({message:`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆相同原因記錄（${group.reason}）`,company:group.company,model:group.model,serialNo});
       });
       });
     }

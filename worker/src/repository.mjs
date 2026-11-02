@@ -1355,7 +1355,7 @@ export function createRepository(env = {}, dependencies = {}) {
     const main = await mainRowsForCompany(company, { refresh: true, cache: false });
     return {
       success: true,
-      duplicates: getDuplicateFaultsFromRows(main.rows, { company, model: text(params.model), serialNos, reason, date, timeZone: config.timeZone }),
+      duplicates: getDuplicateFaultsFromRows(main.rows, { company, model: text(params.model), serialNos, reason, date, includePm: params.includePm, timeZone: config.timeZone }),
     };
   }
 

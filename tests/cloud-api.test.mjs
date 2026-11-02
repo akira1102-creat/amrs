@@ -114,6 +114,17 @@ test("GET returns the Cloudflare primary response without touching GAS", async (
   assert.equal(harness.calls[1].init.headers.authorization, "Bearer token-primary");
 });
 
+test('opt-in PM reminder checks never fall back to a legacy API that silently skips PM',async()=>{
+  const harness=createHarness(call=>{
+    if(call.url===`${CLOUD}/session`)return jsonResponse({success:true,token:'synthetic-session'});
+    if(call.url.startsWith(`${CLOUD}/api?`))throw new TypeError('synthetic network failure');
+    return jsonResponse({success:true,duplicates:{}});
+  });
+  const api=createDualTransport(baseOptions(harness.fetchImpl));
+  await assert.rejects(api.get('action=duplicateFault&includePm=1&reason=PM'),/network|request/i);
+  assert.equal(harness.calls.some(call=>call.url.startsWith(GAS)),false);
+});
+
 test("personal access token is preferred and its permissions are cached with the session", async () => {
   const storage = new MemoryStorage();
   storage.setItem("_amrs_access_token_v1", ACCESS_TOKEN);

@@ -267,7 +267,8 @@ export function getDuplicateFaultsFromRows(rows, params = {}) {
   const timeZone = timeZoneOf(params.timeZone);
   const reason = gasString(params.reason).trim();
   const model = gasString(params.model).trim().toUpperCase();
-  if (!reason || reason.toUpperCase() === "PM") return {};
+  const includePm = params.includePm === true || params.includePm === "1";
+  if (!reason || (reason.toUpperCase() === "PM" && !includePm)) return {};
   const serialNos = new Set((Array.isArray(params.serialNos) ? params.serialNos : gasString(params.serialNos).split(","))
     .map((value) => gasString(value).trim())
     .filter(Boolean));
@@ -281,7 +282,7 @@ export function getDuplicateFaultsFromRows(rows, params = {}) {
     if (!serialNos.has(serialNo)) return;
     if (model && gasString(rowValue(row, 3)).trim().toUpperCase() !== model) return;
     const rowReason = gasString(rowValue(row, normalizeCompany(params.company) === "GEG" ? 7 : 5)).trim();
-    if (rowReason.toUpperCase() !== targetReason || rowReason.toUpperCase() === "PM") return;
+    if (rowReason.toUpperCase() !== targetReason || (rowReason.toUpperCase() === "PM" && !includePm)) return;
     const rowOrdinal = calendarOrdinal(rowValue(row, 1), timeZone);
     if (rowOrdinal == null || rowOrdinal <= endOrdinal - 30 || rowOrdinal > endOrdinal) return;
     counts[serialNo] = (counts[serialNo] || 0) + 1;
