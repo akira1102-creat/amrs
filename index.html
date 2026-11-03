@@ -102,9 +102,10 @@
     .row-action select,.row-action input,.row-action .combo{flex:1}
     .label-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
     .mini-edit-btn{padding:5px 10px;border:1px solid #30363d;border-radius:9px;background:#21262d;color:#e6edf3;font-size:12px;font-weight:800;cursor:pointer}
-    .recent-fault-settings{margin-top:10px;border:1px solid #30363d;border-radius:10px;font-size:12px}
-    .recent-fault-settings summary{padding:10px;cursor:pointer;color:#8b949e;overflow-wrap:anywhere}
-    .recent-fault-settings p{margin:0;padding:0 10px 10px;color:#8b949e;line-height:1.6}
+    .reason-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+    #recentFaultExemptionModal{margin:auto;width:min(460px,calc(100% - 32px));max-height:88vh;overflow:auto;background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:20px;padding:20px}
+    #recentFaultExemptionModal::backdrop{background:rgba(0,0,0,.75)}
+    #recentFaultExemptionSummary{overflow-wrap:anywhere}
     .recent-fault-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:240px;overflow:auto;padding:0 10px 10px}
     .recent-fault-options label{display:flex;align-items:center;gap:8px;margin:0;padding:8px;border-radius:8px;background:#0d1117;cursor:pointer;font-size:12px;overflow-wrap:anywhere}
     .recent-fault-options input[type=checkbox]{width:16px;height:16px;flex:0 0 16px;margin:0;padding:0;accent-color:#1f6feb}
@@ -1032,6 +1033,18 @@
   </div>
 </div>
 
+<dialog id="recentFaultExemptionModal" aria-labelledby="recentFaultExemptionTitle">
+  <div class="template-head">
+    <div class="template-title" id="recentFaultExemptionTitle">30日提醒豁免</div>
+    <form method="dialog">
+      <button class="confirm-cancel" style="padding:8px 12px" type="submit">關閉</button>
+    </form>
+  </div>
+  <p class="template-note">勾選嘅原因唔會發出30日重複提醒。可多選，設定會按公司即時儲存喺此裝置；其他提交檢查不受影響。</p>
+  <p class="template-note">已選：<span id="recentFaultExemptionSummary">PM</span></p>
+  <div class="recent-fault-options" id="recentFaultExemptionOptions"></div>
+</dialog>
+
 <div id="bpListModal">
   <div id="bpListBox">
     <div class="template-head">
@@ -1333,16 +1346,14 @@
     </div>
   </div>
   <div style="margin-bottom:14px">
-    <div class="label-row"><label>原因</label><button class="mini-edit-btn" onclick="openTemplateEditor()" type="button">編輯</button></div>
+    <div class="label-row"><label for="reason">原因</label><div class="reason-actions">
+      <button class="mini-edit-btn" onclick="openRecentFaultExemptions()" aria-haspopup="dialog" aria-controls="recentFaultExemptionModal" type="button">30日提醒豁免</button>
+      <button class="mini-edit-btn" onclick="openTemplateEditor()" type="button">編輯清單</button>
+    </div></div>
     <div class="combo" data-combo="reason">
       <input type="text" id="reason" oninput="onReasonInput()" onchange="onReasonChange()" placeholder="搜尋原因..." autocomplete="off">
       <div class="combo-menu" id="reasonMenu"></div>
     </div>
-    <details class="recent-fault-settings">
-      <summary>30日提醒豁免原因：<span id="recentFaultExemptionSummary">PM</span></summary>
-      <p>勾選後，提交時不提示該原因的30日重複記錄。可多選，按公司儲存於此裝置；不影響當日重複、等件、Holding 或等解鎖檢查。</p>
-      <div class="recent-fault-options" id="recentFaultExemptionOptions"></div>
-    </details>
   </div>
   <div>
     <label>處理方法&備註（選填）</label>
@@ -1740,8 +1751,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.11.02-01';
-const _APP_VERSION='v1.146';
+const _APP_BUMP='2026.11.03-01';
+const _APP_VERSION='v1.147';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -4714,6 +4725,10 @@ function renderRecentFaultExemptions(){
   });
   summary.textContent=selected.length?selected.join('、'):'無（全部檢查）';
   box.innerHTML=options.map(reason=>`<label><input type="checkbox" value="${esc(reason)}"${isRecentFaultExempt(reason)?' checked':''} onchange="setRecentFaultExemption(this.value,this.checked)"><span>${esc(reason)}</span></label>`).join('');
+}
+function openRecentFaultExemptions(){
+  renderRecentFaultExemptions();
+  document.getElementById('recentFaultExemptionModal').showModal();
 }
 function setRecentFaultExemption(reason,checked){
   if(isSubmitting||_submitCheckBusy){renderRecentFaultExemptions();showToast('提交檢查期間不能修改提醒設定','warn');return;}

@@ -20,6 +20,19 @@ function setup(storage=new Map()){
   return {context,elements,storage,requests,toasts};
 }
 
+test('opening the exemption dialog renders the saved selection without changing it',()=>{
+  const {context,elements,storage}=setup();
+  context.setRecentFaultExemption('PO',true);
+  const before=Array.from(storage);
+  elements.recentFaultExemptionOptions.innerHTML='';
+  let opened=false;
+  elements.recentFaultExemptionModal={showModal(){opened=true;}};
+  context.openRecentFaultExemptions?.();
+  assert.equal(opened,true);
+  assert.match(elements.recentFaultExemptionOptions.innerHTML,/value="PO" checked/);
+  assert.deepEqual(Array.from(storage),before);
+});
+
 test('every company starts with only PM exempt; blank and malformed settings keep that default',()=>{
   const {context,storage}=setup();
   for(const company of ['SCL','GEG','MGM','Melco','Wynn','SJM']){
