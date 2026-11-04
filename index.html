@@ -1035,11 +1035,12 @@
 
 <dialog id="recentFaultExemptionModal" aria-labelledby="recentFaultExemptionTitle">
   <div class="template-head">
-    <div class="template-title" id="recentFaultExemptionTitle">30日提醒豁免</div>
+    <div class="template-title" id="recentFaultExemptionTitle">30日重複提醒設定</div>
     <form method="dialog">
       <button class="confirm-cancel" style="padding:8px 12px" type="submit">關閉</button>
     </form>
   </div>
+  <p class="template-note"><strong>選擇後將不提醒該原因的記錄</strong></p>
   <p class="template-note">提交前會查同公司、同機型、同 SN 嘅最近 30 日記錄。勾選只排除歷史記錄入面嘅原因，今次揀咩原因都照查。設定按公司即時儲存喺此裝置。</p>
   <p class="template-note">已選：<span id="recentFaultExemptionSummary">PM</span></p>
   <div class="recent-fault-options" id="recentFaultExemptionOptions"></div>
@@ -1347,7 +1348,7 @@
   </div>
   <div style="margin-bottom:14px">
     <div class="label-row"><label for="reason">原因</label><div class="reason-actions">
-      <button class="mini-edit-btn" onclick="openRecentFaultExemptions()" aria-haspopup="dialog" aria-controls="recentFaultExemptionModal" type="button">30日提醒豁免</button>
+      <button class="mini-edit-btn" onclick="openRecentFaultExemptions()" aria-haspopup="dialog" aria-controls="recentFaultExemptionModal" type="button">30日重複提醒設定</button>
       <button class="mini-edit-btn" onclick="openTemplateEditor()" type="button">編輯清單</button>
     </div></div>
     <div class="combo" data-combo="reason">
@@ -1751,8 +1752,8 @@
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.11.04-01';
-const _APP_VERSION='v1.148';
+const _APP_BUMP='2026.11.04-02';
+const _APP_VERSION='v1.149';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
