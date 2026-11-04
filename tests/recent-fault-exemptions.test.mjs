@@ -14,7 +14,7 @@ function setup(storage=new Map()){
     localStorage:{getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},
     esc:value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),
     showToast:(...args)=>toasts.push(args),URLSearchParams,fmtDate:value=>value.replaceAll('-','/'),getScriptUrl:()=> 'https://example.invalid',
-    fetchJsonWithTimeout:async url=>{requests.push(new URL(url));return {success:true,duplicates:{'9001':2}};},
+    fetchJsonWithTimeout:async url=>{requests.push(new URL(url));return {success:true,history:{'9001':[{reason:'PM',count:1},{reason:'PO',count:2},{reason:'Wrong Reading',count:1}]}};},
   });
   vm.runInContext(html.slice(start,html.indexOf('function todaySheetDate()',start)),context);
   return {context,elements,storage,requests,toasts};
@@ -47,17 +47,18 @@ test('every company starts with only PM exempt; blank and malformed settings kee
 test('multi-select persists per company and survives a new page; empty selection enables PM checks',async()=>{
   const {context,storage,requests}=setup();
   context.setRecentFaultExemption('PO',true);
-  context.queue=[{company:'SCL',sn:'9001',model:'TAE',reason:' po ',date:'2026/09/04'}];
-  assert.equal((await context.collectRecentDuplicateWarnings()).length,0);
-  assert.equal(requests.length,0);
+  context.queue=[{company:'SCL',sn:'9001',model:'TAE',reason:'PM',date:'2026/09/04'}];
+  const [warning]=await context.collectRecentDuplicateWarnings();
+  assert.match(warning.message,/Wrong Reading/);
+  assert.doesNotMatch(warning.message,/PM|PO/);
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].searchParams.get('action'),'recentFaultHistory');
+  assert.equal(requests[0].searchParams.has('reason'),false);
   assert.deepEqual(Array.from(setup(storage).context.getRecentFaultExemptions('SCL')),['PM','PO']);
   assert.deepEqual(Array.from(context.getRecentFaultExemptions('GEG')),['PM']);
   context.setRecentFaultExemption('PO',false);
   context.setRecentFaultExemption('PM',false);
-  context.queue[0].reason='PM';
-  assert.equal((await context.collectRecentDuplicateWarnings()).length,1);
-  assert.equal(requests[0].searchParams.get('reason'),'PM');
-  assert.equal(requests[0].searchParams.get('includePm'),'1');
+  assert.match((await context.collectRecentDuplicateWarnings())[0].message,/PM × 1/);
   assert.deepEqual(Array.from(setup(storage).context.getRecentFaultExemptions()),[]);
 });
 
@@ -72,12 +73,13 @@ test('only 30-day reminders use exemptions; same-day duplicate protection remain
   ];
   assert.ok(context.collectQueueDuplicateWarnings().length>0);
   const warnings=await context.collectRecentDuplicateWarnings();
-  assert.equal(requests.length,1);
-  assert.equal(requests[0].searchParams.get('company'),'GEG');
-  assert.equal(requests[0].searchParams.get('model'),'TAE');
-  assert.equal(requests[0].searchParams.get('date'),'2026/09/03');
-  assert.match(warnings[0].message,/PO/);
-  assert.match(warnings[0].message,/2 筆/);
+  assert.equal(requests.length,2);
+  assert.equal(requests[1].searchParams.get('company'),'GEG');
+  assert.equal(requests[1].searchParams.get('model'),'TAE');
+  assert.equal(requests[1].searchParams.get('date'),'2026/09/03');
+  assert.doesNotMatch(warnings[0].message,/PO/);
+  assert.match(warnings[1].message,/PO/);
+  assert.match(warnings[1].message,/3 筆/);
 });
 
 test('selector uses current editable reasons and preserves removed selected reasons safely',()=>{

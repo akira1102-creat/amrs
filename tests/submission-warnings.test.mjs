@@ -143,9 +143,9 @@ test('30-day warnings retain distinct company and model identities for history b
     { company: 'GEG', model: 'TAE', sn: '9001', reason: 'Test Fault', date: '2026/09/04' },
   ];
   context.isDuplicateCheckItem = () => true;
-  context.isRecentFaultExempt = () => false;
-  context.fetchDuplicateFaults = async () => ({ '9001': 2 });
-  vm.runInContext(html.slice(html.indexOf('function duplicateCount('), html.indexOf('function todaySheetDate()')), context);
+  context.getRecentFaultExemptions = () => ['PM'];
+  context.fetchRecentFaultHistory = async () => ({ '9001': [{reason:'Test Fault',count:2}] });
+  vm.runInContext(html.slice(html.indexOf('async function collectRecentDuplicateWarnings('), html.indexOf('function todaySheetDate()')), context);
   const warnings = await context.collectRecentDuplicateWarnings();
   assert.equal(warnings.length, 2);
   context.showSubmitConfirmation([...warnings, 'Other warning']);

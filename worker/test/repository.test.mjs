@@ -1,7 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCloudflareCacheAdapter, createRepository } from "../src/repository.mjs";
-import { getDuplicateFaultsFromRows } from "../src/domain.mjs";
+import { getDuplicateFaultsFromRows, getRecentFaultHistoryFromRows } from "../src/domain.mjs";
+
+test("recent fault history returns all causes across venues for only the requested model and dates", () => {
+  const rows=[
+    ["Venue A","2026/11/03","","SAE","9001","Wrong Reading"],
+    ["Venue B","2026/11/03","","SAE","9001","wrong reading"],
+    ["Venue A","2026/11/04","","SAE","9001","PM"],
+    ["Venue A","2026/10/05","","SAE","9001","Too old"],
+    ["Venue A","2026/11/05","","SAE","9001","Future"],
+    ["Venue A","2026/11/03","","TAE","9001","Other model"],
+    ["Venue A","2026/11/03","","SAE","9002","Other serial"],
+  ];
+  assert.deepEqual(getRecentFaultHistoryFromRows(rows,{company:"SCL",model:"SAE",serialNos:["9001"],date:"2026/11/04"}),{
+    "9001":[{reason:"Wrong Reading",count:2},{reason:"PM",count:1}]
+  });
+});
 
 test("Cloudflare cache adapter keeps short-lived Sheet payloads outside D1", async () => {
   const entries = new Map();
@@ -253,6 +268,7 @@ test("implements all GET action contracts against synthetic Sheets", async () =>
     ["ping", {}],
     ["today", { company: "SCL" }],
     ["duplicateFault", { company: "SCL", serialNos: "1234", reason: "Hardware Problem", date: "2026/08/04" }],
+    ["recentFaultHistory", { company: "SCL", serialNos: "1234", model: "SAE", date: "2026/08/04" }],
     ["submissionWarnings", { records: [{ company: "SCL", casino: "Venetian", model: "SAE", serialNo: "1234" }] }],
     ["dashboard", { company: "SCL", page: "1", pageSize: "10", serialNo: "1234" }],
     ["parts", {}],

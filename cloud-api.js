@@ -748,6 +748,7 @@
       const queryParams = new URLSearchParams(normalizeQuery(query));
       // Legacy GAS always skips PM, so it cannot answer an explicit PM check.
       const workerOnly = LOG_ACTIONS.has(queryParams.get('action'))
+        || queryParams.get('action') === 'recentFaultHistory'
         || (queryParams.get('action') === 'duplicateFault' && queryParams.get('includePm') === '1');
       if (!this.cloudflareBaseUrl) {
         if (workerOnly) throw new AmrsTransportError('Cloudflare is required for this check or follow-up log', { backend: 'cloudflare', kind: 'cloud-unavailable' });

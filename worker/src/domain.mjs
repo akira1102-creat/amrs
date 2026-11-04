@@ -290,6 +290,28 @@ export function getDuplicateFaultsFromRows(rows, params = {}) {
   return counts;
 }
 
+export function getRecentFaultHistoryFromRows(rows, {company,model,serialNos,date,timeZone=DEFAULT_TIME_ZONE}) {
+  const selected = new Set(serialNos);
+  const targetModel = gasString(model).trim().toUpperCase();
+  const end = calendarOrdinal(date,timeZone);
+  if (!targetModel || end == null || !selected.size) return {};
+  const reasonColumn = normalizeCompany(company) === "GEG" ? 7 : 5;
+  const results = new Map();
+  for (const row of rows) {
+    const sn = gasString(rowValue(row,4)).trim();
+    if (!selected.has(sn) || gasString(rowValue(row,3)).trim().toUpperCase() !== targetModel) continue;
+    const reason = gasString(rowValue(row,reasonColumn)).trim();
+    if (!reason) continue;
+    const day = calendarOrdinal(rowValue(row,1),timeZone);
+    if (day == null || day <= end - 30 || day > end) continue;
+    if (!results.has(sn)) results.set(sn,new Map());
+    const reasons = results.get(sn), key = reason.toUpperCase();
+    if (!reasons.has(key)) reasons.set(key,{reason,count:0});
+    reasons.get(key).count++;
+  }
+  return Object.fromEntries([...results].map(([sn,reasons])=>[sn,[...reasons.values()]]));
+}
+
 export function recordToValues(record, company) {
   const value = record || {};
   const common = [

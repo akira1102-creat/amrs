@@ -21,6 +21,7 @@ import {
   getBrokenPartsPage,
   getDashboardRecords,
   getDuplicateFaultsFromRows,
+  getRecentFaultHistoryFromRows,
   getSubmissionWarningsFromRows,
   getMonthlyScheduleFromRows,
   getMonthlyStatsSubsetFromData,
@@ -1359,6 +1360,17 @@ export function createRepository(env = {}, dependencies = {}) {
     };
   }
 
+  async function getRecentFaultHistory(params = {}) {
+    const company = normalizeCompany(params.company),model = text(params.model);
+    const date = normalizeDateParam(params.date,config.timeZone);
+    const serialNos = [...new Set(text(params.serialNos).split(",").map(text).filter(Boolean))];
+    if (!date || !model || !serialNos.length || serialNos.length > 50 || serialNos.some(sn=>!/^\d{1,4}$/.test(sn))) {
+      throw Object.assign(new Error("Invalid recent fault history query"),{status:400});
+    }
+    const main = await mainRowsForCompany(company,{ensureIdentity:false});
+    return {success:true,history:getRecentFaultHistoryFromRows(main.rows,{company,model,serialNos,date,timeZone:config.timeZone})};
+  }
+
   async function getSubmissionWarnings(params = {}) {
     const supplied = jsonParse(params.records);
     const records = Array.isArray(supplied) ? supplied : [];
@@ -1589,6 +1601,7 @@ export function createRepository(env = {}, dependencies = {}) {
     if (action === "ping") return { success: true };
     if (action === "today") return getToday(params);
     if (action === "duplicateFault") return getDuplicateFaults(params);
+    if (action === "recentFaultHistory") return getRecentFaultHistory(params);
     if (action === "submissionWarnings") return getSubmissionWarnings(params);
     if (action === "dashboard") return getDashboard(params);
     if (action === "parts") return { parts: await readParts({ refresh: text(params.refresh) === "1" }) };

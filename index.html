@@ -7,14 +7,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="AMRS">
-  <link rel="manifest" href="manifest.json?v=20261102a">
+  <link rel="manifest" href="manifest.json?v=20261104a">
   <link rel="icon" href="icon.png?v=23" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
-  <link rel="stylesheet" href="./cvcs.css?v=20261102a">
-  <link rel="stylesheet" href="./galaxy-log.css?v=20261102a">
-  <link rel="stylesheet" href="./mgm-check-request.css?v=20261102a">
-  <link rel="stylesheet" href="./worksheet-editor.css?v=20261102a">
-  <link rel="stylesheet" href="./followup-log.css?v=20261102a">
+  <link rel="stylesheet" href="./cvcs.css?v=20261104a">
+  <link rel="stylesheet" href="./galaxy-log.css?v=20261104a">
+  <link rel="stylesheet" href="./mgm-check-request.css?v=20261104a">
+  <link rel="stylesheet" href="./worksheet-editor.css?v=20261104a">
+  <link rel="stylesheet" href="./followup-log.css?v=20261104a">
   <title>AMRS</title>
   <script>
     (function(){
@@ -1040,7 +1040,7 @@
       <button class="confirm-cancel" style="padding:8px 12px" type="submit">關閉</button>
     </form>
   </div>
-  <p class="template-note">勾選嘅原因唔會發出30日重複提醒。可多選，設定會按公司即時儲存喺此裝置；其他提交檢查不受影響。</p>
+  <p class="template-note">提交前會查同公司、同機型、同 SN 嘅最近 30 日記錄。勾選只排除歷史記錄入面嘅原因，今次揀咩原因都照查。設定按公司即時儲存喺此裝置。</p>
   <p class="template-note">已選：<span id="recentFaultExemptionSummary">PM</span></p>
   <div class="recent-fault-options" id="recentFaultExemptionOptions"></div>
 </dialog>
@@ -1738,21 +1738,21 @@
   </div>
 </div>
 
-<script src="./cloud-api.js?v=20261102a"></script>
-<script src="./access-control.js?v=20261102a"></script>
-<script src="./cvcs.js?v=20261102a"></script>
-<script src="./token-admin.js?v=20261102a"></script>
-<script src="./xlsx.mini.min.js?v=20261102a"></script>
-<script src="./galaxy-log.js?v=20261102a"></script>
-<script src="./mgm-check-request.js?v=20261102a"></script>
-<script src="./worksheet-editor.js?v=20261102a"></script>
-<script src="./followup-log.js?v=20261102a"></script>
+<script src="./cloud-api.js?v=20261104a"></script>
+<script src="./access-control.js?v=20261104a"></script>
+<script src="./cvcs.js?v=20261104a"></script>
+<script src="./token-admin.js?v=20261104a"></script>
+<script src="./xlsx.mini.min.js?v=20261104a"></script>
+<script src="./galaxy-log.js?v=20261104a"></script>
+<script src="./mgm-check-request.js?v=20261104a"></script>
+<script src="./worksheet-editor.js?v=20261104a"></script>
+<script src="./followup-log.js?v=20261104a"></script>
 <script>
 const _PH='ypXGN6eAKSKE5BTnyfouKeHxd+jkz5qAgy4csfOE8Zg=';
 const _PS='JRM5b3kNYJd4Awi4yZg55g==';
 const _ITERS=3000000;
-const _APP_BUMP='2026.11.03-01';
-const _APP_VERSION='v1.147';
+const _APP_BUMP='2026.11.04-01';
+const _APP_VERSION='v1.148';
 const _CLOUDFLARE_API_URL='https://amrs-api.akatsukiakira1102.workers.dev';
 const _isMob=document.documentElement.classList.contains('mob');
 
@@ -4772,52 +4772,45 @@ function renderQueueDuplicateNotice(){
   }
 }
 
-async function fetchDuplicateFaults(serialNos,reason,company=activeCompany,date=fmtDate(document.getElementById('date').value),model=''){
-  const normalizedReason=String(reason||'').trim();
-  if(!normalizedReason||isRecentFaultExempt(normalizedReason,company))return {};
+async function fetchRecentFaultHistory(serialNos,company,date,model){
   const url=getScriptUrl();
   if(!url)throw new Error('尚未設定網站代號');
-  const params=new URLSearchParams({
-    action:'duplicateFault',
-    company:String(company||activeCompany),
-    model:String(model||''),
-    serialNos:[...new Set(serialNos.map(value=>String(value||'').trim()).filter(Boolean))].join(','),
-    reason:normalizedReason,
-    includePm:normalizedReason.toUpperCase()==='PM'?'1':'0',
-    date:String(date||'')
-  });
+  const params=new URLSearchParams({action:'recentFaultHistory',company,model,serialNos:serialNos.join(','),date});
   const data=await fetchJsonWithTimeout(`${url}?${params.toString()}`,{},60000);
-  if(!data?.success)throw new Error(data?.message||'無法檢查最近 30 日重複記錄');
-  return data.duplicates||{};
+  if(!data?.success||!data.history||typeof data.history!=='object'||Array.isArray(data.history))throw new Error(data?.message||'無法檢查最近 30 日歷史記錄');
+  return data.history;
 }
-function duplicateCount(value){return Array.isArray(value)?value.length:Number(value)||0;}
 async function collectRecentDuplicateWarnings(){
   const groups=new Map();
-  queue.filter(item=>String(item.reason||'').trim()&&!isRecentFaultExempt(item.reason,item.company||activeCompany)).forEach(item=>{
+  queue.forEach(item=>{
     const company=item.company||activeCompany;
     const model=String(item.model||'SAE').trim().toUpperCase()||'SAE';
-    const reason=String(item.reason||'').trim();
     const date=item.date||fmtDate(document.getElementById('date').value);
-    const key=`${company}\u0000${model}\u0000${reason}\u0000${date}`;
-    if(!groups.has(key))groups.set(key,{company,model,reason,date,serialNos:new Set()});
-    groups.get(key).serialNos.add(String(item.sn||'').trim());
+    const key=`${company}\u0000${model}\u0000${date}`;
+    if(!groups.has(key))groups.set(key,{company,model,date,serialNos:new Set()});
+    const sn=String(item.sn||'').trim();
+    if(sn)groups.get(key).serialNos.add(sn);
   });
-  const warnings=[];
   const checks=[];
   for(const group of groups.values()){
-    const serialNos=[...group.serialNos].filter(Boolean);
+    const serialNos=[...group.serialNos],exempt=new Set(getRecentFaultExemptions(group.company).map(reason=>reason.trim().toUpperCase()));
     for(let offset=0;offset<serialNos.length;offset+=50){
       const chunk=serialNos.slice(offset,offset+50);
       checks.push(async()=>{
-      const duplicates=await fetchDuplicateFaults(chunk,group.reason,group.company,group.date,group.model);
-      Object.entries(duplicates).forEach(([serialNo,value])=>{
-        const count=duplicateCount(value);
-        if(count>0)warnings.push({message:`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆相同原因記錄（${group.reason}）`,company:group.company,model:group.model,serialNo});
-      });
+        const history=await fetchRecentFaultHistory(chunk,group.company,group.date,group.model);
+        return chunk.flatMap(serialNo=>{
+          const entries=history[serialNo]||[];
+          const matches=entries.filter(entry=>entry.reason&&!exempt.has(entry.reason.trim().toUpperCase())&&Number(entry.count)>0);
+          const count=matches.reduce((total,entry)=>total+Number(entry.count),0);
+          if(!count)return [];
+          const reasons=matches.map(entry=>`${entry.reason} × ${entry.count}`).join('、');
+          return [{message:`${group.model} S/N ${serialNo} 最近 30 日已有 ${count} 筆未豁免記錄（${reasons}）`,company:group.company,model:group.model,serialNo}];
+        });
       });
     }
   }
-  for(let offset=0;offset<checks.length;offset+=3)await Promise.all(checks.slice(offset,offset+3).map(check=>check()));
+  const warnings=[];
+  for(let offset=0;offset<checks.length;offset+=3)warnings.push(...(await Promise.all(checks.slice(offset,offset+3).map(check=>check()))).flat());
   return [...new Map(warnings.map(item=>[`${item.company}\u0000${item.message}`,item])).values()];
 }
 
