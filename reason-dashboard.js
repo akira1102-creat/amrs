@@ -12,7 +12,7 @@
   const reasons=(data.reasons||[]).filter(r=>!excludedKeys.has(key(r.reason))).map(r=>({...r})).sort((a,b)=>b.count-a.count||a.reason.localeCompare(b.reason));
   const included=reasons.reduce((sum,r)=>sum+r.count,0);
   const excluded=(data.reasons||[]).reduce((sum,r)=>sum+(excludedKeys.has(key(r.reason))?r.count:0),0);
-  return {included,excluded,reasons:reasons.map(r=>({...r,share:included?r.count/included*100:0}))};
+  return {included,excluded,reasons:reasons.map(r=>({...r,share:data.total?r.count/data.total*100:0}))};
  }
  function createApp({container,loadCompany,getReasonOptions=()=>[],storage,notify=()=>{},now=()=>Date.now()}){
   const document=container.ownerDocument;
@@ -141,10 +141,10 @@
    if(built)return;
    built=true;month=monthNow();
    container.innerHTML=`<div class="reason-dashboard-shell">
-    <header class="reason-dashboard-head"><h1>維護原因儀表板</h1><button type="button" id="reasonStatsRefresh">重新整理</button></header>
+    <header class="reason-dashboard-head"><h1>維護儀表板</h1><button type="button" id="reasonStatsRefresh">重新整理</button></header>
     <div class="reason-period-controls"><button type="button" id="reasonStatsPrev" aria-label="上個月">‹</button><label>統計月份<input type="month" id="reasonStatsMonth" min="2000-01" max="2099-12"></label><button type="button" id="reasonStatsNext" aria-label="下個月">›</button><label class="reason-all"><input type="checkbox" id="reasonStatsAll">全部日期</label></div>
     <p class="reason-muted">按維護記錄日期計算，每筆記錄計一次，唔係不重複機台數。預設排除 PM；剔選項目唔計算，與30日提醒設定分開。</p>
-    <p class="reason-muted">每間公司先顯示最多五項。長條共用筆數刻度；百分比按該公司排除後、原因非空白嘅記錄計算。</p>
+    <p class="reason-muted">每間公司先顯示最多五項。長條共用筆數刻度；百分比＝該原因筆數 ÷ 該公司所選期間嘅原有總筆數（包括已排除及原因空白嘅記錄）。</p>
     <p id="reasonStatsStatus" class="reason-muted" role="status"></p>
     <div id="reasonStatsGrid" class="reason-stats-grid"></div>
     <dialog id="reasonExclusionDialog" class="reason-exclusion-dialog" aria-labelledby="reasonExclusionTitle">
