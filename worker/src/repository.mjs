@@ -61,6 +61,7 @@ import {
 import { createGoogleAccessTokenProvider } from "./google.mjs";
 import { createCvcsRepository } from "./cvcs-repository.mjs";
 import { createFollowupLogRepository, LOG_ACTIONS } from "./followup-log.mjs";
+import { reasonStatsFromRows } from "./reason-stats.mjs";
 import {
   a1Range,
   columnNumberToA1,
@@ -1604,6 +1605,18 @@ export function createRepository(env = {}, dependencies = {}) {
     if (action === "recentFaultHistory") return getRecentFaultHistory(params);
     if (action === "submissionWarnings") return getSubmissionWarnings(params);
     if (action === "dashboard") return getDashboard(params);
+    if (action === "reasonStats") {
+      const company=text(params.company),month=text(params.month);
+      // Validate before touching Sheets. Statistics must never create identity columns.
+      reasonStatsFromRows([],{company,month,timeZone:config.timeZone});
+      const refresh=text(params.refresh)==="1";
+      const [main,mappings]=await Promise.all([
+        readMainTable(company,{refresh,ensureIdentity:false}),
+        readTemplate(company,{refresh}),
+      ]);
+      if(!main.sheet)throw Object.assign(new Error("Worksheet not found"),{status:404});
+      return {...reasonStatsFromRows(main.rows,{company,month,timeZone:config.timeZone},mappings),generatedAt:new Date(nowMs(now)).toISOString()};
+    }
     if (action === "parts") return { parts: await readParts({ refresh: text(params.refresh) === "1" }) };
     if (action === "template") return { success: true, mappings: await readTemplate(params.company, { refresh: text(params.refresh) === "1" }) };
     if (action === "aaTags") return { success: true, tags: await readAaTags({ refresh: text(params.refresh) === "1" }) };

@@ -33,6 +33,7 @@ test("personal tokens and legacy Deploy IDs use separate storage", () => {
 
 test("page permissions hide unavailable product areas", () => {
   assert.equal(pagePermission("schedule"), "schedule");
+  assert.equal(pagePermission("reasonStats"), "ae");
   assert.equal(pagePermission("cvcs-input"), "cvcs");
   assert.equal(pagePermission("token-admin"), "admin");
   assert.equal(hasPermission(["schedule", "cvcs"], "cvcs"), true);

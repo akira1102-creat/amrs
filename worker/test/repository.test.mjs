@@ -200,6 +200,20 @@ const config = {
 };
 
 const commonHeaders = ["CASINO", "DATE", "PO Number", "Model", "Serial No.", "Reason", "Action Taken", "Error Description", "Box ID", "Inspector"];
+test('reason statistics read only aggregate data and never create worksheet identity columns',async()=>{
+ const harness=createSheetsHarness({scl:[
+  {title:'Worksheet',values:[commonHeaders,['Venue A','2026/11/01','TEST','SAE','9001','PM'],['Venue B','2026/11/02','TEST','TAE','9002','Test Fault']]},
+  {title:'Template',values:[['Reason','Action'],['PM','Inspection'],['Custom reason','Checked']]},
+ ]});
+ const original=JSON.stringify([...harness.sheets.values()]);
+ const repository=createRepository({}, {config,sheetsClient:harness.client});
+ const r=await repository.getAction({action:'reasonStats',company:'SCL',month:'2026-11'});
+ assert.equal(r.success,true);assert.equal(r.total,2);
+ assert.ok(r.reasonOptions.includes('Custom reason'));
+ assert.equal(JSON.stringify([...harness.sheets.values()]),original,'reading statistics must not mutate Sheets');
+ assert.ok(!JSON.stringify(r).includes('9001'));
+ await assert.rejects(()=>repository.getAction({action:'reasonStats',company:'BAD',month:'2026-11'}),/company/i);
+});
 test('submission reconciliation reads only the identity column, not every maintenance field', async () => {
   const harness = createSheetsHarness({ scl: [{ title: 'Worksheet', columnCount: 11, rowCount: 300,
     values: [commonHeaders.concat('AMRS Submission ID'), ['Sample', '', '', 'SAE', '1234', '', '', '', '', '', 'synthetic-row-id']] }] });

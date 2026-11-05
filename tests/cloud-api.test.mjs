@@ -267,6 +267,16 @@ test('follow-up log reads never fall back to an unrelated GAS deployment', async
   assert.equal(harness.calls.some(call => call.url.startsWith(GAS)), false);
 });
 
+test('reason dashboard cannot fall back to GAS and receive unrelated statistics',async()=>{
+ const harness=createHarness(call=>{
+  if(call.url===`${CLOUD}/session`)return jsonResponse({success:true,token:'synthetic-session'});
+  if(call.url.startsWith(`${CLOUD}/api?`))throw new TypeError('Synthetic network failure');
+  return jsonResponse({success:true,reasons:[]});
+ });
+ const api=createDualTransport(baseOptions(harness.fetchImpl));
+ await assert.rejects(api.get('action=reasonStats&company=SCL&month=2026-11'),/network|request/i);
+ assert.equal(harness.calls.some(call=>call.url.startsWith(GAS)),false);
+});
 test("completed submission reconciliation exposes the actual inserted and skipped counts", async () => {
   const harness = createHarness((call) => {
     if (call.url === `${CLOUD}/health`) return jsonResponse({ success: true });
