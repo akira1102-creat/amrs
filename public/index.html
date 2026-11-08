@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#161b22"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="AMRS">
+<link rel="manifest" href="manifest.json?v=20261108a"><link rel="icon" href="icon.png?v=23"><link rel="apple-touch-icon" href="apple-touch-icon.png?v=23">
+<link rel="stylesheet" href="bootstrap.css?v=20261108a"><title>AMRS</title>
+<script src="access-control.js?v=20261108a"></script><script type="module" src="bootstrap.mjs?v=20261108a"></script>
+</head><body class="auth-locked">
+<div id="pinScreen"><div id="pinBox"><div id="pinTitle">維修記錄系統</div><div id="pinSub">請輸入 PIN</div>
+<div class="pin-dots"><div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div><div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div><div class="pin-dot" id="d4"></div><div class="pin-dot" id="d5"></div></div>
+<div id="pinError">PIN 錯誤</div><div class="pin-kb-hint">或使用鍵盤輸入</div>
+<div class="pin-pad"><button class="pin-btn" data-pin="1">1</button><button class="pin-btn" data-pin="2">2</button><button class="pin-btn" data-pin="3">3</button><button class="pin-btn" data-pin="4">4</button><button class="pin-btn" data-pin="5">5</button><button class="pin-btn" data-pin="6">6</button><button class="pin-btn" data-pin="7">7</button><button class="pin-btn" data-pin="8">8</button><button class="pin-btn" data-pin="9">9</button><div class="pin-btn empty"></div><button class="pin-btn" data-pin="0">0</button><button class="pin-btn back" id="pinBack">⌫</button></div>
+</div></div>
+<div id="setupScreen"><div id="setupBox"><div id="setupTitle">請輸入 Token</div><div id="setupSub">請輸入管理員提供的個人 Token。過渡期間亦可繼續使用原有 Deploy ID；資料只會儲存在本機。</div>
+<div><label for="gasUrlInput">Token</label><input type="text" id="gasUrlInput" placeholder="貼上個人 Token 或原有 Deploy ID" autocomplete="off" spellcheck="false"></div>
+<div id="setupErr" role="status"></div><button id="setupTestBtn" type="button">🔗 測試連線</button><div id="setupTestResult"></div><button id="setupSaveBtn" disabled>儲存並繼續</button>
+</div></div><p id="bootStatus" role="status" hidden>正在驗證連線及使用權限…</p>
+<noscript>請啟用 JavaScript 以使用此工具。</noscript>
+</body></html>

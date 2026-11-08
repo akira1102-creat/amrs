@@ -1,0 +1,16 @@
+{
+  "name": "amrs-cloudflare-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test ../test/*.test.mjs",
+    "test:private": "node --test ../.private-runtime/source/tests/*.test.mjs ../.private-runtime/source/worker/test/*.test.mjs",
+    "check": "wrangler deploy --dry-run --config deploy-private.jsonc",
+    "dev": "wrangler dev --config deploy-private.jsonc"
+  },
+  "devDependencies": {
+    "wrangler": "^4.114.0"
+  }
+}
+
