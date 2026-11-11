@@ -1,5 +1,5 @@
-const CACHE='amrs-v1152';
-const ASSETS=['./','./index.html','./bootstrap.mjs?v=20261108a','./bootstrap.css?v=20261108a','./access-control.js?v=20261108a','./manifest.json?v=20261108a','./icon.png?v=23','./apple-touch-icon.png?v=23'];
+const CACHE='amrs-v1153';
+const ASSETS=['./','./index.html','./bootstrap.mjs?v=20261111a','./bootstrap.css?v=20261111a','./access-control.js?v=20261111a','./manifest.json?v=20261111a','./icon.png?v=23','./apple-touch-icon.png?v=23'];
 self.addEventListener('message',e=>{if(e.data?.type==='SKIP_WAITING')self.skipWaiting();});
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&/^(amrs-v|akira-ml-v)/.test(k)).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
